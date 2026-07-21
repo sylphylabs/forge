@@ -3,7 +3,7 @@ package selector
 import (
 	"context"
 
-	"github.com/go-kratos/kratos/v3/errors"
+	"github.com/openkratos/kratos/errors"
 )
 
 // ErrNoAvailable is no available node.

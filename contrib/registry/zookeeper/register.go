@@ -9,7 +9,7 @@ import (
 	"github.com/go-zookeeper/zk"
 	"golang.org/x/sync/singleflight"
 
-	"github.com/go-kratos/kratos/v3/registry"
+	"github.com/openkratos/kratos/registry"
 )
 
 var (

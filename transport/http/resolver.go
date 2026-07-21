@@ -9,11 +9,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/go-kratos/kratos/v3/internal/endpoint"
-	"github.com/go-kratos/kratos/v3/internal/subset"
-	"github.com/go-kratos/kratos/v3/log"
-	"github.com/go-kratos/kratos/v3/registry"
-	"github.com/go-kratos/kratos/v3/selector"
+	"github.com/openkratos/kratos/internal/endpoint"
+	"github.com/openkratos/kratos/internal/subset"
+	"github.com/openkratos/kratos/log"
+	"github.com/openkratos/kratos/registry"
+	"github.com/openkratos/kratos/selector"
 )
 
 // Target is resolver target

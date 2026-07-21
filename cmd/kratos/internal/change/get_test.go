@@ -8,6 +8,7 @@ func TestParseGithubURL(t *testing.T) {
 		owner string
 		repo  string
 	}{
+		{"https://github.com/openkratos/kratos.git", "openkratos", "kratos"},
 		{"https://github.com/go-kratos/kratos.git", "go-kratos", "kratos"},
 		{"https://github.com/go-kratos/kratos", "go-kratos", "kratos"},
 		{"git@github.com:go-kratos/kratos.git", "go-kratos", "kratos"},

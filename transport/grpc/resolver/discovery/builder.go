@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/resolver"
 
-	"github.com/go-kratos/kratos/v3/registry"
+	"github.com/openkratos/kratos/registry"
 )
 
 const name = "discovery"

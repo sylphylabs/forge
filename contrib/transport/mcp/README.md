@@ -2,12 +2,12 @@
 
 This module implements the MCP server in Kratos based on mcp-go.
 
-[![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/go-kratos/kratos/contrib/transport/mcp/v3)
+[![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/openkratos/kratos/contrib/transport/mcp)
 
 ## Quick start
 ```go
 import(
-    tm "github.com/go-kratos/kratos/contrib/transport/mcp/v3"
+    tm "github.com/openkratos/kratos/contrib/transport/mcp"
     mcp "github.com/mark3labs/mcp-go/mcp"
 )
 

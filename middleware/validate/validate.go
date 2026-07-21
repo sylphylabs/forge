@@ -3,8 +3,8 @@ package validate
 import (
 	"context"
 
-	"github.com/go-kratos/kratos/v3/errors"
-	"github.com/go-kratos/kratos/v3/middleware"
+	"github.com/openkratos/kratos/errors"
+	"github.com/openkratos/kratos/middleware"
 )
 
 // ValidatorFunc defines a validation function type.

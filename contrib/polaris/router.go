@@ -8,6 +8,7 @@ import (
 
 	"github.com/polarismesh/polaris-go"
 	polarisconfig "github.com/polarismesh/polaris-go/pkg/config"
+	polarislog "github.com/polarismesh/polaris-go/pkg/log"
 	"github.com/polarismesh/polaris-go/pkg/model"
 	"github.com/polarismesh/polaris-go/pkg/model/local"
 	"github.com/polarismesh/polaris-go/pkg/model/pb"
@@ -16,11 +17,11 @@ import (
 	v1 "github.com/polarismesh/specification/source/go/api/v1/service_manage"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"github.com/go-kratos/kratos/v3"
-	"github.com/go-kratos/kratos/v3/log"
-	"github.com/go-kratos/kratos/v3/selector"
-	"github.com/go-kratos/kratos/v3/transport"
-	"github.com/go-kratos/kratos/v3/transport/http"
+	"github.com/openkratos/kratos"
+	"github.com/openkratos/kratos/log"
+	"github.com/openkratos/kratos/selector"
+	"github.com/openkratos/kratos/transport"
+	"github.com/openkratos/kratos/transport/http"
 )
 
 type router struct {
@@ -253,5 +254,5 @@ func buildPolarisInstance(namespace string, nodes []selector.Node) *pb.ServiceIn
 	}
 	return pb.NewServiceInstancesInProto(d, func(string) local.InstanceLocalValue {
 		return local.NewInstanceLocalValue()
-	}, &pb.SvcPluginValues{Routers: nil, Loadbalancer: nil}, nil)
+	}, &pb.SvcPluginValues{Routers: nil, Loadbalancer: nil}, nil, polarislog.GetBaseLogger())
 }

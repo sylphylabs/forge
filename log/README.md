@@ -63,23 +63,23 @@ log.InfoContext(ctx, "handling request")
 
 ```go
 import (
-	otel "github.com/go-kratos/kratos/contrib/otel/v3/log"
-	"github.com/go-kratos/kratos/v3/log"
+	otel "github.com/openkratos/kratos/contrib/otel/log"
+	"github.com/openkratos/kratos/log"
 )
 
 logger := log.NewLogger(otel.NewHandler("helloworld"))
 log.SetDefault(logger)
 ```
 
-The `github.com/go-kratos/kratos/contrib/otel/v3/log` handler bridges slog records to
+The `github.com/openkratos/kratos/contrib/otel/log` handler bridges slog records to
 OpenTelemetry Logs. Use the core log builder when you need Kratos logger options:
 
 ```go
 import (
 	"log/slog"
 
-	otel "github.com/go-kratos/kratos/contrib/otel/v3/log"
-	"github.com/go-kratos/kratos/v3/log"
+	otel "github.com/openkratos/kratos/contrib/otel/log"
+	"github.com/openkratos/kratos/log"
 )
 
 logger := log.NewLogger(

@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-kratos/kratos/v3/encoding"
-	"github.com/go-kratos/kratos/v3/internal/testdata/binding"
-	"github.com/go-kratos/kratos/v3/middleware"
-	"github.com/go-kratos/kratos/v3/selector"
-	transportpkg "github.com/go-kratos/kratos/v3/transport"
+	"github.com/openkratos/kratos/encoding"
+	"github.com/openkratos/kratos/internal/testdata/binding"
+	"github.com/openkratos/kratos/middleware"
+	"github.com/openkratos/kratos/selector"
+	transportpkg "github.com/openkratos/kratos/transport"
 )
 
 type streamTestCodec struct{}

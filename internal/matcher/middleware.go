@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/go-kratos/kratos/v3/middleware"
+	"github.com/openkratos/kratos/middleware"
 )
 
 // Matcher is a middleware matcher.

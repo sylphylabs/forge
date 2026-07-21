@@ -6,9 +6,9 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/go-kratos/kratos/contrib/middleware/validate/v3/internal/testdata"
-	kerrors "github.com/go-kratos/kratos/v3/errors"
-	"github.com/go-kratos/kratos/v3/middleware"
+	"github.com/openkratos/kratos/contrib/middleware/validate/internal/testdata"
+	kerrors "github.com/openkratos/kratos/errors"
+	"github.com/openkratos/kratos/middleware"
 )
 
 type testcase struct {

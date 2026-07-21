@@ -18,8 +18,8 @@ sentry.Init(sentry.ClientOptions{
 import (
 	"context"
 
-	ksentry "github.com/go-kratos/kratos/contrib/errortracker/sentry/v3"
-	"github.com/go-kratos/kratos/contrib/otel/v3/tracing"
+	ksentry "github.com/openkratos/kratos/contrib/errortracker/sentry"
+	"github.com/openkratos/kratos/contrib/otel/tracing"
 )
 
 // for HTTP server, new HTTP server with sentry middleware options

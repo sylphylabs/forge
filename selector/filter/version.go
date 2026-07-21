@@ -3,7 +3,7 @@ package filter
 import (
 	"context"
 
-	"github.com/go-kratos/kratos/v3/selector"
+	"github.com/openkratos/kratos/selector"
 )
 
 // Version is version filter.

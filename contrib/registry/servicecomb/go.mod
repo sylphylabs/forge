@@ -1,12 +1,12 @@
-module github.com/go-kratos/kratos/contrib/registry/servicecomb/v3
+module github.com/openkratos/kratos/contrib/registry/servicecomb
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/go-chassis/cari v0.9.0
 	github.com/go-chassis/sc-client v0.7.0
-	github.com/go-kratos/kratos/v3 v3.0.0
 	github.com/gofrs/uuid v4.4.0+incompatible
+	github.com/openkratos/kratos v0.0.0
 )
 
 require (
@@ -22,4 +22,4 @@ require (
 	github.com/stretchr/testify v1.11.1 // indirect
 )
 
-replace github.com/go-kratos/kratos/v3 => ../../../
+replace github.com/openkratos/kratos => ../../../

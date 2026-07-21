@@ -9,7 +9,7 @@ import (
 
 	"github.com/hashicorp/consul/api"
 
-	"github.com/go-kratos/kratos/v3/registry"
+	"github.com/openkratos/kratos/registry"
 )
 
 var (

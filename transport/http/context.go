@@ -9,10 +9,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/gorilla/mux"
-
-	"github.com/go-kratos/kratos/v3/middleware"
-	"github.com/go-kratos/kratos/v3/transport"
+	"github.com/openkratos/kratos/middleware"
+	"github.com/openkratos/kratos/transport"
 )
 
 var _ Context = (*wrapper)(nil)
@@ -70,12 +68,7 @@ func (c *wrapper) Header() http.Header {
 }
 
 func (c *wrapper) Vars() url.Values {
-	raws := mux.Vars(c.req)
-	vars := make(url.Values, len(raws))
-	for k, v := range raws {
-		vars[k] = []string{v}
-	}
-	return vars
+	return requestVars(c.req)
 }
 
 func (c *wrapper) Form() url.Values {

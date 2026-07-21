@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-kratos/kratos/v3/registry"
-	"github.com/go-kratos/kratos/v3/selector"
-	"github.com/go-kratos/kratos/v3/selector/filter"
+	"github.com/openkratos/kratos/registry"
+	"github.com/openkratos/kratos/selector"
+	"github.com/openkratos/kratos/selector/filter"
 )
 
 func TestWrr(t *testing.T) {

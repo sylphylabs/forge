@@ -5,8 +5,8 @@ import (
 	stderrors "errors"
 	"testing"
 
-	kratoserrors "github.com/go-kratos/kratos/v3/errors"
-	"github.com/go-kratos/kratos/v3/transport"
+	kratoserrors "github.com/openkratos/kratos/errors"
+	"github.com/openkratos/kratos/transport"
 )
 
 type transportMock struct {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/hashicorp/consul/api"
 
-	"github.com/go-kratos/kratos/v3/config"
+	"github.com/openkratos/kratos/config"
 )
 
 // Option is consul config option.

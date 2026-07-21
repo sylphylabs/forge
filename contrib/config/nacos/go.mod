@@ -1,10 +1,10 @@
-module github.com/go-kratos/kratos/contrib/config/nacos/v3
+module github.com/openkratos/kratos/contrib/config/nacos
 
-go 1.25.0
+go 1.26.0
 
 require (
-	github.com/go-kratos/kratos/v3 v3.0.0
 	github.com/nacos-group/nacos-sdk-go v1.1.6
+	github.com/openkratos/kratos v0.0.0
 )
 
 require (
@@ -21,12 +21,12 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
-	gopkg.in/ini.v1 v1.67.2 // indirect
+	gopkg.in/ini.v1 v1.67.3 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/go-kratos/kratos/v3 => ../../../
+replace github.com/openkratos/kratos => ../../../

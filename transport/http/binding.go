@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/go-kratos/kratos/v3/encoding"
-	"github.com/go-kratos/kratos/v3/encoding/form"
-	"github.com/go-kratos/kratos/v3/errors"
+	"github.com/openkratos/kratos/encoding"
+	"github.com/openkratos/kratos/encoding/form"
+	"github.com/openkratos/kratos/errors"
 )
 
 func bindQuery(vars url.Values, target any) error {

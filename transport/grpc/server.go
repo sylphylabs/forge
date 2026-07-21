@@ -14,12 +14,12 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/go-kratos/kratos/v3/internal/endpoint"
-	"github.com/go-kratos/kratos/v3/internal/host"
-	"github.com/go-kratos/kratos/v3/internal/matcher"
-	"github.com/go-kratos/kratos/v3/log"
-	"github.com/go-kratos/kratos/v3/middleware"
-	"github.com/go-kratos/kratos/v3/transport"
+	"github.com/openkratos/kratos/internal/endpoint"
+	"github.com/openkratos/kratos/internal/host"
+	"github.com/openkratos/kratos/internal/matcher"
+	"github.com/openkratos/kratos/log"
+	"github.com/openkratos/kratos/middleware"
+	"github.com/openkratos/kratos/transport"
 )
 
 var (

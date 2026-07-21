@@ -4,16 +4,16 @@ This module keeps OpenTelemetry integrations out of the core Kratos module.
 
 ## Packages
 
-- `github.com/go-kratos/kratos/contrib/otel/v3/log`: slog handler bridge, usually imported as `otel` for `otel.NewHandler`.
-- `github.com/go-kratos/kratos/contrib/otel/v3/tracing`: tracing middleware and trace slog attributes.
-- `github.com/go-kratos/kratos/contrib/otel/v3/metrics`: metrics middleware and OTel metric helpers.
+- `github.com/openkratos/kratos/contrib/otel/log`: slog handler bridge, usually imported as `otel` for `otel.NewHandler`.
+- `github.com/openkratos/kratos/contrib/otel/tracing`: tracing middleware and trace slog attributes.
+- `github.com/openkratos/kratos/contrib/otel/metrics`: metrics middleware and OTel metric helpers.
 
 ## Logger
 
 ```go
 import (
-	otel "github.com/go-kratos/kratos/contrib/otel/v3/log"
-	"github.com/go-kratos/kratos/v3/log"
+	otel "github.com/openkratos/kratos/contrib/otel/log"
+	"github.com/openkratos/kratos/log"
 )
 
 logger := log.NewLogger(otel.NewHandler("helloworld"))
@@ -26,8 +26,8 @@ filtering:
 import (
 	"log/slog"
 
-	otel "github.com/go-kratos/kratos/contrib/otel/v3/log"
-	"github.com/go-kratos/kratos/v3/log"
+	otel "github.com/openkratos/kratos/contrib/otel/log"
+	"github.com/openkratos/kratos/log"
 )
 
 logger := log.NewLogger(

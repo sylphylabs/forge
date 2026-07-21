@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 	"path"
+	"strings"
 )
 
 // WalkRouteFunc is the type of the function called for each route visited by Walk.
@@ -38,7 +39,7 @@ func (r *Router) Group(prefix string, filters ...FilterFunc) *Router {
 	newFilters := make([]FilterFunc, 0, len(r.filters)+len(filters))
 	newFilters = append(newFilters, r.filters...)
 	newFilters = append(newFilters, filters...)
-	return newRouter(path.Join(r.prefix, prefix), r.srv, newFilters...)
+	return newRouter(joinRoutePath(r.prefix, prefix), r.srv, newFilters...)
 }
 
 // Handle registers a new route with a matcher for the URL path and method.
@@ -52,10 +53,21 @@ func (r *Router) Handle(method, relativePath string, h HandlerFunc, filters ...F
 	}))
 	next = FilterChain(filters...)(next)
 	next = FilterChain(r.filters...)(next)
-	route := r.srv.router.Handle(path.Join(r.prefix, relativePath), next)
-	if method != "*" {
-		route.Methods(method)
+	r.srv.router.handle(method, joinRoutePath(r.prefix, relativePath), r.srv.filter()(next), true)
+}
+
+func joinRoutePath(prefix, route string) string {
+	joined := path.Join(prefix, route)
+	if joined == "." {
+		return "/"
 	}
+	if strings.HasSuffix(route, "/") && joined != "/" {
+		joined += "/"
+	}
+	if !strings.HasPrefix(joined, "/") {
+		joined = "/" + joined
+	}
+	return joined
 }
 
 // GET registers a new GET route for a path with matching handler in the router.

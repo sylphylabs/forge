@@ -14,8 +14,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/go-kratos/kratos/v3/middleware"
-	"github.com/go-kratos/kratos/v3/transport"
+	"github.com/openkratos/kratos/middleware"
+	"github.com/openkratos/kratos/transport"
 )
 
 type headerCarrier http.Header

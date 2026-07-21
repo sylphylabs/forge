@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-kratos/kratos/v3/registry"
-	"github.com/go-kratos/kratos/v3/transport"
+	"github.com/openkratos/kratos/registry"
+	"github.com/openkratos/kratos/transport"
 )
 
 func TestID(t *testing.T) {

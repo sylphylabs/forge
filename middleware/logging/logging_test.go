@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/go-kratos/kratos/v3/middleware"
-	"github.com/go-kratos/kratos/v3/transport"
+	"github.com/openkratos/kratos/middleware"
+	"github.com/openkratos/kratos/transport"
 )
 
 var _ transport.Transporter = (*Transport)(nil)

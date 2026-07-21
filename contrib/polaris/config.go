@@ -8,8 +8,8 @@ import (
 	"github.com/polarismesh/polaris-go"
 	"github.com/polarismesh/polaris-go/pkg/model"
 
-	"github.com/go-kratos/kratos/v3/config"
-	"github.com/go-kratos/kratos/v3/log"
+	"github.com/openkratos/kratos/config"
+	"github.com/openkratos/kratos/log"
 )
 
 // ConfigOption is polaris config option.

@@ -2,7 +2,7 @@
 
 This module implements the `config.Source` interface in kratos based apollo config management center.
 
-[![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/go-kratos/kratos/contrib/config/apollo/v3)
+[![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/openkratos/kratos/contrib/config/apollo)
 
 ### Quick start
 
@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/go-kratos/kratos/contrib/config/apollo/v3"
-	"github.com/go-kratos/kratos/v3/config"
+	"github.com/openkratos/kratos/contrib/config/apollo"
+	"github.com/openkratos/kratos/config"
 )
 
 func main() {

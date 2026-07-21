@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-kratos/kratos/v3/internal/host"
+	"github.com/openkratos/kratos/internal/host"
 )
 
 const appJSONStr = "application/json"
@@ -178,8 +178,8 @@ func testRoute(t *testing.T, srv *Server) {
 func TestRouter_Group(t *testing.T) {
 	r := &Router{}
 	rr := r.Group("a", func(http.Handler) http.Handler { return nil })
-	if !reflect.DeepEqual("a", rr.prefix) {
-		t.Errorf("expected %q, got %q", "a", rr.prefix)
+	if !reflect.DeepEqual("/a", rr.prefix) {
+		t.Errorf("expected %q, got %q", "/a", rr.prefix)
 	}
 }
 

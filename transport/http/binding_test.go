@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	kratoserror "github.com/go-kratos/kratos/v3/errors"
+	kratoserror "github.com/openkratos/kratos/errors"
 )
 
 type (

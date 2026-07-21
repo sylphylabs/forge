@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-kratos/kratos/v3/encoding"
+	"github.com/openkratos/kratos/encoding"
 )
 
 // Decoder is config decoder.

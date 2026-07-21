@@ -13,7 +13,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 
-	"github.com/go-kratos/kratos/cmd/kratos/v3/internal/base"
+	"github.com/openkratos/kratos/cmd/kratos/internal/base"
 )
 
 var projects = map[string]string{

@@ -18,10 +18,10 @@ import (
 	"google.golang.org/genproto/googleapis/api/httpbody"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	kratoserrors "github.com/go-kratos/kratos/v3/errors"
-	"github.com/go-kratos/kratos/v3/middleware"
-	"github.com/go-kratos/kratos/v3/registry"
-	"github.com/go-kratos/kratos/v3/selector"
+	kratoserrors "github.com/openkratos/kratos/errors"
+	"github.com/openkratos/kratos/middleware"
+	"github.com/openkratos/kratos/registry"
+	"github.com/openkratos/kratos/selector"
 )
 
 type mockRoundTripper struct{}

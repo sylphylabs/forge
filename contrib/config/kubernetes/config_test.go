@@ -15,7 +15,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 
-	"github.com/go-kratos/kratos/v3/config"
+	"github.com/openkratos/kratos/config"
 )
 
 const (

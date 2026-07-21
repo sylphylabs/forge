@@ -10,10 +10,10 @@ import (
 
 	"google.golang.org/genproto/googleapis/api/httpbody"
 
-	"github.com/go-kratos/kratos/v3/encoding"
-	_ "github.com/go-kratos/kratos/v3/encoding/protojson"
-	"github.com/go-kratos/kratos/v3/errors"
-	"github.com/go-kratos/kratos/v3/internal/testdata/binding"
+	"github.com/openkratos/kratos/encoding"
+	_ "github.com/openkratos/kratos/encoding/protojson"
+	"github.com/openkratos/kratos/errors"
+	"github.com/openkratos/kratos/internal/testdata/binding"
 )
 
 func TestDefaultRequestDecoder(t *testing.T) {

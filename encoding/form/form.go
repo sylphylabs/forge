@@ -7,7 +7,7 @@ import (
 	"github.com/go-playground/form/v4"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/go-kratos/kratos/v3/encoding"
+	"github.com/openkratos/kratos/encoding"
 )
 
 const (
@@ -23,7 +23,7 @@ var (
 )
 
 // This variable can be replaced with -ldflags like below:
-// go build "-ldflags=-X github.com/go-kratos/kratos/v3/encoding/form.tagName=form"
+// go build "-ldflags=-X github.com/openkratos/kratos/encoding/form.tagName=form"
 var tagName = "json"
 
 func init() {

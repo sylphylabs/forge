@@ -17,7 +17,7 @@ import (
 
 const (
 	contextPackage       = protogen.GoImportPath("context")
-	transportHTTPPackage = protogen.GoImportPath("github.com/go-kratos/kratos/v3/transport/http")
+	transportHTTPPackage = protogen.GoImportPath("github.com/openkratos/kratos/transport/http")
 	httpBodyFullName     = protoreflect.FullName("google.api.HttpBody")
 )
 
@@ -205,12 +205,8 @@ func buildMethodDesc(g *protogen.GeneratedFile, m *protogen.Method, method, path
 	pathTemplate := path
 	vars := buildPathVars(path)
 
-	for v, s := range vars {
+	for v := range vars {
 		fields := m.Input.Desc.Fields()
-
-		if s != nil {
-			path = replacePath(v, *s, path)
-		}
 		for _, field := range strings.Split(v, ".") {
 			if strings.TrimSpace(field) == "" {
 				continue
@@ -249,7 +245,7 @@ func buildMethodDesc(g *protogen.GeneratedFile, m *protogen.Method, method, path
 		Request:         g.QualifiedGoIdent(m.Input.GoIdent),
 		Reply:           g.QualifiedGoIdent(m.Output.GoIdent),
 		Comment:         comment,
-		Path:            path,
+		Path:            pathTemplate,
 		PathTemplate:    pathTemplate,
 		Method:          method,
 		HasVars:         len(vars) > 0,
@@ -283,35 +279,6 @@ func buildPathVars(path string) (res map[string]*string) {
 		}
 	}
 	return
-}
-
-func replacePath(name string, value string, path string) string {
-	pattern := regexp.MustCompile(fmt.Sprintf(`(?i){([\s]*%s\b[\s]*)=?([^{}]*)}`, name))
-	idx := pattern.FindStringIndex(path)
-	if len(idx) > 0 {
-		path = fmt.Sprintf("%s{%s:%s}%s",
-			path[:idx[0]], // The start of the match
-			name,
-			pathTemplateRegex(value),
-			path[idx[1]:],
-		)
-	}
-	return path
-}
-
-func pathTemplateRegex(value string) string {
-	segs := strings.Split(value, "/")
-	for i, seg := range segs {
-		switch seg {
-		case "*":
-			segs[i] = "[^/]+"
-		case "**":
-			segs[i] = ".*"
-		default:
-			segs[i] = regexp.QuoteMeta(seg)
-		}
-	}
-	return strings.Join(segs, "/")
 }
 
 func camelCaseVars(s string) string {

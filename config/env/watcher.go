@@ -3,7 +3,7 @@ package env
 import (
 	"context"
 
-	"github.com/go-kratos/kratos/v3/config"
+	"github.com/openkratos/kratos/config"
 )
 
 var _ config.Watcher = (*watcher)(nil)

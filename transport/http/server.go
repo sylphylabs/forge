@@ -9,14 +9,12 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/gorilla/mux"
-
-	"github.com/go-kratos/kratos/v3/internal/endpoint"
-	"github.com/go-kratos/kratos/v3/internal/host"
-	"github.com/go-kratos/kratos/v3/internal/matcher"
-	"github.com/go-kratos/kratos/v3/log"
-	"github.com/go-kratos/kratos/v3/middleware"
-	"github.com/go-kratos/kratos/v3/transport"
+	"github.com/openkratos/kratos/internal/endpoint"
+	"github.com/openkratos/kratos/internal/host"
+	"github.com/openkratos/kratos/internal/matcher"
+	"github.com/openkratos/kratos/log"
+	"github.com/openkratos/kratos/middleware"
+	"github.com/openkratos/kratos/transport"
 )
 
 var (
@@ -112,9 +110,8 @@ func TLSConfig(c *tls.Config) ServerOption {
 	}
 }
 
-// StrictSlash is with mux's StrictSlash
-// If true, when the path pattern is "/path/", accessing "/path" will
-// redirect to the former and vice versa.
+// StrictSlash is retained for source compatibility.
+// Deprecated: net/http.ServeMux owns path cleaning and trailing-slash redirects.
 func StrictSlash(strictSlash bool) ServerOption {
 	return func(o *Server) {
 		o.strictSlash = strictSlash
@@ -128,22 +125,22 @@ func Listener(lis net.Listener) ServerOption {
 	}
 }
 
-// PathPrefix with mux's PathPrefix, router will be replaced by a subrouter that start with prefix.
+// PathPrefix applies a common prefix to routes registered on the server.
 func PathPrefix(prefix string) ServerOption {
 	return func(s *Server) {
-		s.router = s.router.PathPrefix(prefix).Subrouter()
+		s.pathPrefix = prefix
 	}
 }
 
 func NotFoundHandler(handler http.Handler) ServerOption {
 	return func(s *Server) {
-		s.router.NotFoundHandler = handler
+		s.router.notFoundHandler = handler
 	}
 }
 
 func MethodNotAllowedHandler(handler http.Handler) ServerOption {
 	return func(s *Server) {
-		s.router.MethodNotAllowedHandler = handler
+		s.router.methodNotAllowedHandler = handler
 	}
 }
 
@@ -165,7 +162,8 @@ type Server struct {
 	enc         EncodeResponseFunc
 	ene         EncodeErrorFunc
 	strictSlash bool
-	router      *mux.Router
+	pathPrefix  string
+	router      *routeMux
 }
 
 // NewServer creates an HTTP server by options.
@@ -181,15 +179,11 @@ func NewServer(opts ...ServerOption) *Server {
 		enc:         DefaultResponseEncoder,
 		ene:         DefaultErrorEncoder,
 		strictSlash: true,
-		router:      mux.NewRouter(),
+		router:      newRouteMux(),
 	}
-	srv.router.NotFoundHandler = http.DefaultServeMux
-	srv.router.MethodNotAllowedHandler = http.DefaultServeMux
 	for _, o := range opts {
 		o(srv)
 	}
-	srv.router.StrictSlash(srv.strictSlash)
-	srv.router.Use(srv.filter())
 	srv.Server = &http.Server{
 		Handler:   FilterChain(srv.filters...)(srv.router),
 		TLSConfig: srv.tlsConf,
@@ -208,22 +202,7 @@ func (s *Server) Use(selector string, m ...middleware.Middleware) {
 
 // WalkRoute walks the router and all its sub-routers, calling walkFn for each route in the tree.
 func (s *Server) WalkRoute(fn WalkRouteFunc) error {
-	return s.router.Walk(func(route *mux.Route, _ *mux.Router, _ []*mux.Route) error {
-		methods, err := route.GetMethods()
-		if err != nil {
-			return nil // ignore no methods
-		}
-		path, err := route.GetPathTemplate()
-		if err != nil {
-			return err
-		}
-		for _, method := range methods {
-			if err := fn(RouteInfo{Method: method, Path: path}); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	return s.router.walk(fn)
 }
 
 // WalkHandle walks the router and all its sub-routers, calling walkFn for each route in the tree.
@@ -236,27 +215,27 @@ func (s *Server) WalkHandle(handle func(method, path string, handler http.Handle
 
 // Route registers an HTTP router.
 func (s *Server) Route(prefix string, filters ...FilterFunc) *Router {
-	return newRouter(prefix, s, filters...)
+	return newRouter(joinRoutePath(s.pathPrefix, prefix), s, filters...)
 }
 
 // Handle registers a new route with a matcher for the URL path.
 func (s *Server) Handle(path string, h http.Handler) {
-	s.router.Handle(path, h)
+	s.router.handle("*", joinRoutePath(s.pathPrefix, path), s.filter()(h), false)
 }
 
 // HandlePrefix registers a new route with a matcher for the URL path prefix.
 func (s *Server) HandlePrefix(prefix string, h http.Handler) {
-	s.router.PathPrefix(prefix).Handler(h)
+	s.router.handlePrefix(joinRoutePath(s.pathPrefix, prefix), s.filter()(h))
 }
 
 // HandleFunc registers a new route with a matcher for the URL path.
 func (s *Server) HandleFunc(path string, h http.HandlerFunc) {
-	s.router.HandleFunc(path, h)
+	s.Handle(path, h)
 }
 
 // HandleHeader registers a new route with a matcher for the header.
 func (s *Server) HandleHeader(key, val string, h http.HandlerFunc) {
-	s.router.Headers(key, val).Handler(h)
+	s.router.handleHeader(key, val, s.filter()(h))
 }
 
 // ServeHTTP should write reply headers and data to the ResponseWriter and then return.
@@ -264,7 +243,7 @@ func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	s.Handler.ServeHTTP(res, req)
 }
 
-func (s *Server) filter() mux.MiddlewareFunc {
+func (s *Server) filter() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			var (
@@ -278,11 +257,7 @@ func (s *Server) filter() mux.MiddlewareFunc {
 			}
 			defer cancel()
 
-			pathTemplate := req.URL.Path
-			if route := mux.CurrentRoute(req); route != nil {
-				// /path/123 -> /path/{id}
-				pathTemplate, _ = route.GetPathTemplate()
-			}
+			pathTemplate := routeTemplate(req)
 
 			tr := &Transport{
 				operation:    pathTemplate,

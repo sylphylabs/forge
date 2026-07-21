@@ -18,9 +18,9 @@ import (
 	"testing"
 	"time"
 
-	kratoserrors "github.com/go-kratos/kratos/v3/errors"
-	"github.com/go-kratos/kratos/v3/internal/host"
-	"github.com/go-kratos/kratos/v3/log"
+	kratoserrors "github.com/openkratos/kratos/errors"
+	"github.com/openkratos/kratos/internal/host"
+	"github.com/openkratos/kratos/log"
 )
 
 var h = func(w http.ResponseWriter, r *http.Request) {
@@ -373,18 +373,25 @@ func TestListener(t *testing.T) {
 }
 
 func TestNotFoundHandler(t *testing.T) {
-	mux := http.NewServeMux()
-	srv := NewServer(NotFoundHandler(mux))
-	if !reflect.DeepEqual(srv.router.NotFoundHandler, mux) {
-		t.Errorf("expected %v got %v", mux, srv.router.NotFoundHandler)
+	srv := NewServer(NotFoundHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})))
+	recorder := httptest.NewRecorder()
+	srv.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/missing", nil))
+	if recorder.Code != http.StatusTeapot {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusTeapot)
 	}
 }
 
 func TestMethodNotAllowedHandler(t *testing.T) {
-	mux := http.NewServeMux()
-	srv := NewServer(MethodNotAllowedHandler(mux))
-	if !reflect.DeepEqual(srv.router.MethodNotAllowedHandler, mux) {
-		t.Errorf("expected %v got %v", mux, srv.router.MethodNotAllowedHandler)
+	srv := NewServer(MethodNotAllowedHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})))
+	srv.Route("/").GET("/resource", func(Context) error { return nil })
+	recorder := httptest.NewRecorder()
+	srv.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/resource", nil))
+	if recorder.Code != http.StatusTeapot {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusTeapot)
 	}
 }
 

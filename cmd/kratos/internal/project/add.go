@@ -9,7 +9,7 @@ import (
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/fatih/color"
 
-	"github.com/go-kratos/kratos/cmd/kratos/v3/internal/base"
+	"github.com/openkratos/kratos/cmd/kratos/internal/base"
 )
 
 const (

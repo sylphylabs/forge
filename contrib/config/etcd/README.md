@@ -6,8 +6,8 @@ import (
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 
-	cfg "github.com/go-kratos/kratos/contrib/config/etcd/v3"
-	"github.com/go-kratos/kratos/v3/config"
+	cfg "github.com/openkratos/kratos/contrib/config/etcd"
+	"github.com/openkratos/kratos/config"
 )
 
 // create an etcd client

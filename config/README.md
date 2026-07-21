@@ -3,23 +3,23 @@
 ## kubernetes
 
 ```shell
-go get -u github.com/go-kratos/kratos/contrib/config/kubernetes/v3
+go get -u github.com/openkratos/kratos/contrib/config/kubernetes
 ```
 
 ## apollo
 
 ```shell
-go get -u github.com/go-kratos/kratos/contrib/config/apollo/v3
+go get -u github.com/openkratos/kratos/contrib/config/apollo
 ```
 
 ## etcd
 
 ```shell
-go get -u github.com/go-kratos/kratos/contrib/config/etcd/v3
+go get -u github.com/openkratos/kratos/contrib/config/etcd
 ```
 
 ## nacos
 
 ```shell
-go get -u github.com/go-kratos/kratos/contrib/config/nacos/v3
+go get -u github.com/openkratos/kratos/contrib/config/nacos
 ```

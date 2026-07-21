@@ -5,16 +5,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"reflect"
 
-	"github.com/gorilla/mux"
 	"google.golang.org/genproto/googleapis/api/httpbody"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/go-kratos/kratos/v3/encoding"
-	"github.com/go-kratos/kratos/v3/errors"
-	"github.com/go-kratos/kratos/v3/internal/httputil"
+	"github.com/openkratos/kratos/encoding"
+	"github.com/openkratos/kratos/errors"
+	"github.com/openkratos/kratos/internal/httputil"
 )
 
 // SupportPackageIsVersion3 These constants should not be referenced from any other code.
@@ -51,12 +49,7 @@ type EncodeErrorFunc func(http.ResponseWriter, *http.Request, error)
 
 // DefaultRequestVars decodes the request vars to object.
 func DefaultRequestVars(r *http.Request, v any) error {
-	raws := mux.Vars(r)
-	vars := make(url.Values, len(raws))
-	for k, v := range raws {
-		vars[k] = []string{v}
-	}
-	return bindQuery(vars, v)
+	return bindQuery(requestVars(r), v)
 }
 
 // DefaultRequestQuery decodes the request vars to object.
