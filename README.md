@@ -89,6 +89,8 @@ OpenKratos started from Kratos v3. Existing Kratos users should treat the module
 - [Examples](https://github.com/go-kratos/examples)
 - [Project Layout](https://github.com/go-kratos/kratos-layout)
 - [Upstream baseline and synchronization policy](UPSTREAM.md)
+- [Performance modernization](docs/design/performance.md)
+- [Upstream adoption ledger](docs/upstream-adoptions.md)
 - [v2 to v3 upstream migration guide](docs/migration/v2-to-v3.md)
 - [Community Contribution Guide](https://go-kratos.dev/docs/community/contribution)
 

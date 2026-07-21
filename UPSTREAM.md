@@ -20,3 +20,6 @@ The `upstream` remote is fetch-only and configured not to fetch tags. Upstream c
 Security fixes and correctness fixes receive priority. Compatibility layers, dependency additions, and changes that conflict with the OpenKratos architecture are not merged automatically.
 
 Use the upstream commit hash in merge or cherry-pick descriptions so provenance remains auditable.
+
+Review outcomes and local adoption commits are recorded in
+[`docs/upstream-adoptions.md`](docs/upstream-adoptions.md).

@@ -12,6 +12,9 @@ inputs to our investigation, not OpenKratos release claims. A result becomes an
 OpenKratos result only after it is reproduced against an OpenKratos baseline on
 the same machine and Go toolchain.
 
+Individual upstream review outcomes and provenance are tracked in
+[`docs/upstream-adoptions.md`](../upstream-adoptions.md).
+
 ## Goals
 
 - Reduce CPU, allocation, garbage-collection, and lock costs on per-request hot
@@ -37,9 +40,9 @@ the same machine and Go toolchain.
 
 | Area | Status | Decision |
 | --- | --- | --- |
-| HTTP routing | In progress | Replace Gorilla mux with `net/http.ServeMux` plus a small Google AIP template adapter. |
-| WRR selection | Approved for adoption | Port go-kratos/kratos#3831 with upstream authorship and reproduce its benchmarks. |
-| P2C selection | Approved for adoption | Port go-kratos/kratos#3832 with upstream authorship and reproduce its concurrency benchmarks. |
+| HTTP routing | Implemented; release evidence pending | Use `net/http.ServeMux` plus a small Google AIP template adapter. |
+| WRR selection | Adopted and validated | Detect stale entries without a steady-state node-set scan; retain churn invariants and benchmarks. |
+| P2C selection | Adopted and validated | Use concurrency-safe `math/rand/v2` package functions instead of a per-balancer random-number lock. |
 | Go 1.27 HTTP/2 | Validated | Use the standard-library-backed HTTP/2 path through a current `golang.org/x/net`; do not retain the legacy build tag. |
 | Future Go APIs | Watch | Evaluate only accepted, shipped APIs against concrete Kratos call sites and benchmarks. |
 
@@ -76,19 +79,26 @@ recorded in `DEVELOPMENT.md`.
   `benchstat`.
 - Routing compatibility breaks have migration examples before release.
 
+The implementation and focused benchmarks are present in
+`transport/http/routing.go` and `transport/http/routing_benchmark_test.go`.
+The remaining gate is controlled, publishable before-and-after evidence using
+the benchmark rules below.
+
 ## WRR Hot Path
 
 ### Source
 
 - Upstream PR: [go-kratos/kratos#3831](https://github.com/go-kratos/kratos/pull/3831)
 - Upstream commit: `15639816e6a0d0f7f05bbcc865bd0f70e996e15e`
+- OpenKratos adoption commit: `42b647be57a1cff372346c42aceb0bfba2e1e99c`
+- OpenKratos acceptance-test commit: `4fa25d1bc3d68a45d0da97e01c82c8785b93d01d`
 - Upstream status when verified: open
 
 ### Finding
 
 WRR is the default selector for both HTTP and gRPC clients. Its `Pick` method is
-called before every discovered outbound RPC. The current implementation builds
-an address set on steady-state picks to determine whether nodes changed.
+called before every discovered outbound RPC. The upstream baseline built an
+address set on steady-state picks to determine whether nodes changed.
 
 The proposed implementation relies on this invariant:
 
@@ -103,8 +113,8 @@ has disappeared. WRR selection itself remains O(n).
 
 ### Upstream-reported result
 
-The upstream PR reports the following Apple M1 Pro, Go 1.26 measurements. These
-have not yet been reproduced as OpenKratos results.
+The upstream PR reports the following Apple M1 Pro, Go 1.26 measurements. They
+remain upstream evidence; the controlled OpenKratos results are recorded below.
 
 | Benchmark | Before | After | Reported change |
 | --- | ---: | ---: | ---: |
@@ -112,15 +122,25 @@ have not yet been reproduced as OpenKratos results.
 | Changing nodes | 232.7 ns/op | 209.2 ns/op | -10.1% |
 | Changing-node allocation | 32 B, 1 alloc | 0 B, 0 alloc | allocation removed |
 
-### Adoption requirements
+### OpenKratos result
 
-- Preserve the upstream author and add the source SHA with `cherry-pick -x`.
-- Adapt new imports to `github.com/openkratos/kratos`.
-- Retain equal-length replacement, partial-overlap, and randomized churn tests.
-- Benchmark stable, add-only, removal, and replacement workloads at 1, 5, 10,
-  and 100 nodes.
-- Add a parallel benchmark to measure the reduced mutex hold time.
-- Run selector tests and race detection before acceptance.
+Ten-sample Apple M5 Pro measurements on Go 1.26.4 show stable picks improving
+40.1% to 49.6% from 5 to 100 nodes and shared parallel picks improving 45.5%.
+A synthetic five-node full-replacement cycle regressed 24.6%; replacement at 10
+and 100 nodes showed no significant change. The full commands, allocation data,
+and accepted trade-off are in the
+[selector benchmark report](../benchmarks/selectors-2026-07-22.md).
+
+### Adoption record
+
+- Upstream authorship and the source SHA are preserved in the local commit.
+- Imports use the OpenKratos module path.
+- Equal-length replacement, partial-overlap, and randomized churn invariants are
+  retained.
+- Stable, add-only, removal, replacement, and parallel benchmarks are present at
+  the required node counts.
+- Controlled before-and-after `benchstat` results are published, and the selector
+  suite passes race detection.
 
 ## P2C Concurrency
 
@@ -128,13 +148,16 @@ have not yet been reproduced as OpenKratos results.
 
 - Upstream PR: [go-kratos/kratos#3832](https://github.com/go-kratos/kratos/pull/3832)
 - Upstream commit: `584de99479d3c45ec61701a3d51a0ee84473d9c2`
+- OpenKratos adoption commit: `f1246466a2df872e7a4fa05b7e18a212e064fc63`
+- OpenKratos acceptance-test commit: `4fa25d1bc3d68a45d0da97e01c82c8785b93d01d`
 - Upstream status when verified: open
 
 ### Finding
 
 P2C samples two distinct nodes and uses the EWMA node state to choose the better
-candidate. The current implementation serializes every concurrent sample on a
-per-balancer mutex protecting a private `rand.Rand`.
+candidate. The upstream baseline serialized every concurrent sample on a
+per-balancer mutex protecting a private `rand.Rand`; the adopted implementation
+removes that lock and private generator.
 
 The top-level `math/rand/v2` functions are documented as safe for concurrent
 use. In the currently supported Go implementation they use runtime-local random
@@ -148,28 +171,36 @@ contract, so this is not considered an API compatibility break.
 ### Upstream-reported result
 
 The upstream PR reports the following Apple M1 Pro, Go 1.26,
-`GOMAXPROCS=8` measurements. These have not yet been reproduced as OpenKratos
-results.
+`GOMAXPROCS=8` measurements. They remain upstream evidence; the controlled
+OpenKratos results are recorded below.
 
 | Benchmark | Before | After | Reported change |
 | --- | ---: | ---: | ---: |
 | Parallel selection | 329.5 ns/op | 128.1 ns/op | -61.1% |
 | Serial selection | 274.3 ns/op | 273.4 ns/op | no significant change |
 
+### OpenKratos result
+
+Ten-sample Apple M5 Pro measurements on Go 1.26.4 show parallel improvements of
+17.6%, 38.5%, 54.8%, and 68.6% at GOMAXPROCS 2, 4, 8, and 16 respectively.
+GOMAXPROCS 1 regressed 0.9%, serial results stayed within -1.1% to +3.7%, and
+allocations were unchanged. See the
+[selector benchmark report](../benchmarks/selectors-2026-07-22.md).
+
 P2C is optional; WRR remains the current default. This improvement therefore
 benefits applications that explicitly select P2C and does not stack with the WRR
 result for a single request.
 
-### Adoption requirements
+### Adoption record
 
-- Preserve the upstream author and add the source SHA with `cherry-pick -x`.
-- Adapt new imports to `github.com/openkratos/kratos`.
-- Avoid comments that make lock freedom a permanent standard-library API
-  guarantee; concurrency safety is the contractual requirement.
-- Run the selector suite with race detection.
-- Reproduce serial and parallel results with `GOMAXPROCS` 1, 2, 4, 8, and 16.
-- Verify that sampled nodes are always distinct and that distribution remains
-  within a documented statistical tolerance.
+- Upstream authorship and the source SHA are preserved in the local commit.
+- Imports use the OpenKratos module path.
+- Comments rely on the standard library's concurrency-safety contract rather
+  than promising an implementation detail.
+- Concurrent sampling, distinct-node selection, and distribution tolerance have
+  regression coverage.
+- Serial and parallel results across `GOMAXPROCS` 1, 2, 4, 8, and 16 are
+  published, and the selector suite passes race detection.
 
 ## Benchmark Rules
 
@@ -190,18 +221,14 @@ release evidence should come from controlled comparative runs.
 
 ### Immediate
 
-- Complete and validate the `ServeMux` migration.
-- Establish a clean OpenKratos baseline commit before importing upstream work.
-- Cherry-pick the WRR and P2C commits separately, preserving authorship and
-  upstream SHAs.
-- Adapt module paths and keep OpenKratos-specific benchmark improvements in
-  follow-up commits.
+- Complete the controlled Gorilla-versus-ServeMux comparison.
+- Investigate replacement-heavy WRR workloads if real discovery profiles show
+  that the isolated five-node regression is operationally relevant.
+- Keep performance changes separate from unrelated upstream adoptions.
 
 ### Before the first release
 
 - Publish controlled Gorilla-versus-ServeMux benchmark results.
-- Publish controlled before-versus-after WRR and P2C results.
-- Add routing and selector performance commands to the development guide.
 - Document selector choice and the operational difference between WRR and P2C.
 - Review dependency removal made possible by the standard-library router.
 

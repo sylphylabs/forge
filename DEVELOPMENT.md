@@ -56,6 +56,19 @@ Run the router scaling benchmarks with:
 go test ./transport/http -run '^$' -bench '^BenchmarkRouteMux$' -benchmem
 ```
 
+Benchmark acceptance rules and selector performance investigations are recorded
+in [`docs/design/performance.md`](docs/design/performance.md).
+
+Run selector performance benchmarks with:
+
+```shell
+GOMAXPROCS=8 go test ./selector/wrr -run '^$' \
+  -bench '^(BenchmarkPickWorkloads|BenchmarkPickParallel)$' -benchmem
+
+go test ./selector/p2c -run '^$' -bench '^BenchmarkSelect' \
+  -benchmem -cpu=1,2,4,8,16
+```
+
 ## Repository Identity
 
 All OpenKratos modules and generated Go package paths use the `github.com/openkratos/kratos` prefix. Internal cross-module requirements use the temporary `v0.0.0` version together with local `replace` directives until the first OpenKratos tags are published.

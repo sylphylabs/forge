@@ -89,6 +89,8 @@ OpenKratos 以 Kratos v3 为起点。现有 Kratos 用户应将 module path 变�
 - [示例](https://github.com/go-kratos/examples)
 - [项目模板](https://github.com/go-kratos/kratos-layout)
 - [上游基线与同步策略](UPSTREAM.md)
+- [性能现代化记录](docs/design/performance.md)
+- [上游变更吸收记录](docs/upstream-adoptions.md)
 - [上游 v2 到 v3 迁移指南](docs/migration/v2-to-v3_zh.md)
 - [贡献指南](https://go-kratos.dev/zh-cn/docs/community/contribution)
 
