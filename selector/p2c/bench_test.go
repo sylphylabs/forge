@@ -24,9 +24,8 @@ func benchSelector(nodeCount int) selector.Selector {
 	return s
 }
 
-// BenchmarkSelectParallel hammers a single shared balancer from GOMAXPROCS
-// goroutines, which is how a balancer is used under real client load. The
-// per-pick mutex around the *rand.Rand serializes every pick here.
+// BenchmarkSelectParallel exercises a shared balancer from GOMAXPROCS
+// goroutines, matching how clients use a balancer under concurrent load.
 func BenchmarkSelectParallel(b *testing.B) {
 	s := benchSelector(10)
 	ctx := context.Background()
@@ -43,13 +42,13 @@ func BenchmarkSelectParallel(b *testing.B) {
 	})
 }
 
-// BenchmarkSelectSerial measures the single-goroutine cost (uncontended lock).
+// BenchmarkSelectSerial measures the single-goroutine selection cost.
 func BenchmarkSelectSerial(b *testing.B) {
 	s := benchSelector(10)
 	ctx := context.Background()
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, done, err := s.Select(ctx)
 		if err != nil {
 			b.Fatal(err)
