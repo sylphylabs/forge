@@ -102,3 +102,37 @@ func TestCodec_Marshal(t *testing.T) {
 		t.Fatalf("want \"v: hi\n\" return \"%s\"", string(got))
 	}
 }
+
+func TestCodecCompatibility(t *testing.T) {
+	type document struct {
+		Enabled bool              `yaml:"enabled"`
+		Labels  map[string]string `yaml:"labels"`
+		Ports   []int             `yaml:"ports"`
+	}
+	want := document{
+		Enabled: true,
+		Labels:  map[string]string{"app": "openkratos"},
+		Ports:   []int{8000, 9000},
+	}
+	data, err := (codec{}).Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got document
+	if err := (codec{}).Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("round trip = %#v, want %#v", got, want)
+	}
+
+	var legacy struct {
+		Enabled bool `yaml:"enabled"`
+	}
+	if err := (codec{}).Unmarshal([]byte("enabled: yes\n"), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	if !legacy.Enabled {
+		t.Fatal("typed YAML 1.1 boolean compatibility was lost")
+	}
+}
