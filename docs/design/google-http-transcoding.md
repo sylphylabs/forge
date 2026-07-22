@@ -1,6 +1,6 @@
 # Google HTTP Transcoding Conformance
 
-Status: Phase 1 approved for implementation; Phase 2 scope only
+Status: Phase 1 implemented and validated; release packaging pending; Phase 2 scope only
 
 Last reviewed: July 22, 2026
 
@@ -80,29 +80,28 @@ Phase 2 covers external `google.api.Service` YAML configuration:
 Phase 2 must not begin by widening Phase 1 APIs speculatively. Its CLI and merge
 contract require a separate approved design after Phase 1 lands.
 
-## Current Gaps
+## Implementation Status
 
-The current implementation supports the common path grammar, generated route
-registration, named bodies, named response bodies, and one-level additional
-bindings. It does not yet satisfy the complete contract:
+Phase 1 now has one shared path parser for generation, client expansion,
+ServeMux registration, and escaped-path extraction. Invalid descriptors and
+conflicting bindings fail generation without partial output. Generated unary
+clients and servers use `application/json` with descriptor-aware protobuf JSON
+adapters for whole messages and projected fields.
 
-1. `http.Request.PathValue` returns decoded wildcard values. Google requires
-   `%2F` and `%2f` to remain encoded by default inside multi-segment variables.
-2. `transport/http` routing, `BuildPath`, and `protoc-gen-go-http` each parse
-   templates independently. Their accepted grammar and escaping behavior can
-   diverge.
-3. Repeated and map path fields currently produce warnings rather than hard
-   generator errors. A path variable that terminates at a message field is not
-   rejected consistently.
-4. Projected scalar, repeated, map, and enum bodies use ordinary Go JSON in
-   some generated paths. That is incorrect for protobuf-specific cases such as
-   64-bit integers, enum names, and non-finite floating-point values.
-5. The server can represent `custom.kind = "*"`, but a generated client cannot
-   infer one concrete HTTP method from an unspecified-method rule.
-6. `additional_bindings` has generator logic but no complete generated-client
-   and registered-server round-trip fixture.
-7. External service config and `fully_decode_reserved_expansion` are not
-   supported.
+Real Edition 2023 Open and Opaque fixtures compile and execute generated code.
+They cover primary client/server requests, multiple additional bindings,
+concrete and unspecified custom methods, bare wildcards, `%2F`, named and whole
+bodies, nested and repeated query parameters, and message/scalar/repeated/map
+response projections. Focused runtime tests cover enum, bytes, 64-bit integers,
+non-finite floats, repeated messages, path-field omission, and preservation of
+unrelated projected fields.
+
+The remaining release task is packaging, not Phase 1 behavior: the nested
+generator module's repository-relative `replace` must be removed after a
+matching root version exists, then a versioned `go install` smoke test must pass.
+
+External service config and `fully_decode_reserved_expansion` remain unsupported
+and belong exclusively to Phase 2.
 
 ## Design
 
@@ -142,14 +141,18 @@ type Variable struct {
 func Parse(pattern string) (*Template, error)
 func (t *Template) Pattern() string
 func (t *Template) ServeMuxPattern() string
+func (t *Template) MatchKey() string
+func (t *Template) HasUnboundWildcard() bool
 func (t *Template) Variables() []Variable
 func (t *Template) Expand(resolve func(fieldPath string) (string, error)) (string, error)
 func (t *Template) Extract(escapedPath string) (map[string]string, error)
 ```
 
-`Variables` returns a copy. `Expand` and `Extract` return wrapped errors with
-template and variable context. The resolver supplies canonical string values;
-the parser package does not import protobuf reflection.
+`MatchKey` describes the decoded path match set while ignoring protobuf field
+names, so generators can reject equivalent bindings. `Variables` returns a
+copy. `Expand` and `Extract` return wrapped errors with template and variable
+context. The resolver supplies canonical string values; the parser package does
+not import protobuf reflection.
 
 Do not add an interface for the parser. There is one implementation and all
 operations are deterministic pure functions or methods on the parsed template.

@@ -35,6 +35,7 @@ upstream revision explicitly.
 | Project CLI | `cmd/kratos` | Removed | Workflow breaking |
 | Protobuf generators | Kratos module paths | OpenKratos module paths | Install path change |
 | HTTP protobuf generation | Open API field access | Editions 2023 Open and Opaque API accessors | New generated-code capability |
+| Google HTTP transcoding | Partial, independently parsed route/body/query behavior | Shared path grammar, strict generation, ProtoJSON projection, and additional bindings | API and wire behavior breaking |
 | HTTP router | Gorilla mux | Standard-library `http.ServeMux` tree | Behavior breaking |
 | HTTP client paths | Endpoint base paths and escaped variables could be lost | Base paths and AIP-aware escaping are retained | Correctness and URL behavior change |
 | Unknown HTTP routes | Could fall through to `http.DefaultServeMux` | Explicit 404/405 handling | Behavior and security change |
@@ -107,10 +108,42 @@ github.com/openkratos/kratos/cmd/protoc-gen-go-errors
 ```
 
 `protoc-gen-go-http` declares protobuf Editions support through Edition 2024.
-Generated named `body` and `response_body` access uses API-aware accessors and
-assignment, so Edition 2023 Open and Opaque messages compile for message,
-scalar, repeated, map, explicit-presence, and oneof fields. Whole-message `*`
-bindings retain their existing behavior.
+Real `protoc` fixtures compile and execute Edition 2023 Open and Opaque APIs for
+message, scalar, repeated, map, explicit-presence, and oneof fields.
+
+Inline unary `google.api.HttpRule` bindings use one shared Google path-template
+implementation across generation, client expansion, ServeMux registration, and
+server extraction. The primary binding defines the generated Go client method;
+all one-level `additional_bindings` are registered as alternative server routes.
+Nested additional bindings fail generation.
+
+Google-transcoded JSON uses the public media type `application/json` with
+protobuf JSON semantics. Whole messages and named `body`/`response_body`
+projections preserve enum names, standard base64 bytes, quoted 64-bit integers,
+non-finite floats, messages, repeated fields, maps, and Open/Opaque APIs.
+`google.api.HttpBody` continues to carry its declared media type and bytes.
+
+Request fields are classified once: path fields are omitted from body and
+query, named-body descendants are omitted from query, and `body: "*"` emits no
+query. Nested query leaves and repeated scalar keys are supported; maps and
+repeated messages in query position fail generation. The generated server
+applies body, query, then path so the URL path remains authoritative.
+
+Invalid path fields, invalid body projections, `response_body: "*"`, duplicate
+or conflicting bindings, and ambiguous custom declarations fail generation
+without emitting a partial file. Omit `response_body` to encode the whole
+response.
+
+`transport/http.BuildPath` now returns `(string, error)`. Generated clients
+propagate expansion errors before network I/O. A primary `custom.kind: "*"`
+returns `ErrUnspecifiedHTTPMethod`; a primary bare `*` or `**` path returns
+`ErrUnboundPathWildcard`. Servers and raw HTTP clients may still use both rule
+forms.
+
+External `google.api.Service` configuration and
+`fully_decode_reserved_expansion` are not implemented; they remain the
+separate Phase 2 described in
+[`docs/design/google-http-transcoding.md`](docs/design/google-http-transcoding.md).
 
 ## HTTP Routing
 
@@ -140,6 +173,8 @@ The public differences are:
   relying on Gorilla's matcher order.
 - Single-segment path variables percent-encode slash and URL delimiters;
   structural slashes are retained only for AIP multi-segment templates.
+- Multi-segment variables preserve `%2F` and `%2f` exactly during server
+  extraction; single-segment variables fully decode them.
 - Direct HTTP client endpoints retain their configured base path. Discovery
   service names remain separate from endpoint path prefixes.
 

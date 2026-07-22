@@ -99,21 +99,55 @@ OpenKratos 使用标准库 `http.ServeMux` 的优先级规则，不再依赖 Gor
 行为。如果服务有意使用 `http.DefaultServeMux` 兜底，需要通过
 `NotFoundHandler` 显式传入。
 
-## 6. 检查流式请求超时
+## 6. 检查 Google HTTP Transcoding
+
+重新生成所有 HTTP client 与 server。OpenKratos 会更严格地校验 inline unary
+`google.api.HttpRule`；原 generator 仅警告或推迟到运行期处理的 schema 现在可能
+直接生成失败。
+
+- 删除 `response_body: "*"`；省略 `response_body` 即表示整条响应。
+- `body` 与 `response_body` 必须引用顶层字段。
+- 不要让 map 或 repeated message 落入 query；应将其绑定到 body，或重新设计请求。
+- 删除嵌套 `additional_bindings` 以及重复或冲突的路由匹配集合。
+- Google JSON endpoint 对外使用 `application/json`，但 wire value 遵循 protobuf
+  JSON，例如 64 位整数使用字符串，bytes 使用标准 base64。
+- 生成 client 只使用 primary binding；additional binding 是 server 提供给原始
+  REST client 的替代入口。
+
+手写的 `transport/http.BuildPath` 调用必须处理 error：
+
+```go
+path, err := http.BuildPath(pattern, request, http.WithQueryParams())
+if err != nil {
+	return err
+}
+```
+
+对于 primary `custom.kind: "*"`，生成 client 无法推导 HTTP method；对于 primary
+路径中的裸 `*`/`**`，生成 client 也没有可取值的请求字段。这两类调用会在网络
+I/O 前分别返回 `ErrUnspecifiedHTTPMethod` 或 `ErrUnboundPathWildcard`。需要生成
+Go client 时，应使用具体 primary rule，并把含糊规则放到 additional binding。
+
+编码后的 slash 涉及安全边界。请为 resource-name 路径增加集成测试：多路径段
+变量保留 `%2F`/`%2f`，单路径段变量则完整解码。
+
+外部 `google.api.Service` YAML 与 `fully_decode_reserved_expansion` 目前尚未支持。
+
+## 7. 检查流式请求超时
 
 HTTP SSE 与 WebSocket stream 不会再被 unary server timeout 终止。如果业务
 要求最大连接时长、读写超时或空闲超时，需要显式配置相应策略。
 
-## 7. 保留 Kratos v3 已完成的迁移
+## 8. 保留 Kratos v3 已完成的迁移
 
 OpenKratos 继续使用 Kratos v3 的 `log/slog` 日志模型、兼容标准库的 errors，
 以及相互独立的 `json` 与 `protojson` codec。已经使用 Kratos v3 的服务不应
 撤销这些迁移。
 
-当前 HTTP generator 仍不支持 protobuf Editions 和 Opaque API。在
-`COMPATIBILITY.md` 将其记录为已实现之前，应继续使用受支持的 protobuf API。
+HTTP generator 已支持 Edition 2023 Open/Opaque API。应从 schema 重新生成，
+不要继续保留上游 generator 产生的旧代码。
 
-## 8. 验证迁移
+## 9. 验证迁移
 
 先生成代码，再运行测试，避免生成文件中残留旧导入路径：
 
@@ -135,6 +169,9 @@ go vet ./...
 - [ ] 从源文件重新生成所有 Go 代码。
 - [ ] 使用 Go 与 Buf 命令替代 `kratos` CLI。
 - [ ] 检查路由优先级、冲突、prefix、斜杠、404 与 405。
+- [ ] 重新生成并测试每个 inline `google.api.HttpRule` binding。
+- [ ] 修改 `BuildPath` 调用并处理 error。
+- [ ] 检查 body/query 分类、ProtoJSON wire value 和 `%2F` 路径。
 - [ ] 为 HTTP stream 定义显式生命周期策略。
 - [ ] 运行 race test、vet 和服务集成测试。
 - [ ] 发布前再次检查 `COMPATIBILITY.md`。

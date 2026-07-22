@@ -34,6 +34,7 @@ OpenKratos 是 `go-kratos/kratos` 的独立 fork，不是 Kratos v3 的直接替
 | 项目 CLI | `cmd/kratos` | 已移除 | 工作流不兼容 |
 | Protobuf generator | Kratos module 路径 | OpenKratos module 路径 | 安装路径变化 |
 | HTTP protobuf 生成 | Open API 字段访问 | Editions 2023 Open/Opaque API accessor | 新增生成能力 |
+| Google HTTP transcoding | 路由、body、query 分别解析且仅部分支持 | 共享路径语法、严格生成校验、ProtoJSON 投影和 additional bindings | API 与 wire 行为不兼容 |
 | HTTP router | Gorilla mux | 标准库 `http.ServeMux` 路由树 | 行为不兼容 |
 | HTTP client 路径 | endpoint base path 和转义变量可能丢失 | 保留 base path，并按 AIP 规则转义 | 正确性与 URL 行为变化 |
 | 未匹配 HTTP 路由 | 可能落入 `http.DefaultServeMux` | 显式处理 404/405 | 行为与安全变化 |
@@ -96,10 +97,38 @@ github.com/openkratos/kratos/cmd/protoc-gen-go-http
 github.com/openkratos/kratos/cmd/protoc-gen-go-errors
 ```
 
-`protoc-gen-go-http` 声明支持到 protobuf Edition 2024。命名 `body` 与
-`response_body` 使用与 API level 对应的 accessor 和赋值方式，因此 Edition
-2023 的 Open 与 Opaque message 可覆盖 message、scalar、repeated、map、显式
-presence 和 oneof 字段并成功编译；整条 message 的 `*` binding 保持原行为。
+`protoc-gen-go-http` 声明支持到 protobuf Edition 2024。真实 `protoc` fixture
+已经对 Edition 2023 Open/Opaque API 的 message、scalar、repeated、map、显式
+presence 与 oneof 字段完成编译和执行验证。
+
+Inline unary `google.api.HttpRule` 在生成、client 展开、ServeMux 注册和 server
+提取阶段使用同一个 Google 路径模板实现。Primary binding 定义生成的 Go client
+方法；一层 `additional_bindings` 全部注册为可选 server 路由。嵌套 additional
+binding 会导致生成失败。
+
+Google transcoding 的 JSON 对外使用 `application/json`，但 wire 语义遵循
+protobuf JSON。整条 message 以及命名 `body`/`response_body` 投影均正确处理 enum
+名称、标准 base64 bytes、字符串形式的 64 位整数、非有限浮点数、message、
+repeated、map 和 Open/Opaque API。`google.api.HttpBody` 继续携带自身声明的媒体
+类型和原始 bytes。
+
+请求字段只分类一次：path 字段不会进入 body 或 query，命名 body 的所有后代不会
+进入 query，`body: "*"` 不生成 query。支持嵌套 query leaf 与重复 scalar key；
+query 位置的 map 和 repeated message 会在生成期失败。生成的 server 按 body、
+query、path 顺序绑定，因此 URL path 始终具有最终优先级。
+
+非法 path 字段、非法 body 投影、`response_body: "*"`、重复或冲突 binding 和
+含糊的 custom 声明都会让生成失败，且不会留下部分生成文件。若要编码整条响应，
+应省略 `response_body`。
+
+`transport/http.BuildPath` 现在返回 `(string, error)`。生成 client 会在网络请求
+前返回展开错误。Primary `custom.kind: "*"` 返回
+`ErrUnspecifiedHTTPMethod`；primary 路径中的裸 `*` 或 `**` 返回
+`ErrUnboundPathWildcard`。Server 与原始 HTTP client 仍可使用这两类规则。
+
+外部 `google.api.Service` 配置与 `fully_decode_reserved_expansion` 尚未实现，
+仍属于 [`docs/design/google-http-transcoding.md`](docs/design/google-http-transcoding.md)
+定义的独立 Phase 2。
 
 ## HTTP 路由
 
@@ -122,6 +151,7 @@ pattern，匹配变量仍可通过 `transport/http.Context.Vars()` 和
   注册顺序。
 - 单路径段变量会对 slash 与 URL delimiter 做百分号编码；只有 AIP 多路径段模板
   保留结构性 slash；
+- server 提取多路径段变量时原样保留 `%2F` 和 `%2f`，单路径段变量则完整解码；
 - 直接 HTTP client endpoint 保留配置的 base path，discovery service name 与
   endpoint path prefix 分离。
 

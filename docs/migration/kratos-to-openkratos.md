@@ -101,23 +101,62 @@ Replace multi-segment Gorilla regular expressions with Google AIP templates.
 `http.DefaultServeMux` as a fallback, pass it explicitly through
 `NotFoundHandler`.
 
-## 6. Review Streaming Timeouts
+## 6. Review Google HTTP Transcoding
+
+Regenerate every HTTP client and server. OpenKratos validates inline unary
+`google.api.HttpRule` declarations more strictly and may reject schemas that the
+previous generator accepted with a warning or deferred until runtime.
+
+- Remove `response_body: "*"`; omission means the whole response.
+- Keep `body` and `response_body` on top-level fields.
+- Remove map and repeated-message fields from query position. Bind them to the
+  body, or redesign the request.
+- Remove nested `additional_bindings` and duplicate/conflicting route match
+  sets.
+- Expect generated Google JSON endpoints to use `application/json` with
+  protobuf JSON wire representations, including quoted 64-bit integers and
+  standard base64 bytes.
+- Expect the generated client to use only the primary binding. Additional
+  bindings remain raw REST entry points on the server.
+
+Hand-written callers of `transport/http.BuildPath` must handle its error:
+
+```go
+path, err := http.BuildPath(pattern, request, http.WithQueryParams())
+if err != nil {
+	return err
+}
+```
+
+A generated client cannot infer a method for primary `custom.kind: "*"`, or a
+request value for a primary bare `*`/`**` path wildcard. Those calls now return
+`ErrUnspecifiedHTTPMethod` or `ErrUnboundPathWildcard` before network I/O. Use a
+concrete primary rule and keep ambiguous forms as additional server bindings
+when a generated Go client is required.
+
+Encoded slashes are security-sensitive. Add integration tests for resource-name
+paths: multi-segment variables preserve `%2F`/`%2f`, while single-segment
+variables fully decode them.
+
+External `google.api.Service` YAML and `fully_decode_reserved_expansion` are not
+yet supported.
+
+## 7. Review Streaming Timeouts
 
 HTTP SSE and WebSocket streams are not terminated by the unary server timeout.
 Add explicit read, write, idle, or application lifetime policies where the
 service requires them.
 
-## 7. Keep Inherited v3 Migrations
+## 8. Keep Inherited v3 Migrations
 
 OpenKratos retains the Kratos v3 `log/slog` logging model, standard-compatible
 errors, and the separate `json` and `protojson` codecs. A service already on
 Kratos v3 should not undo those migrations.
 
-The current HTTP generator still does not support protobuf Editions or the
-Opaque API. Keep schemas on the supported protobuf API until that work is
-recorded as implemented in `COMPATIBILITY.md`.
+The HTTP generator supports Edition 2023 Open and Opaque APIs. Regenerate from
+the schema rather than retaining code produced by the upstream generator.
 
-## 8. Validate the Migration
+## 9. Validate the Migration
 
 Run generation before tests so stale imports cannot hide in generated files:
 
@@ -140,6 +179,9 @@ graceful shutdown in integration tests used by the service.
 - [ ] Regenerate all generated Go files from source.
 - [ ] Replace `kratos` CLI commands with Go and Buf commands.
 - [ ] Review route precedence, conflicts, prefixes, slashes, 404, and 405.
+- [ ] Regenerate and test every inline `google.api.HttpRule` binding.
+- [ ] Migrate `BuildPath` callers to handle errors.
+- [ ] Review body/query classification, ProtoJSON wire values, and `%2F` paths.
 - [ ] Define explicit HTTP stream lifetime policies.
 - [ ] Run race tests, vet, and service integration tests.
 - [ ] Review `COMPATIBILITY.md` again before release.
