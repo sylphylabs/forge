@@ -47,6 +47,29 @@ func TestDefaultRequestDecoder(t *testing.T) {
 	}
 }
 
+func TestDefaultRequestDecoderEmptyBodyWithoutContentType(t *testing.T) {
+	r, err := http.NewRequest(http.MethodPost, "", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var target struct{}
+	if err := DefaultRequestDecoder(r, &target); err != nil {
+		t.Fatalf("empty body returned an error: %v", err)
+	}
+}
+
+func TestDefaultRequestDecoderNonEmptyBodyRequiresContentType(t *testing.T) {
+	r, err := http.NewRequest(http.MethodPost, "", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var target struct{}
+	err = DefaultRequestDecoder(r, &target)
+	if err == nil || !strings.Contains(err.Error(), "unregister Content-Type") {
+		t.Fatalf("non-empty body error = %v, want unregistered Content-Type", err)
+	}
+}
+
 func TestDefaultRequestDecoderHTTPBody(t *testing.T) {
 	const bodyStr = "raw file content"
 	r, _ := http.NewRequest(http.MethodPost, "", io.NopCloser(bytes.NewBufferString(bodyStr)))
