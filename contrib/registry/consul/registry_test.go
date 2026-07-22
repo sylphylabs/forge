@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -157,6 +158,55 @@ func TestRegistry_Register(t *testing.T) {
 			}
 			watchCancel()
 		})
+	}
+}
+
+func TestRegistryRegisterRejectsInvalidEndpointPort(t *testing.T) {
+	cli, err := api.NewClient(&api.Config{Address: "127.0.0.1:8500"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := New(cli, WithHeartbeat(false), WithHealthCheck(false))
+
+	for _, endpoint := range []string{
+		"http://127.0.0.1",
+		"http://127.0.0.1:0",
+		"http://127.0.0.1:-1",
+		"http://127.0.0.1:65536",
+		"http://127.0.0.1:not-a-port",
+	} {
+		t.Run(endpoint, func(t *testing.T) {
+			err := r.Register(t.Context(), &registry.ServiceInstance{
+				ID:        "invalid-port",
+				Name:      "greeter",
+				Endpoints: []string{endpoint},
+			})
+			if err == nil {
+				t.Fatal("Register() succeeded with an invalid port")
+			}
+		})
+	}
+}
+
+func TestServiceSetBroadcastsEmptyUpdate(t *testing.T) {
+	set := &serviceSet{
+		watcher:  make(map[*watcher]struct{}),
+		services: &atomic.Value{},
+	}
+	w := &watcher{event: make(chan struct{}, 1), set: set, ctx: t.Context()}
+	set.watcher[w] = struct{}{}
+	set.broadcast([]*registry.ServiceInstance{{ID: "one"}})
+	if got, err := w.Next(); err != nil || len(got) != 1 {
+		t.Fatalf("initial update = %v, %v", got, err)
+	}
+
+	set.broadcast([]*registry.ServiceInstance{})
+	got, err := w.Next()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("empty update returned %v", got)
 	}
 }
 
