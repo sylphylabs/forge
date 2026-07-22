@@ -1,11 +1,10 @@
 module github.com/openkratos/kratos
 
-go 1.26.0
+go 1.27rc2
 
 require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-playground/form/v4 v4.3.0
-	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/sync v0.22.0

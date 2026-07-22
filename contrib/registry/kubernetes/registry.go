@@ -3,6 +3,7 @@ package kuberegistry
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -12,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -128,7 +128,7 @@ func (s *Registry) Register(ctx context.Context, service *registry.ServiceInstan
 		return err
 	}
 
-	patchBytes, err := jsoniter.Marshal(map[string]any{
+	patchBytes, err := json.Marshal(map[string]any{
 		"metadata": metav1.ObjectMeta{
 			Labels: map[string]string{
 				LabelsKeyServiceID:      service.ID,
@@ -320,11 +320,12 @@ func (iter *Iterator) Stop() error {
 // //////////// Helper Func ////////////
 
 func marshal(in any) (string, error) {
-	return jsoniter.MarshalToString(in)
+	data, err := json.Marshal(in)
+	return string(data), err
 }
 
 func unmarshal(data string, in any) error {
-	return jsoniter.UnmarshalFromString(data, in)
+	return json.Unmarshal([]byte(data), in)
 }
 
 func isEmptyObjectString(s string) bool {

@@ -8,8 +8,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/openkratos/kratos/log"
@@ -46,9 +46,7 @@ func New(opts ...Option) *App {
 		stopTimeout:      10 * time.Second,
 		afterStopTimeout: 10 * time.Second,
 	}
-	if id, err := uuid.NewUUID(); err == nil {
-		o.id = id.String()
-	}
+	o.id = uuid.New().String()
 	for _, opt := range opts {
 		opt(&o)
 	}

@@ -1,6 +1,6 @@
 module github.com/openkratos/kratos/contrib/middleware/jwt
 
-go 1.26.0
+go 1.27rc2
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1

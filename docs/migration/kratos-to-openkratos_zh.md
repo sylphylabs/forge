@@ -13,7 +13,7 @@ go vet ./...
 ```
 
 提交或单独保存生成代码与 `go.mod`，避免迁移差异和无关改动混在一起。
-OpenKratos 要求 Go 1.26，因此应先完成工具链升级。
+OpenKratos 要求 Go 1.27，因此应先完成工具链升级。
 
 ## 2. 替换 Module 路径
 
@@ -45,6 +45,20 @@ go mod tidy
 ```
 
 正式发布 tag 后应改用明确版本，不应长期依赖 `main`。
+
+如果应用直接使用 SDK 类型构造 contrib adapter，需要同步修改 provider import：
+
+```text
+github.com/hashicorp/consul/api
+github.com/hashicorp/consul/api/v2
+
+github.com/nacos-group/nacos-sdk-go/clients/config_client
+github.com/nacos-group/nacos-sdk-go/v2/clients/config_client
+```
+
+Apollo integration 使用 `github.com/apolloconfig/agollo/v5`。OpenKratos 使用
+Go 1.27 标准库 `uuid`，不再直接使用 Google 或 gofrs UUID 类型。默认 application
+ID 从 UUIDv1 改为 UUIDv4；如果其值或 version 属于运维契约，应显式配置 ID。
 
 ## 3. 更新代码生成器
 
@@ -162,9 +176,11 @@ go vet ./...
 
 ## 检查清单
 
-- [ ] 升级到 Go 1.26 或更高版本。
+- [ ] 升级到 Go 1.27 或更高版本。
 - [ ] 替换 Kratos v3 根 module 路径。
 - [ ] 替换每个使用到的 contrib module，并移除 `/v3`。
+- [ ] 更新 Consul、Nacos 与 Apollo provider SDK import path。
+- [ ] 替换直接使用的 Google/gofrs UUID import，并检查 application ID version 变化。
 - [ ] 固定 OpenKratos generator 版本。
 - [ ] 从源文件重新生成所有 Go 代码。
 - [ ] 使用 Go 与 Buf 命令替代 `kratos` CLI。

@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"testing"
 
-	srvContractPb "github.com/opensergo/opensergo-go/proto/service_contract/v1"
+	srvContractPb "github.com/opensergo/opensergo-go/pkg/proto/service_contract/v1"
 	"google.golang.org/genproto/googleapis/api/annotations"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"

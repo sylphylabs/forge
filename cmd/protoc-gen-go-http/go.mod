@@ -1,6 +1,6 @@
 module github.com/openkratos/kratos/cmd/protoc-gen-go-http
 
-go 1.26.0
+go 1.27rc2
 
 require (
 	github.com/openkratos/kratos v0.0.0

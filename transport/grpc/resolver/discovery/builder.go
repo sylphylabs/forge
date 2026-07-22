@@ -5,8 +5,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc/resolver"
 
 	"github.com/openkratos/kratos/registry"
@@ -100,7 +100,7 @@ func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, _ resolv
 		cancel:      cancel,
 		insecure:    b.insecure,
 		subsetSize:  b.subsetSize,
-		selectorKey: uuid.New().String(),
+		selectorKey: uuid.NewV4().String(),
 	}
 	go r.watch()
 	return r, nil

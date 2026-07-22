@@ -3,10 +3,10 @@ package servicecomb
 import (
 	"context"
 	"testing"
+	"uuid"
 
 	pb "github.com/go-chassis/cari/discovery"
 	"github.com/go-chassis/sc-client"
-	"github.com/gofrs/uuid"
 
 	"github.com/openkratos/kratos/registry"
 )
@@ -54,10 +54,8 @@ func (receiver *mockClient) GetMicroServiceID(_, _, _, _ string, _ ...sc.CallOpt
 }
 
 func TestRegistry(t *testing.T) {
-	instanceID, err := uuid.NewV4()
-	if err != nil {
-		t.Fatal(err)
-	}
+	instanceID := uuid.NewV4()
+	var err error
 	svc := &registry.ServiceInstance{
 		Name:      "KratosServicecomb",
 		Version:   "0.0.1",
@@ -92,10 +90,8 @@ func TestRegistry(t *testing.T) {
 }
 
 func TestWatcher(t *testing.T) {
-	instanceID1, err := uuid.NewV4()
-	if err != nil {
-		t.Fatal(err)
-	}
+	instanceID1 := uuid.NewV4()
+	var err error
 	svc1 := &registry.ServiceInstance{
 		Name:      "WatcherTest",
 		Version:   "0.0.1",

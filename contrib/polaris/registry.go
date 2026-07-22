@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/polarismesh/polaris-go"
 	"github.com/polarismesh/polaris-go/pkg/model"
 
@@ -96,7 +96,7 @@ func WithRegistryRetryCount(retryCount int) RegistryOption {
 
 // Register the registration.
 func (r *Registry) Register(_ context.Context, instance *registry.ServiceInstance) error {
-	id := uuid.NewString()
+	id := uuid.NewV4().String()
 	for _, endpoint := range instance.Endpoints {
 		u, err := url.Parse(endpoint)
 		if err != nil {

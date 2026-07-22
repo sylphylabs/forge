@@ -3,7 +3,7 @@ package apollo
 import (
 	"testing"
 
-	"github.com/apolloconfig/agollo/v4/storage"
+	"github.com/apolloconfig/agollo/v5/storage"
 
 	"github.com/openkratos/kratos/config"
 	"github.com/openkratos/kratos/encoding"

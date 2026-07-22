@@ -304,7 +304,7 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 		t.Fatal("generated output changed between identical protoc runs")
 	}
 
-	goMod := fmt.Sprintf("module opaque.test\n\ngo 1.26.0\n\nrequire github.com/openkratos/kratos v0.0.0\n\nreplace github.com/openkratos/kratos => %s\n", root)
+	goMod := fmt.Sprintf("module opaque.test\n\ngo 1.27rc2\n\nrequire github.com/openkratos/kratos v0.0.0\n\nreplace github.com/openkratos/kratos => %s\n", root)
 	if err := os.WriteFile(filepath.Join(tmp, "go.mod"), []byte(goMod), 0o644); err != nil {
 		t.Fatal(err)
 	}

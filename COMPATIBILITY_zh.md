@@ -29,10 +29,12 @@ OpenKratos 是 `go-kratos/kratos` 的独立 fork，不是 Kratos v3 的直接替
 | --- | --- | --- | --- |
 | 根 module | `github.com/go-kratos/kratos/v3` | `github.com/openkratos/kratos` | 源码不兼容 |
 | 版本线 | v3 | v0 预发布 | 发布不兼容 |
-| 最低 Go 版本 | Go 1.25 | Go 1.26 | 构建要求变化 |
+| 最低 Go 版本 | Go 1.25 | Go 1.27 | 构建要求变化 |
 | Module 数量 | 28，包含 `cmd/kratos` | 27 | 发布和工具变化 |
 | 项目 CLI | `cmd/kratos` | 已移除 | 工作流不兼容 |
 | Protobuf generator | Kratos module 路径 | OpenKratos module 路径 | 安装路径变化 |
+| Contrib provider SDK | 旧 provider major 与已归档直接依赖 | 当前稳定 major 与受维护的标准替代 | 源码与依赖图变化 |
+| UUID 生成 | `google/uuid` 与 `gofrs/uuid` | 标准库 `uuid` | 源码与生成 ID 行为变化 |
 | HTTP protobuf 生成 | Open API 字段访问 | Editions 2023 Open/Opaque API accessor | 新增生成能力 |
 | Google HTTP transcoding | 路由、body、query 分别解析且仅部分支持 | 共享路径语法、严格生成校验、ProtoJSON 投影和 additional bindings | API 与 wire 行为不兼容 |
 | HTTP router | Gorilla mux | 标准库 `http.ServeMux` 路由树 | 行为不兼容 |
@@ -67,8 +69,8 @@ module tag 不会自动发布嵌套 module。
 
 ## 工具链
 
-OpenKratos 要求 Go 1.26，并使用 Go 1.27 RC 对根 module 做前向验证。上游基线
-要求 Go 1.25，因此仍需停留在 Go 1.25 的项目无法直接迁移。
+OpenKratos 要求 Go 1.27。在 final 工具链发布前，开发与 CI 使用 Go 1.27 RC2。
+上游基线要求 Go 1.25，因此仍需停留在 Go 1.25 或 Go 1.26 的项目无法直接迁移。
 
 仓库当前包含 27 个 Go module。根目录的 `go test ./...` 不会覆盖嵌套 module，
 完整验证方式见 [`DEVELOPMENT.md`](DEVELOPMENT.md)。
@@ -129,6 +131,42 @@ query、path 顺序绑定，因此 URL path 始终具有最终优先级。
 外部 `google.api.Service` 配置与 `fully_decode_reserved_expansion` 尚未实现，
 仍属于 [`docs/design/google-http-transcoding.md`](docs/design/google-http-transcoding.md)
 定义的独立 Phase 2。
+
+## Contrib Provider 依赖
+
+OpenKratos contrib module 使用当前稳定的 Apollo v5、Consul API v2 与 Nacos SDK
+v2 module path。使用 SDK 类型构造 Consul 或 Nacos provider 的应用需要修改
+import，因此属于源码不兼容：
+
+```text
+github.com/hashicorp/consul/api
+github.com/hashicorp/consul/api/v2
+
+github.com/nacos-group/nacos-sdk-go/clients/config_client
+github.com/nacos-group/nacos-sdk-go/v2/clients/config_client
+```
+
+直接依赖的已归档 `json-iterator/go`、`golang/mock` 与 PGV 已分别由
+`encoding/json`、`go.uber.org/mock` 和 Protovalidate 测试 fixture 替代。旧请求只要
+实现 `Validate() error` 仍然兼容，不需要 PGV runtime module。
+
+部分当前 provider SDK 仍会编译已归档的传递依赖。其归属和替换条件记录在
+[`docs/dependency-maintenance.md`](docs/dependency-maintenance.md)；OpenKratos
+并不宣称所有传递仓库仍处于维护状态。
+
+## UUID 生成
+
+OpenKratos 直接生成的所有 UUID 均使用 Go 1.27 标准库 `uuid`。根 module 与
+contrib provider 不再直接依赖 `github.com/google/uuid` 或
+`github.com/gofrs/uuid`。
+
+Resolver selector key 与 provider instance ID 仍使用 UUIDv4。默认 application
+instance ID 从 Google UUIDv1（`google/uuid.NewUUID`）改为标准库默认
+（`uuid.New`），在 Go 1.27 中即 UUIDv4。需要稳定 ID 或指定 UUID version 的服务
+仍应显式传入 application ID。
+
+Provider SDK 仍可能传递依赖其自身的 UUID package。OpenKratos 不暴露这些类型，
+也不会为了隐藏上游依赖再引入第二套直接 UUID 实现。
 
 ## HTTP 路由
 

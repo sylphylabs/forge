@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hashicorp/consul/api"
-	"github.com/hashicorp/consul/api/watch"
+	"github.com/hashicorp/consul/api/v2"
+	"github.com/hashicorp/consul/api/v2/watch"
 
 	"github.com/openkratos/kratos/config"
 )

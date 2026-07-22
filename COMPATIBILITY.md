@@ -30,10 +30,12 @@ upstream revision explicitly.
 | --- | --- | --- | --- |
 | Root module | `github.com/go-kratos/kratos/v3` | `github.com/openkratos/kratos` | Source breaking |
 | Release line | v3 | v0 pre-release | Release breaking |
-| Minimum Go version | Go 1.25 | Go 1.26 | Build requirement |
+| Minimum Go version | Go 1.25 | Go 1.27 | Build requirement |
 | Module count | 28, including `cmd/kratos` | 27 | Release and tooling change |
 | Project CLI | `cmd/kratos` | Removed | Workflow breaking |
 | Protobuf generators | Kratos module paths | OpenKratos module paths | Install path change |
+| Contrib provider SDKs | Older provider majors and archived direct dependencies | Current stable majors and standard maintained replacements | Source and dependency graph change |
+| UUID generation | `google/uuid` and `gofrs/uuid` | Standard-library `uuid` | Source and generated-ID behavior change |
 | HTTP protobuf generation | Open API field access | Editions 2023 Open and Opaque API accessors | New generated-code capability |
 | Google HTTP transcoding | Partial, independently parsed route/body/query behavior | Shared path grammar, strict generation, ProtoJSON projection, and additional bindings | API and wire behavior breaking |
 | HTTP router | Gorilla mux | Standard-library `http.ServeMux` tree | Behavior breaking |
@@ -69,9 +71,10 @@ does not release nested modules.
 
 ## Toolchain
 
-OpenKratos requires Go 1.26 and also validates the root module with Go 1.27 RC.
-The upstream baseline requires Go 1.25. Projects that must remain on Go 1.25
-cannot migrate to OpenKratos without upgrading their toolchain.
+OpenKratos requires Go 1.27. Until the final toolchain is published, development
+and CI use Go 1.27 RC2. The upstream baseline requires Go 1.25. Projects that
+must remain on Go 1.25 or Go 1.26 cannot migrate to OpenKratos without upgrading
+their toolchain.
 
 The repository currently contains 27 Go modules. Running `go test ./...` at the
 root does not test nested modules; use the repository commands documented in
@@ -144,6 +147,46 @@ External `google.api.Service` configuration and
 `fully_decode_reserved_expansion` are not implemented; they remain the
 separate Phase 2 described in
 [`docs/design/google-http-transcoding.md`](docs/design/google-http-transcoding.md).
+
+## Contrib Provider Dependencies
+
+OpenKratos contrib modules use the current stable Apollo v5, Consul API v2, and
+Nacos SDK v2 module paths. This is source breaking for applications that
+construct the Consul or Nacos providers with SDK types:
+
+```text
+github.com/hashicorp/consul/api
+github.com/hashicorp/consul/api/v2
+
+github.com/nacos-group/nacos-sdk-go/clients/config_client
+github.com/nacos-group/nacos-sdk-go/v2/clients/config_client
+```
+
+Direct dependencies on archived `json-iterator/go`, `golang/mock`, and PGV were
+removed in favor of `encoding/json`, `go.uber.org/mock`, and Protovalidate test
+fixtures. Legacy requests implementing `Validate() error` remain supported and
+do not require the PGV runtime module.
+
+Some current provider SDKs still compile archived transitive packages. Their
+ownership and replacement conditions are documented in
+[`docs/dependency-maintenance.md`](docs/dependency-maintenance.md); OpenKratos
+does not claim that all transitive repositories are maintained.
+
+## UUID Generation
+
+OpenKratos uses Go 1.27's standard-library `uuid` package for all UUIDs it
+generates directly. The root module and contrib providers no longer directly
+depend on `github.com/google/uuid` or `github.com/gofrs/uuid`.
+
+Resolver selector keys and provider instance IDs remain UUIDv4. The default
+application instance ID changes from Google UUIDv1 (`google/uuid.NewUUID`) to
+the standard package default (`uuid.New`), which is UUIDv4 in Go 1.27. Services
+that require a stable ID or a specific UUID version must continue to provide an
+explicit application ID.
+
+Provider SDKs may still carry their own UUID packages transitively. OpenKratos
+does not expose those types or add a second direct UUID implementation to hide
+that upstream dependency.
 
 ## HTTP Routing
 

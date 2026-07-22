@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"os"
 	"time"
+	"uuid"
 
 	"github.com/go-chassis/cari/discovery"
 	"github.com/go-chassis/cari/pkg/errsvc"
 	"github.com/go-chassis/sc-client"
-	"github.com/gofrs/uuid"
 
 	"github.com/openkratos/kratos/log"
 	"github.com/openkratos/kratos/registry"
@@ -125,12 +125,7 @@ func (r *Registry) Register(_ context.Context, svcIns *registry.ServiceInstance)
 		curServiceID = sid
 	}
 	if svcIns.ID == "" {
-		var id uuid.UUID
-		id, err = uuid.NewV4()
-		if err != nil {
-			return err
-		}
-		svcIns.ID = id.String()
+		svcIns.ID = uuid.NewV4().String()
 	}
 	props := map[string]string{
 		appIDKey: appID,

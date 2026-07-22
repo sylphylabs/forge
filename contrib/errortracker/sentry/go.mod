@@ -1,6 +1,6 @@
 module github.com/openkratos/kratos/contrib/errortracker/sentry
 
-go 1.26.0
+go 1.27rc2
 
 require (
 	github.com/getsentry/sentry-go v0.48.0

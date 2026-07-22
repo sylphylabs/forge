@@ -1,11 +1,11 @@
 module github.com/openkratos/kratos/contrib/registry/nacos
 
-go 1.26.0
+go 1.27rc2
 
 require (
-	github.com/golang/mock v1.6.0
 	github.com/nacos-group/nacos-sdk-go/v2 v2.3.5
 	github.com/openkratos/kratos v0.0.0
+	go.uber.org/mock v0.6.0
 )
 
 require (
@@ -26,6 +26,7 @@ require (
 	github.com/buger/jsonparser v1.2.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/deckarep/golang-set v1.8.0 // indirect
+	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -37,7 +38,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.24.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
-	github.com/prometheus/common v0.70.0 // indirect
+	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/tjfoc/gmsm v1.4.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect

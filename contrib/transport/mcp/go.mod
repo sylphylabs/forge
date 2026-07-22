@@ -1,6 +1,6 @@
 module github.com/openkratos/kratos/contrib/transport/mcp
 
-go 1.26.0
+go 1.27rc2
 
 require (
 	github.com/mark3labs/mcp-go v0.56.0

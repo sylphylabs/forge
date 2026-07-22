@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"net/url"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/pkg/errors"
 
 	"github.com/openkratos/kratos/log"
 )
@@ -249,7 +249,7 @@ func (d *Discovery) renew(ctx context.Context, ins *discoveryInstance) (err erro
 		err = fmt.Errorf("discovery.renew failed ErrorCode: %d", res.Code)
 		if res.Code == _codeNotFound {
 			if err = d.register(ctx, ins); err != nil {
-				err = errors.Wrap(err, "Discovery.renew instance, and failed to register ins")
+				err = fmt.Errorf("Discovery.renew instance: failed to register: %w", err)
 			}
 			return
 		}

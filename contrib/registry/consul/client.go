@@ -15,7 +15,7 @@ import (
 	"github.com/openkratos/kratos/log"
 	"github.com/openkratos/kratos/registry"
 
-	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/consul/api/v2"
 )
 
 type Datacenter string

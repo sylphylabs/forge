@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/openkratos/kratos/registry"
 	"github.com/openkratos/kratos/transport/grpc"
@@ -100,6 +101,16 @@ func TestApp(t *testing.T) {
 	})
 	if err := app.Run(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAppDefaultIDIsUUIDv4(t *testing.T) {
+	id, err := uuid.Parse(New().ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version := id[6] >> 4; version != 4 {
+		t.Fatalf("default application ID version = %d, want 4", version)
 	}
 }
 

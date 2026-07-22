@@ -1,9 +1,8 @@
 module github.com/openkratos/kratos/contrib/polaris
 
-go 1.26.0
+go 1.27rc2
 
 require (
-	github.com/google/uuid v1.6.0
 	github.com/openkratos/kratos v0.0.0
 	github.com/polarismesh/polaris-go v1.7.1
 	github.com/polarismesh/specification v1.8.0
@@ -17,6 +16,7 @@ require (
 	github.com/dlclark/regexp2 v1.12.0 // indirect
 	github.com/go-playground/form/v4 v4.3.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect

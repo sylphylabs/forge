@@ -1,6 +1,6 @@
 module github.com/openkratos/kratos/contrib/registry/zookeeper
 
-go 1.26.0
+go 1.27rc2
 
 require (
 	github.com/go-zookeeper/zk v1.0.4

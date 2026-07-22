@@ -33,7 +33,7 @@ migration, and validation before implementation.
 
 ## Development
 
-OpenKratos requires Go 1.26. The repository contains nested Go modules, so a
+OpenKratos requires Go 1.27. The repository contains nested Go modules, so a
 root-only test does not cover the entire tree.
 
 ```shell
@@ -42,8 +42,8 @@ root-only test does not cover the entire tree.
 make lint
 ```
 
-See [`DEVELOPMENT.md`](DEVELOPMENT.md) for the module matrix, Go 1.27 RC
-validation, and focused benchmarks.
+See [`DEVELOPMENT.md`](DEVELOPMENT.md) for the module matrix, RC toolchain
+setup, and focused benchmarks.
 
 Tests should be deterministic and offline unless they are explicitly marked as
 integration tests. Concurrency changes require race coverage. Performance

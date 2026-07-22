@@ -7,9 +7,9 @@ package nacos
 import (
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
 	model "github.com/nacos-group/nacos-sdk-go/v2/model"
 	vo "github.com/nacos-group/nacos-sdk-go/v2/vo"
+	gomock "go.uber.org/mock/gomock"
 )
 
 // MockINamingClient is a mock of INamingClient interface.

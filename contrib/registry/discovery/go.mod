@@ -1,11 +1,10 @@
 module github.com/openkratos/kratos/contrib/registry/discovery
 
-go 1.26.0
+go 1.27rc2
 
 require (
 	github.com/go-resty/resty/v2 v2.17.2
 	github.com/openkratos/kratos v0.0.0
-	github.com/pkg/errors v0.9.1
 )
 
 require (

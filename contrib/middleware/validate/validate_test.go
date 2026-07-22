@@ -2,9 +2,8 @@ package validate
 
 import (
 	"context"
+	"errors"
 	"testing"
-
-	"google.golang.org/protobuf/proto"
 
 	"github.com/openkratos/kratos/contrib/middleware/validate/internal/testdata"
 	kerrors "github.com/openkratos/kratos/errors"
@@ -13,9 +12,22 @@ import (
 
 type testcase struct {
 	name string
-	req  proto.Message
+	req  any
 	err  bool
 }
+
+type legacyRequest struct {
+	err error
+}
+
+func (r *legacyRequest) Validate() error { return r.err }
+
+type mixedRequest struct {
+	*testdata.Modern
+	err error
+}
+
+func (r *mixedRequest) Validate() error { return r.err }
 
 func TestTable(t *testing.T) {
 	var mock middleware.Handler = func(context.Context, any) (any, error) { return nil, nil }
@@ -23,33 +35,31 @@ func TestTable(t *testing.T) {
 	tests := []testcase{
 		{
 			name: "valid_legacy",
-			req:  &testdata.Legacy{Name: "testcase", Age: 19},
+			req:  &legacyRequest{},
 			err:  false,
 		},
 		{
-			name: "invalid_legacy1",
-			req:  &testdata.Legacy{Name: "testcase", Age: 10},
-			err:  true,
-		},
-		{
-			name: "invalid_legacy2",
-			req:  &testdata.Legacy{Name: "test", Age: 100},
+			name: "invalid_legacy",
+			req:  &legacyRequest{err: errors.New("legacy validation failed")},
 			err:  true,
 		},
 		{
 			name: "valid_mixed",
-			req:  &testdata.Mixed{Name: "testcase", Age: 19},
+			req:  &mixedRequest{Modern: &testdata.Modern{Name: "testcase", Age: 19}},
 			err:  false,
 		},
 		{
-			name: "invalid_mixed1",
-			req:  &testdata.Mixed{Name: "testcase", Age: 10},
+			name: "invalid_mixed_modern",
+			req:  &mixedRequest{Modern: &testdata.Modern{Name: "test", Age: 19}},
 			err:  true,
 		},
 		{
-			name: "invalid_mixed2",
-			req:  &testdata.Mixed{Name: "test", Age: 100},
-			err:  true,
+			name: "invalid_mixed_legacy",
+			req: &mixedRequest{
+				Modern: &testdata.Modern{Name: "testcase", Age: 19},
+				err:    errors.New("legacy validation failed"),
+			},
+			err: true,
 		},
 		{
 			name: "valid_modern",

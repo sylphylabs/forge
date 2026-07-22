@@ -2,10 +2,9 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
-
-	"github.com/pkg/errors"
 
 	"github.com/openkratos/kratos/registry"
 )

@@ -16,7 +16,7 @@ go vet ./...
 Commit or otherwise preserve generated code and `go.mod` so the migration diff
 can be reviewed independently from unrelated changes.
 
-OpenKratos requires Go 1.26. Upgrade the project toolchain before changing the
+OpenKratos requires Go 1.27. Upgrade the project toolchain before changing the
 module path.
 
 ## 2. Replace Module Paths
@@ -44,6 +44,21 @@ go mod tidy
 ```
 
 Use released versions rather than `main` after OpenKratos publishes tags.
+
+Update provider SDK imports when constructing contrib adapters directly:
+
+```text
+github.com/hashicorp/consul/api
+github.com/hashicorp/consul/api/v2
+
+github.com/nacos-group/nacos-sdk-go/clients/config_client
+github.com/nacos-group/nacos-sdk-go/v2/clients/config_client
+```
+
+Apollo integrations use `github.com/apolloconfig/agollo/v5`. OpenKratos uses
+the Go 1.27 standard-library `uuid` package rather than Google or gofrs UUID
+types. The default application ID is now UUIDv4 rather than UUIDv1; configure an
+explicit ID if its value or version is part of an operational contract.
 
 ## 3. Update Code Generators
 
@@ -172,9 +187,11 @@ graceful shutdown in integration tests used by the service.
 
 ## Checklist
 
-- [ ] Upgrade to Go 1.26 or later.
+- [ ] Upgrade to Go 1.27 or later.
 - [ ] Replace the root Kratos v3 module path.
 - [ ] Replace every used contrib module path and remove `/v3`.
+- [ ] Update Consul, Nacos, and Apollo provider SDK import paths.
+- [ ] Replace direct Google/gofrs UUID imports and review the application ID version change.
 - [ ] Pin the OpenKratos generator revisions.
 - [ ] Regenerate all generated Go files from source.
 - [ ] Replace `kratos` CLI commands with Go and Buf commands.

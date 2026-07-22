@@ -24,7 +24,7 @@ func ProtoValidate() middleware.Middleware {
 				}
 			}
 
-			// to compatible with the [old validator](https://github.com/envoyproxy/protoc-gen-validate)
+			// Preserve compatibility with legacy PGV-generated code and manual validators.
 			if v, ok := req.(validator); ok {
 				if err := v.Validate(); err != nil {
 					return nil, errors.BadRequest("VALIDATOR", err.Error()).WithCause(err)

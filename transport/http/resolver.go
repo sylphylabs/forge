@@ -6,8 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/openkratos/kratos/internal/endpoint"
 	"github.com/openkratos/kratos/internal/subset"
@@ -108,7 +107,7 @@ func newResolver(ctx context.Context, discovery registry.Discovery, target *Targ
 		watcher:     watcher,
 		rebalancer:  rebalancer,
 		insecure:    insecure,
-		selectorKey: uuid.New().String(),
+		selectorKey: uuid.NewV4().String(),
 		subsetSize:  subsetSize,
 	}
 	if block {

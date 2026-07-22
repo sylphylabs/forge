@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/openkratos/kratos/log"
 	"github.com/openkratos/kratos/registry"
 )
@@ -18,7 +16,7 @@ func (d *Discovery) Register(ctx context.Context, service *registry.ServiceInsta
 
 	d.mutex.Lock()
 	if _, ok := d.registry[ins.AppID]; ok {
-		err = errors.Wrap(ErrDuplication, ins.AppID)
+		err = fmt.Errorf("register %s: %w", ins.AppID, ErrDuplication)
 	} else {
 		d.registry[ins.AppID] = struct{}{}
 	}

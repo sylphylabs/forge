@@ -1,11 +1,10 @@
 module github.com/openkratos/kratos/contrib/registry/servicecomb
 
-go 1.26.0
+go 1.27rc2
 
 require (
 	github.com/go-chassis/cari v0.9.0
 	github.com/go-chassis/sc-client v0.7.0
-	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/openkratos/kratos v0.0.0
 )
 

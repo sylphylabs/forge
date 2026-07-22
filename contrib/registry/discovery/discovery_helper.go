@@ -1,13 +1,12 @@
 package discovery
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"strconv"
 	"time"
-
-	"github.com/pkg/errors"
 
 	"github.com/openkratos/kratos/registry"
 )

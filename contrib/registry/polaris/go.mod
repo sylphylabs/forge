@@ -1,6 +1,6 @@
 module github.com/openkratos/kratos/contrib/registry/polaris
 
-go 1.26.0
+go 1.27rc2
 
 require (
 	github.com/openkratos/kratos v0.0.0
@@ -24,7 +24,7 @@ require (
 	github.com/polarismesh/specification v1.8.0 // indirect
 	github.com/prometheus/client_golang v1.24.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
-	github.com/prometheus/common v0.70.0 // indirect
+	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect

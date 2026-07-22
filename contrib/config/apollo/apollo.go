@@ -3,10 +3,10 @@ package apollo
 import (
 	"strings"
 
-	"github.com/apolloconfig/agollo/v4"
-	"github.com/apolloconfig/agollo/v4/constant"
-	apolloconfig "github.com/apolloconfig/agollo/v4/env/config"
-	"github.com/apolloconfig/agollo/v4/extension"
+	"github.com/apolloconfig/agollo/v5"
+	"github.com/apolloconfig/agollo/v5/constant"
+	apolloconfig "github.com/apolloconfig/agollo/v5/env/config"
+	"github.com/apolloconfig/agollo/v5/extension"
 
 	"github.com/openkratos/kratos/config"
 	"github.com/openkratos/kratos/encoding"
