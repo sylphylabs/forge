@@ -64,7 +64,7 @@ func (t *Tracer) End(_ context.Context, span trace.Span, m any, err error) {
 	if err != nil {
 		span.RecordError(err)
 		if e := errors.FromError(err); e != nil {
-			span.SetAttributes(attribute.Key("rpc.status_code").Int64(int64(e.Code)))
+			span.SetAttributes(attribute.Key("kratos.error.code").Int64(int64(e.Code)))
 		}
 		span.SetStatus(codes.Error, err.Error())
 	} else {

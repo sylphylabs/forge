@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 	"google.golang.org/grpc/peer"
 
 	"go.opentelemetry.io/otel/trace/noop"
@@ -30,24 +30,35 @@ func Test_parseFullMethod(t *testing.T) {
 			fullMethod: "/foo.bar/hello",
 			want:       "foo.bar/hello",
 			wantAttr: []attribute.KeyValue{
-				semconv.RPCServiceKey.String("foo.bar"),
-				semconv.RPCMethodKey.String("hello"),
+				semconv.RPCMethod("foo.bar/hello"),
 			},
 		},
 		{
-			name:       "/foo.bar/hello/world",
+			name:       "extra path segment",
 			fullMethod: "/foo.bar/hello/world",
-			want:       "foo.bar/hello/world",
+			want:       "/foo.bar/hello/world",
 			wantAttr: []attribute.KeyValue{
-				semconv.RPCServiceKey.String("foo.bar"),
-				semconv.RPCMethodKey.String("hello/world"),
+				semconv.RPCMethod("_OTHER"),
+				semconv.RPCMethodOriginal("/foo.bar/hello/world"),
 			},
 		},
 		{
 			name:       "/hello",
 			fullMethod: "/hello",
-			want:       "hello",
-			wantAttr:   []attribute.KeyValue{attribute.Key("rpc.operation").String("/hello")},
+			want:       "/hello",
+			wantAttr: []attribute.KeyValue{
+				semconv.RPCMethod("_OTHER"),
+				semconv.RPCMethodOriginal("/hello"),
+			},
+		},
+		{
+			name:       "missing leading slash",
+			fullMethod: "foo.bar/hello",
+			want:       "foo.bar/hello",
+			wantAttr: []attribute.KeyValue{
+				semconv.RPCMethod("_OTHER"),
+				semconv.RPCMethodOriginal("foo.bar/hello"),
+			},
 		},
 	}
 
@@ -74,8 +85,8 @@ func Test_peerAttr(t *testing.T) {
 			name: "nil addr",
 			addr: ":8080",
 			want: []attribute.KeyValue{
-				semconv.NetPeerIPKey.String("127.0.0.1"),
-				semconv.NetPeerPortKey.String("8080"),
+				semconv.NetworkPeerAddress("127.0.0.1"),
+				semconv.NetworkPeerPort(8080),
 			},
 		},
 		{
@@ -87,16 +98,16 @@ func Test_peerAttr(t *testing.T) {
 			name: "normal addr with port",
 			addr: "192.168.0.1:8080",
 			want: []attribute.KeyValue{
-				semconv.NetPeerIPKey.String("192.168.0.1"),
-				semconv.NetPeerPortKey.String("8080"),
+				semconv.NetworkPeerAddress("192.168.0.1"),
+				semconv.NetworkPeerPort(8080),
 			},
 		},
 		{
 			name: "dns addr",
 			addr: "foo:8080",
 			want: []attribute.KeyValue{
-				semconv.NetPeerIPKey.String("foo"),
-				semconv.NetPeerPortKey.String("8080"),
+				semconv.NetworkPeerAddress("foo"),
+				semconv.NetworkPeerPort(8080),
 			},
 		},
 	}

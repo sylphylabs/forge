@@ -5,6 +5,8 @@ import (
 	"net"
 	"testing"
 
+	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/grpc/peer"
@@ -15,66 +17,87 @@ type ctxKey string
 
 const testKey ctxKey = "MY_TEST_KEY"
 
-func TestClient_HandleConn(_ *testing.T) {
-	(&ClientHandler{}).HandleConn(context.Background(), nil)
-}
-
-func TestClient_TagConn(t *testing.T) {
-	client := &ClientHandler{}
-	ctx := context.WithValue(context.Background(), testKey, 123)
-
-	if client.TagConn(ctx, nil).Value(testKey) != 123 {
-		t.Errorf(`The context value must be 123 for the "MY_KEY_TEST" key, %v given.`, client.TagConn(ctx, nil).Value(testKey))
-	}
-}
-
-func TestClient_TagRPC(t *testing.T) {
-	client := &ClientHandler{}
-	ctx := context.WithValue(context.Background(), testKey, 123)
-
-	if client.TagRPC(ctx, nil).Value(testKey) != 123 {
-		t.Errorf(`The context value must be 123 for the "MY_KEY_TEST" key, %v given.`, client.TagConn(ctx, nil).Value(testKey))
-	}
-}
-
-type mockSpan struct {
+type recordingSpan struct {
 	trace.Span
-	mockSpanCtx *trace.SpanContext
+	spanContext trace.SpanContext
+	attributes  []attribute.KeyValue
 }
 
-func (m *mockSpan) SpanContext() trace.SpanContext {
-	return *m.mockSpanCtx
+func (s *recordingSpan) SpanContext() trace.SpanContext { return s.spanContext }
+func (s *recordingSpan) SetAttributes(attrs ...attribute.KeyValue) {
+	s.attributes = append(s.attributes, attrs...)
 }
 
-func TestClient_HandleRPC(_ *testing.T) {
-	client := &ClientHandler{}
-	ctx := context.Background()
-	rs := stats.OutHeader{}
-
-	// Handle stats.RPCStats is not type of stats.OutHeader case
-	client.HandleRPC(context.TODO(), nil)
-
-	// Handle context doesn't have the peerkey filled with a Peer instance
-	client.HandleRPC(ctx, &rs)
-
-	// Handle context with the peerkey filled with a Peer instance
-	ip, _ := net.ResolveIPAddr("ip", "1.1.1.1")
-	ctx = peer.NewContext(ctx, &peer.Peer{
-		Addr: ip,
+func validSpanContext() trace.SpanContext {
+	return trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID: trace.TraceID{1},
+		SpanID:  trace.SpanID{1},
 	})
-	client.HandleRPC(ctx, &rs)
+}
 
-	// Handle context with Span
-	_, span := noop.NewTracerProvider().Tracer("Tracer").Start(ctx, "Spanname")
-	spanCtx := trace.SpanContext{}
-	spanID := [8]byte{12, 12, 12, 12, 12, 12, 12, 12}
-	traceID := [16]byte{12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12}
-	spanCtx = spanCtx.WithTraceID(traceID)
-	spanCtx = spanCtx.WithSpanID(spanID)
-	mSpan := mockSpan{
-		Span:        span,
-		mockSpanCtx: &spanCtx,
+func TestClientHandleConn(t *testing.T) {
+	(&ClientHandler{}).HandleConn(t.Context(), nil)
+}
+
+func TestClientTagConn(t *testing.T) {
+	ctx := context.WithValue(t.Context(), testKey, 123)
+	if got := (&ClientHandler{}).TagConn(ctx, nil).Value(testKey); got != 123 {
+		t.Fatalf("context value = %v, want 123", got)
 	}
-	ctx = trace.ContextWithSpan(ctx, &mSpan)
-	client.HandleRPC(ctx, &rs)
+}
+
+func TestClientTagRPC(t *testing.T) {
+	ctx := context.WithValue(t.Context(), testKey, 123)
+	if got := (&ClientHandler{}).TagRPC(ctx, nil).Value(testKey); got != 123 {
+		t.Fatalf("context value = %v, want 123", got)
+	}
+}
+
+func TestClientHandleRPCAttributes(t *testing.T) {
+	tests := []struct {
+		name      string
+		stats     stats.RPCStats
+		withPeer  bool
+		spanCtx   trace.SpanContext
+		wantAttrs []attribute.KeyValue
+	}{
+		{name: "non header stats", stats: nil, withPeer: true, spanCtx: validSpanContext()},
+		{name: "missing peer", stats: &stats.OutHeader{}, spanCtx: validSpanContext()},
+		{name: "invalid span", stats: &stats.OutHeader{}, withPeer: true},
+		{
+			name:     "valid peer",
+			stats:    &stats.OutHeader{},
+			withPeer: true,
+			spanCtx:  validSpanContext(),
+			wantAttrs: []attribute.KeyValue{
+				semconv.NetworkPeerAddress("1.1.1.1"),
+				semconv.NetworkPeerPort(8080),
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			span := &recordingSpan{Span: noop.Span{}, spanContext: test.spanCtx}
+			ctx := trace.ContextWithSpan(t.Context(), span)
+			if test.withPeer {
+				ctx = peer.NewContext(ctx, &peer.Peer{Addr: &net.TCPAddr{IP: net.ParseIP("1.1.1.1"), Port: 8080}})
+			}
+			(&ClientHandler{}).HandleRPC(ctx, test.stats)
+			if !attributeSetsEqual(span.attributes, test.wantAttrs) {
+				t.Fatalf("attributes = %v, want %v", span.attributes, test.wantAttrs)
+			}
+		})
+	}
+}
+
+func attributeSetsEqual(got, want []attribute.KeyValue) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }

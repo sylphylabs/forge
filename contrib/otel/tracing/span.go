@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/openkratos/kratos/metadata"
@@ -11,7 +12,7 @@ import (
 	"github.com/openkratos/kratos/transport/http"
 
 	"go.opentelemetry.io/otel/attribute"
-	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/proto"
@@ -22,30 +23,23 @@ func setClientSpan(ctx context.Context, span trace.Span, m any) {
 		attrs     []attribute.KeyValue
 		remote    string
 		operation string
-		rpcKind   string
 	)
 	tr, ok := transport.FromClientContext(ctx)
 	if ok {
 		operation = tr.Operation()
-		rpcKind = tr.Kind().String()
 		switch tr.Kind() {
 		case transport.KindHTTP:
 			if ht, ok := tr.(http.Transporter); ok {
-				method := ht.Request().Method
-				route := ht.PathTemplate()
-				path := ht.Request().URL.Path
-				attrs = append(attrs, semconv.HTTPMethodKey.String(method))
-				attrs = append(attrs, semconv.HTTPRouteKey.String(route))
-				attrs = append(attrs, semconv.HTTPTargetKey.String(path))
+				attrs = append(attrs, httpClientAttrs(ht)...)
 				remote = ht.Request().Host
 			}
 		case transport.KindGRPC:
 			remote, _ = parseTarget(tr.Endpoint())
+			attrs = append(attrs, semconv.RPCSystemNameGRPC)
+			_, methodAttrs := parseFullMethod(operation)
+			attrs = append(attrs, methodAttrs...)
 		}
 	}
-	attrs = append(attrs, semconv.RPCSystemKey.String(rpcKind))
-	_, mAttrs := parseFullMethod(operation)
-	attrs = append(attrs, mAttrs...)
 	if remote != "" {
 		attrs = append(attrs, peerAttr(remote)...)
 	}
@@ -61,38 +55,33 @@ func setServerSpan(ctx context.Context, span trace.Span, m any) {
 		attrs     []attribute.KeyValue
 		remote    string
 		operation string
-		rpcKind   string
 	)
 	tr, ok := transport.FromServerContext(ctx)
 	if ok {
 		operation = tr.Operation()
-		rpcKind = tr.Kind().String()
 		switch tr.Kind() {
 		case transport.KindHTTP:
 			if ht, ok := tr.(http.Transporter); ok {
-				method := ht.Request().Method
-				route := ht.PathTemplate()
-				path := ht.Request().URL.Path
-				attrs = append(attrs, semconv.HTTPMethodKey.String(method))
-				attrs = append(attrs, semconv.HTTPRouteKey.String(route))
-				attrs = append(attrs, semconv.HTTPTargetKey.String(path))
+				attrs = append(attrs, httpServerAttrs(ht)...)
 				remote = ht.Request().RemoteAddr
 			}
 		case transport.KindGRPC:
+			attrs = append(attrs, semconv.RPCSystemNameGRPC)
+			_, methodAttrs := parseFullMethod(operation)
+			attrs = append(attrs, methodAttrs...)
 			if p, ok := peer.FromContext(ctx); ok {
 				remote = p.Addr.String()
 			}
 		}
 	}
-	attrs = append(attrs, semconv.RPCSystemKey.String(rpcKind))
-	_, mAttrs := parseFullMethod(operation)
-	attrs = append(attrs, mAttrs...)
 	attrs = append(attrs, peerAttr(remote)...)
 	if p, ok := m.(proto.Message); ok {
 		attrs = append(attrs, attribute.Key("recv_msg.size").Int(proto.Size(p)))
 	}
 	if md, ok := metadata.FromServerContext(ctx); ok {
-		attrs = append(attrs, semconv.PeerServiceKey.String(md.Get(serviceHeader)))
+		if service := md.Get(serviceHeader); service != "" {
+			attrs = append(attrs, semconv.ServicePeerName(service))
+		}
 	}
 
 	span.SetAttributes(attrs...)
@@ -102,21 +91,15 @@ func setServerSpan(ctx context.Context, span trace.Span, m any) {
 // conventions as well as all applicable span attribute.KeyValue attributes based
 // on a gRPC's FullMethod.
 func parseFullMethod(fullMethod string) (string, []attribute.KeyValue) {
-	name := strings.TrimLeft(fullMethod, "/")
-	parts := strings.SplitN(name, "/", 2)
-	if len(parts) != 2 { //nolint:mnd
-		// Invalid format, does not follow `/package.service/method`.
-		return name, []attribute.KeyValue{attribute.Key("rpc.operation").String(fullMethod)}
+	name, ok := strings.CutPrefix(fullMethod, "/")
+	service, method, valid := strings.Cut(name, "/")
+	if !ok || !valid || service == "" || method == "" || strings.ContainsRune(method, '/') {
+		return fullMethod, []attribute.KeyValue{
+			semconv.RPCMethod("_OTHER"),
+			semconv.RPCMethodOriginal(fullMethod),
+		}
 	}
-
-	var attrs []attribute.KeyValue
-	if service := parts[0]; service != "" {
-		attrs = append(attrs, semconv.RPCServiceKey.String(service))
-	}
-	if method := parts[1]; method != "" {
-		attrs = append(attrs, semconv.RPCMethodKey.String(method))
-	}
-	return name, attrs
+	return name, []attribute.KeyValue{semconv.RPCMethod(service + "/" + method)}
 }
 
 // peerAttr returns attributes about the peer address.
@@ -130,10 +113,40 @@ func peerAttr(addr string) []attribute.KeyValue {
 		host = "127.0.0.1"
 	}
 
-	return []attribute.KeyValue{
-		semconv.NetPeerIPKey.String(host),
-		semconv.NetPeerPortKey.String(port),
+	attrs := []attribute.KeyValue{semconv.NetworkPeerAddress(host)}
+	if port, err := strconv.Atoi(port); err == nil {
+		attrs = append(attrs, semconv.NetworkPeerPort(port))
 	}
+	return attrs
+}
+
+func httpClientAttrs(transport http.Transporter) []attribute.KeyValue {
+	request := transport.Request()
+	attrs := []attribute.KeyValue{
+		semconv.HTTPRequestMethodKey.String(request.Method),
+		semconv.HTTPRoute(transport.PathTemplate()),
+		semconv.URLFull(request.URL.String()),
+	}
+	if userAgent := request.UserAgent(); userAgent != "" {
+		attrs = append(attrs, semconv.UserAgentOriginal(userAgent))
+	}
+	return attrs
+}
+
+func httpServerAttrs(transport http.Transporter) []attribute.KeyValue {
+	request := transport.Request()
+	attrs := []attribute.KeyValue{
+		semconv.HTTPRequestMethodKey.String(request.Method),
+		semconv.HTTPRoute(transport.PathTemplate()),
+		semconv.URLPath(request.URL.Path),
+	}
+	if query := request.URL.RawQuery; query != "" {
+		attrs = append(attrs, semconv.URLQuery(query))
+	}
+	if userAgent := request.UserAgent(); userAgent != "" {
+		attrs = append(attrs, semconv.UserAgentOriginal(userAgent))
+	}
+	return attrs
 }
 
 func parseTarget(endpoint string) (address string, err error) {
