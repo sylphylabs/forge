@@ -162,6 +162,15 @@ func TestStopTimeout(t *testing.T) {
 	}
 }
 
+func TestAfterStopTimeout(t *testing.T) {
+	o := &options{}
+	v := time.Duration(123)
+	AfterStopTimeout(v)(o)
+	if o.afterStopTimeout != v {
+		t.Fatalf("afterStopTimeout = %v, want %v", o.afterStopTimeout, v)
+	}
+}
+
 func TestBeforeStart(t *testing.T) {
 	o := &options{}
 	v := func(_ context.Context) error {

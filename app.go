@@ -33,6 +33,8 @@ type App struct {
 	cancel   context.CancelFunc
 	mu       sync.Mutex
 	instance *registry.ServiceInstance
+	stopOnce sync.Once
+	stopErr  error
 }
 
 // New create an application lifecycle manager.
@@ -41,6 +43,8 @@ func New(opts ...Option) *App {
 		ctx:              context.Background(),
 		sigs:             []os.Signal{syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGINT},
 		registrarTimeout: 10 * time.Second,
+		stopTimeout:      10 * time.Second,
+		afterStopTimeout: 10 * time.Second,
 	}
 	if id, err := uuid.NewUUID(); err == nil {
 		o.id = id.String()
@@ -132,43 +136,64 @@ func (a *App) Run() error {
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, a.opts.sigs...)
+	defer signal.Stop(c)
 	eg.Go(func() error {
 		select {
 		case <-ctx.Done():
-			return nil
+			return a.Stop()
 		case <-c:
 			return a.Stop()
 		}
 	})
-	if err = eg.Wait(); err != nil && !errors.Is(err, context.Canceled) {
-		return err
+	runErr := eg.Wait()
+	if errors.Is(runErr, context.Canceled) {
+		runErr = nil
 	}
-	err = nil
-	for _, fn := range a.opts.afterStop {
-		err = fn(sctx)
+	afterCtx := context.WithoutCancel(sctx)
+	if a.opts.afterStopTimeout > 0 {
+		var cancel context.CancelFunc
+		afterCtx, cancel = context.WithTimeout(afterCtx, a.opts.afterStopTimeout)
+		defer cancel()
 	}
-	return err
+	return errors.Join(runErr, runHooks(afterCtx, a.opts.afterStop))
 }
 
 // Stop gracefully stops the application.
-func (a *App) Stop() (err error) {
-	sctx := NewContext(a.ctx, a)
-	for _, fn := range a.opts.beforeStop {
-		err = fn(sctx)
+func (a *App) Stop() error {
+	a.stopOnce.Do(func() {
+		a.stopErr = a.stop()
+	})
+	return a.stopErr
+}
+
+func (a *App) stop() error {
+	sctx := context.WithoutCancel(NewContext(a.ctx, a))
+	if a.opts.stopTimeout > 0 {
+		var cancel context.CancelFunc
+		sctx, cancel = context.WithTimeout(sctx, a.opts.stopTimeout)
+		defer cancel()
 	}
+	hookErr := runHooks(sctx, a.opts.beforeStop)
 
 	a.mu.Lock()
 	instance := a.instance
 	a.mu.Unlock()
+	var deregisterErr error
 	if a.opts.registrar != nil && instance != nil {
-		ctx, cancel := context.WithTimeout(NewContext(a.ctx, a), a.opts.registrarTimeout)
+		ctx, cancel := context.WithTimeout(sctx, a.opts.registrarTimeout)
 		defer cancel()
-		if err = a.opts.registrar.Deregister(ctx, instance); err != nil {
-			return err
-		}
+		deregisterErr = a.opts.registrar.Deregister(ctx, instance)
 	}
 	if a.cancel != nil {
 		a.cancel()
+	}
+	return errors.Join(hookErr, deregisterErr)
+}
+
+func runHooks(ctx context.Context, hooks []func(context.Context) error) error {
+	var err error
+	for _, hook := range hooks {
+		err = errors.Join(err, hook(ctx))
 	}
 	return err
 }

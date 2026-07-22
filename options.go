@@ -29,6 +29,7 @@ type options struct {
 	registrar        registry.Registrar
 	registrarTimeout time.Duration
 	stopTimeout      time.Duration
+	afterStopTimeout time.Duration
 	servers          []transport.Server
 
 	// Before and After funcs
@@ -96,6 +97,12 @@ func RegistrarTimeout(t time.Duration) Option {
 // StopTimeout with app stop timeout.
 func StopTimeout(t time.Duration) Option {
 	return func(o *options) { o.stopTimeout = t }
+}
+
+// AfterStopTimeout sets the total time allowed for all AfterStop hooks.
+// A non-positive duration disables the deadline.
+func AfterStopTimeout(t time.Duration) Option {
+	return func(o *options) { o.afterStopTimeout = t }
 }
 
 // Before and Afters

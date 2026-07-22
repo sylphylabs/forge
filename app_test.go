@@ -19,6 +19,36 @@ type mockRegistry struct {
 	service map[string]*registry.ServiceInstance
 }
 
+type errorRegistry struct {
+	deregisterErr error
+}
+
+type lifecycleServer struct {
+	started  chan struct{}
+	stopped  chan struct{}
+	stopOnce sync.Once
+}
+
+func newLifecycleServer() *lifecycleServer {
+	return &lifecycleServer{started: make(chan struct{}), stopped: make(chan struct{})}
+}
+
+func (s *lifecycleServer) Start(context.Context) error {
+	close(s.started)
+	<-s.stopped
+	return nil
+}
+
+func (s *lifecycleServer) Stop(context.Context) error {
+	s.stopOnce.Do(func() { close(s.stopped) })
+	return nil
+}
+
+func (*errorRegistry) Register(context.Context, *registry.ServiceInstance) error { return nil }
+func (r *errorRegistry) Deregister(context.Context, *registry.ServiceInstance) error {
+	return r.deregisterErr
+}
+
 func (r *mockRegistry) Register(_ context.Context, service *registry.ServiceInstance) error {
 	if service == nil || service.ID == "" {
 		return errors.New("no service id")
@@ -70,6 +100,85 @@ func TestApp(t *testing.T) {
 	})
 	if err := app.Run(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAppAfterStopUsesFreshBoundedContext(t *testing.T) {
+	called := false
+	server := newLifecycleServer()
+	var app *App
+	app = New(
+		Server(server),
+		AfterStopTimeout(time.Second),
+		AfterStop(func(ctx context.Context) error {
+			called = true
+			if err := ctx.Err(); err != nil {
+				t.Fatalf("AfterStop context is already canceled: %v", err)
+			}
+			if _, ok := ctx.Deadline(); !ok {
+				t.Fatal("AfterStop context has no deadline")
+			}
+			if info, ok := FromContext(ctx); !ok || info != app {
+				t.Fatal("AfterStop context lost application information")
+			}
+			return nil
+		}),
+	)
+	go func() {
+		<-server.started
+		_ = app.Stop()
+	}()
+	if err := app.Run(); err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("AfterStop hook was not called")
+	}
+}
+
+func TestAppJoinsLifecycleErrorsAndStillCancels(t *testing.T) {
+	beforeErr := errors.New("before stop")
+	deregisterErr := errors.New("deregister")
+	afterErr := errors.New("after stop")
+	server := newLifecycleServer()
+	app := New(
+		Server(server),
+		Registrar(&errorRegistry{deregisterErr: deregisterErr}),
+		BeforeStop(func(context.Context) error { return beforeErr }),
+		AfterStop(func(context.Context) error { return afterErr }),
+	)
+	go func() {
+		<-server.started
+		_ = app.Stop()
+	}()
+
+	err := app.Run()
+	for _, want := range []error{beforeErr, deregisterErr, afterErr} {
+		if !errors.Is(err, want) {
+			t.Errorf("Run() error %v does not contain %v", err, want)
+		}
+	}
+	select {
+	case <-app.ctx.Done():
+	default:
+		t.Fatal("application context was not canceled")
+	}
+}
+
+func TestAppStopIsIdempotent(t *testing.T) {
+	var calls int
+	app := New(BeforeStop(func(context.Context) error {
+		calls++
+		return nil
+	}))
+	if err := app.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("BeforeStop called %d times, want 1", calls)
 	}
 }
 
