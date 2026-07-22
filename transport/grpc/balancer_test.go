@@ -5,10 +5,33 @@ import (
 	"reflect"
 	"testing"
 
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/resolver"
 
 	"github.com/openkratos/kratos/selector"
 )
+
+type testSubConn struct{ balancer.SubConn }
+
+func TestBalancerBuildUsesGlobalSelector(t *testing.T) {
+	conn := testSubConn{}
+	picker := (&balancerBuilder{}).Build(base.PickerBuildInfo{
+		ReadySCs: map[balancer.SubConn]base.SubConnInfo{
+			conn: {Address: resolver.Address{Addr: "127.0.0.1:9000"}},
+		},
+	})
+
+	result, err := picker.Pick(balancer.PickInfo{Ctx: t.Context()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SubConn != conn {
+		t.Fatalf("picked SubConn %v, want %v", result.SubConn, conn)
+	}
+	result.Done(balancer.DoneInfo{})
+}
 
 func TestTrailer(t *testing.T) {
 	trailer := Trailer(metadata.New(map[string]string{"a": "b"}))
