@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -126,6 +127,7 @@ type Client struct {
 	maxRetry          int
 	heartbeatInterval time.Duration
 	client            *http.Client
+	pickStart         func(int) int
 	keepalive         map[string]chan struct{}
 	lock              sync.Mutex
 }
@@ -150,6 +152,7 @@ func NewClient(urls []string, opts ...ClientOption) *Client {
 		maxRetry:          len(urls),
 		heartbeatInterval: heartbeatTime,
 		client:            &http.Client{Transport: clientTransport, Timeout: httpTimeout},
+		pickStart:         rand.IntN,
 		keepalive:         make(map[string]chan struct{}),
 	}
 
@@ -297,20 +300,13 @@ func (e *Client) filterUp(apps ...Application) (res []Instance) {
 }
 
 func (e *Client) pickServer(currentTimes int) string {
-	return e.urls[currentTimes%e.maxRetry]
-}
-
-func (e *Client) shuffle() {
-	rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0)).
-		Shuffle(len(e.urls), func(i, j int) {
-			e.urls[i], e.urls[j] = e.urls[j], e.urls[i]
-		})
+	if len(e.urls) == 0 {
+		return ""
+	}
+	return e.urls[currentTimes%len(e.urls)]
 }
 
 func (e *Client) buildAPI(currentTimes int, params ...string) string {
-	if currentTimes == 0 {
-		e.shuffle()
-	}
 	server := e.pickServer(currentTimes)
 	params = append([]string{server, e.eurekaPath}, params...)
 	return strings.Join(params, "/")
@@ -352,9 +348,28 @@ func (e *Client) request(ctx context.Context, method string, params []string, in
 }
 
 func (e *Client) do(ctx context.Context, method string, params []string, input io.Reader, output any) error {
-	for i := 0; i < e.maxRetry; i++ {
-		retry, err := e.request(ctx, method, params, input, output, i)
+	if len(e.urls) == 0 {
+		return errors.New("eureka client has no server URLs")
+	}
+	var payload []byte
+	var err error
+	if input != nil {
+		payload, err = io.ReadAll(input)
+		if err != nil {
+			return err
+		}
+	}
+	attempts := max(0, e.maxRetry) + 1
+	start := e.pickStart(len(e.urls))
+	var lastErr error
+	for i := 0; i < attempts; i++ {
+		var body io.Reader
+		if input != nil {
+			body = bytes.NewReader(payload)
+		}
+		retry, err := e.request(ctx, method, params, body, output, start+i)
 		if retry {
+			lastErr = err
 			continue
 		}
 		if err != nil {
@@ -362,5 +377,5 @@ func (e *Client) do(ctx context.Context, method string, params []string, input i
 		}
 		return nil
 	}
-	return fmt.Errorf("retry after %d times", e.maxRetry)
+	return fmt.Errorf("eureka request failed after %d attempts: %w", attempts, lastErr)
 }

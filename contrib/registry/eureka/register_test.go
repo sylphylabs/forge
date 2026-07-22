@@ -92,6 +92,34 @@ func do(r *Registry, s *registry.ServiceInstance) {
 	}
 }
 
+func TestEndpointsCloneMetadata(t *testing.T) {
+	r := new(Registry)
+	service := &registry.ServiceInstance{
+		ID:        "instance",
+		Name:      "greeter",
+		Version:   "v1",
+		Endpoints: []string{"grpc://127.0.0.1:9000", "http://127.0.0.1:8000"},
+		Metadata:  map[string]string{"zone": "a"},
+	}
+
+	endpoints := r.Endpoints(service)
+	if len(endpoints) != 2 {
+		t.Fatalf("Endpoints() returned %d endpoints, want 2", len(endpoints))
+	}
+	for i, endpoint := range endpoints {
+		if got, want := endpoint.MetaData["Endpoints"], service.Endpoints[i]; got != want {
+			t.Errorf("endpoint %d metadata = %q, want %q", i, got, want)
+		}
+	}
+	endpoints[0].MetaData["zone"] = "b"
+	if got := endpoints[1].MetaData["zone"]; got != "a" {
+		t.Errorf("second endpoint metadata changed to %q", got)
+	}
+	if got := service.Metadata["zone"]; got != "a" {
+		t.Errorf("service metadata changed to %q", got)
+	}
+}
+
 func TestLock(_ *testing.T) {
 	type me struct {
 		lock sync.Mutex
