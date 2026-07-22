@@ -8,22 +8,46 @@ import "google/protobuf/go_features.proto";
 option go_package = "opaque.test/openpb";
 option features.(pb.go).api_level = API_OPEN;
 
-message Request {
+message ScalarRequest {
   string text = 1;
+}
+
+message ScalarReply {
+  string text = 1;
+}
+
+message OneofRequest {
   oneof selection {
     string choice = 2;
   }
 }
 
-message Reply {
-  string text = 1;
+message OneofReply {
   oneof selection {
     string choice = 2;
   }
+}
+
+message RouteRequest {
+  string name = 1;
+  string query = 2;
+  repeated string tags = 3;
+  RouteFilter filter = 4;
+}
+
+message RouteReply {
+  string name = 1;
+  string query = 2;
+  repeated string tags = 3;
+  RouteFilter filter = 4;
+}
+
+message RouteFilter {
+  string text = 1;
 }
 
 service OpenService {
-  rpc ScalarBody(Request) returns (Reply) {
+  rpc ScalarBody(ScalarRequest) returns (ScalarReply) {
     option (google.api.http) = {
       post: "/v1/open/scalar"
       body: "text"
@@ -31,11 +55,41 @@ service OpenService {
     };
   }
 
-  rpc OneofBody(Request) returns (Reply) {
+  rpc OneofBody(OneofRequest) returns (OneofReply) {
     option (google.api.http) = {
       post: "/v1/open/oneof"
       body: "choice"
       response_body: "choice"
+    };
+  }
+
+  rpc Alternate(RouteRequest) returns (RouteReply) {
+    option (google.api.http) = {
+      get: "/v1/{name=items/*}"
+      additional_bindings {
+        get: "/v1/alternate/{name=items/*}"
+      }
+      additional_bindings {
+        custom {
+          kind: "REPORT"
+          path: "/v1/report/{name=items/*}"
+        }
+      }
+    };
+  }
+
+  rpc AnyMethod(RouteRequest) returns (RouteReply) {
+    option (google.api.http) = {
+      custom {
+        kind: "*"
+        path: "/v1/any/{name}"
+      }
+    };
+  }
+
+  rpc BareWildcard(RouteRequest) returns (RouteReply) {
+    option (google.api.http) = {
+      get: "/v1/files/**"
     };
   }
 }

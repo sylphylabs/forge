@@ -56,6 +56,7 @@ type pathPart struct {
 type Template struct {
 	pattern         string
 	serveMuxPattern string
+	matchKey        string
 	parts           []pathPart
 	variables       []Variable
 	verbRaw         string
@@ -67,6 +68,19 @@ func (t *Template) Pattern() string { return t.pattern }
 
 // ServeMuxPattern returns the structural net/http.ServeMux path pattern.
 func (t *Template) ServeMuxPattern() string { return t.serveMuxPattern }
+
+// MatchKey returns a canonical description of the request paths this template matches.
+func (t *Template) MatchKey() string { return t.matchKey }
+
+// HasUnboundWildcard reports whether expansion needs a value not owned by a field.
+func (t *Template) HasUnboundWildcard() bool {
+	for _, part := range t.parts {
+		if part.unbound {
+			return true
+		}
+	}
+	return false
+}
 
 // Variables returns a copy of the variables referenced by the template.
 func (t *Template) Variables() []Variable { return slices.Clone(t.variables) }

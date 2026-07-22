@@ -1,12 +1,12 @@
 {{$svrType := .ServiceType}}
 {{$svrName := .ServiceName}}
 
-{{- range .MethodSets}}
+{{- range .ClientMethods}}
 const Operation{{$svrType}}{{.OriginalName}} = "/{{$svrName}}/{{.OriginalName}}"
 {{- end}}
 
 type {{.ServiceType}}HTTPServer interface {
-{{- range .MethodSets}}
+{{- range .ClientMethods}}
 	{{- if ne .Comment ""}}
 	{{.Comment}}
 	{{- end}}
@@ -31,7 +31,7 @@ func Register{{.ServiceType}}HTTPServer(s *http.Server, srv {{.ServiceType}}HTTP
 	{{- end}}
 }
 
-{{range .MethodSets}}
+{{range .ClientMethods}}
 {{- if or .ClientStreaming .ServerStreaming}}
 type {{$svrType}}_{{.Name}}HTTPServer struct {
 	http.ServerStream
@@ -80,15 +80,19 @@ func _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Handler(srv {{$svrType}}HTTPServer) fu
 		var in {{.Request}}
 		{{- if .HasBody}}
 			{{- if eq .BodyField "*"}}
-		if err := ctx.Bind(&in); err != nil {
+		if err := ctx.Bind(http.NewProtoJSON(&in{{range .PathFields}}, "{{.}}"{{end}})); err != nil {
 			return err
 		}
-			{{- else}}
+			{{- else if .BodyHTTPBody}}
 		var body {{.BodyType}}
 		if err := ctx.Bind(&body); err != nil {
 			return err
 		}
 		{{.BodyAssignment}}
+			{{- else}}
+		if err := ctx.Bind(http.NewProtoJSONField(&in, "{{.BodyField}}")); err != nil {
+			return err
+		}
 			{{- end}}
 		{{- end}}
 		{{- if not .HasBody}}
@@ -117,15 +121,19 @@ func _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Handler(srv {{$svrType}}HTTPServer) fu
 		var in {{.Request}}
 		{{- if .HasBody}}
 			{{- if eq .BodyField "*"}}
-		if err := ctx.Bind(&in); err != nil {
+		if err := ctx.Bind(http.NewProtoJSON(&in{{range .PathFields}}, "{{.}}"{{end}})); err != nil {
 			return err
 		}
-			{{- else}}
+			{{- else if .BodyHTTPBody}}
 		var body {{.BodyType}}
 		if err := ctx.Bind(&body); err != nil {
 			return err
 		}
 		{{.BodyAssignment}}
+			{{- else}}
+		if err := ctx.Bind(http.NewProtoJSONField(&in, "{{.BodyField}}")); err != nil {
+			return err
+		}
 			{{- end}}
 		{{- end}}
 		{{- if not .HasBody}}
@@ -153,10 +161,10 @@ func _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Handler(srv {{$svrType}}HTTPServer) fu
 		reply := out.(*{{.Reply}})
 		{{- if or .ReplyHTTPBody .ResponseBodyHTTPBody}}
 		return ctx.Blob(200, http.BodyContentType(reply{{.ResponseBodyGetter}}), reply{{.ResponseBodyGetter}}.GetData())
-		{{- else if and .ResponseBodyGetter (not .ResponseBodyMessage)}}
-		return ctx.JSON(200, reply{{.ResponseBodyGetter}})
+		{{- else if .ResponseBodyGetter}}
+		return ctx.JSON(200, http.NewProtoJSONField(reply, "{{.ResponseBodyField}}"))
 		{{- else}}
-		return ctx.Result(200, reply{{.ResponseBodyGetter}})
+		return ctx.JSON(200, http.NewProtoJSON(reply))
 		{{- end}}
 		{{- end}}
 	}
@@ -164,7 +172,7 @@ func _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Handler(srv {{$svrType}}HTTPServer) fu
 {{end}}
 
 type {{.ServiceType}}HTTPClient interface {
-{{- range .MethodSets}}
+{{- range .ClientMethods}}
 	{{- if ne .Comment ""}}
 	{{.Comment}}
 	{{- end}}
@@ -186,7 +194,7 @@ func New{{.ServiceType}}HTTPClient (client *http.Client) {{.ServiceType}}HTTPCli
 	return &{{.ServiceType}}HTTPClientImpl{client}
 }
 
-{{range .MethodSets}}
+{{range .ClientMethods}}
 {{- if or .ClientStreaming .ServerStreaming}}
 type {{$svrType}}_{{.Name}}HTTPClient struct {
 	http.ClientStream
@@ -275,12 +283,17 @@ func (x *{{$svrType}}_{{.Name}}HTTPClient) CloseAndRecv() (*{{.Reply}}, error) {
 {{- end}}
 {{end}}
 
-{{range .MethodSets}}
+{{range .ClientMethods}}
 	{{- if ne .Comment ""}}
 	{{.Comment}}
 	{{- end}}
 {{- if .ClientStreaming}}
 func (c *{{$svrType}}HTTPClientImpl) {{.Name}}(ctx context.Context, opts ...http.CallOption) ({{$svrType}}_{{.Name}}Client, error) {
+	{{- if .UnspecifiedMethod}}
+	return nil, http.ErrUnspecifiedHTTPMethod
+	{{- else if .UnboundPathWildcard}}
+	return nil, http.ErrUnboundPathWildcard
+	{{- end}}
 	pattern := "{{.PathTemplate}}"
 	opts = append([]http.CallOption{
 		http.Accept("application/protojson"),
@@ -294,6 +307,11 @@ func (c *{{$svrType}}HTTPClientImpl) {{.Name}}(ctx context.Context, opts ...http
 }
 {{- else if .ServerStreaming}}
 func (c *{{$svrType}}HTTPClientImpl) {{.Name}}(ctx context.Context, in *{{.Request}}, opts ...http.CallOption) ({{$svrType}}_{{.Name}}Client, error) {
+	{{- if .UnspecifiedMethod}}
+	return nil, http.ErrUnspecifiedHTTPMethod
+	{{- else if .UnboundPathWildcard}}
+	return nil, http.ErrUnboundPathWildcard
+	{{- end}}
 	pattern := "{{.PathTemplate}}"
 	{{- if .HasBody}}
 		{{- if or (eq .BodyField "*") (eq .BodyField "")}}
@@ -337,6 +355,11 @@ path, err := http.BuildPath(pattern, in, http.WithQueryParams())
 }
 {{- else}}
 func (c *{{$svrType}}HTTPClientImpl) {{.Name}}(ctx context.Context, in *{{.Request}}, opts ...http.CallOption) (*{{.Reply}}, error) {
+	{{- if .UnspecifiedMethod}}
+	return nil, http.ErrUnspecifiedHTTPMethod
+	{{- else if .UnboundPathWildcard}}
+	return nil, http.ErrUnboundPathWildcard
+	{{- end}}
 	var out {{.Reply}}
 	pattern := "{{.PathTemplate}}"
 	{{- if .HasBody}}
@@ -346,15 +369,9 @@ path, err := http.BuildPath(pattern, in)
 path, err := http.BuildPath(pattern, in, http.WithQueryParams(), http.WithOmitFields("{{.BodyQueryName}}"))
 		{{- end}}
 	opts = append([]http.CallOption{
-			{{- if and .ResponseBodyGetter (not .ResponseBodyMessage)}}
 			http.Accept("application/json"),
-			{{- else}}
-			http.Accept("application/protojson"),
-			{{- end}}
 			{{- if .BodyHTTPBody}}
 			http.ContentType(http.BodyContentType(in{{.BodyGetter}})),
-			{{- else if .BodyProtoJSON}}
-			http.ContentType("application/protojson"),
 			{{- else}}
 			http.ContentType("application/json"),
 		{{- end}}
@@ -364,11 +381,7 @@ path, err := http.BuildPath(pattern, in, http.WithQueryParams(), http.WithOmitFi
 	{{- else}}
 path, err := http.BuildPath(pattern, in, http.WithQueryParams())
 	opts = append([]http.CallOption{
-			{{- if and .ResponseBodyGetter (not .ResponseBodyMessage)}}
 			http.Accept("application/json"),
-			{{- else}}
-			http.Accept("application/protojson"),
-			{{- end}}
 		http.Operation(Operation{{$svrType}}{{.OriginalName}}),
 		http.PathTemplate(pattern),
 	}, opts...)
@@ -376,18 +389,24 @@ path, err := http.BuildPath(pattern, in, http.WithQueryParams())
 	if err != nil {
 		return nil, err
 	}
-	{{- if .ResponseBodyGetter}}
+	{{- if .ResponseBodyHTTPBody}}
 	var responseBody {{.ResponseBodyType}}
 	{{- end}}
 	{{- if .HasBody}}
-	err = c.cc.Invoke(ctx, "{{.Method}}", path, in{{.BodyGetter}}, {{if .ResponseBodyGetter}}&responseBody{{else}}&out{{end}}, opts...)
+		{{- if eq .BodyField "*"}}
+	err = c.cc.Invoke(ctx, "{{.Method}}", path, http.NewProtoJSON(in{{range .PathFields}}, "{{.}}"{{end}}), {{if .ResponseBodyHTTPBody}}&responseBody{{else if .ResponseBodyGetter}}http.NewProtoJSONField(&out, "{{.ResponseBodyField}}"){{else if .ReplyHTTPBody}}&out{{else}}http.NewProtoJSON(&out){{end}}, opts...)
+		{{- else if .BodyHTTPBody}}
+	err = c.cc.Invoke(ctx, "{{.Method}}", path, in{{.BodyGetter}}, {{if .ResponseBodyHTTPBody}}&responseBody{{else if .ResponseBodyGetter}}http.NewProtoJSONField(&out, "{{.ResponseBodyField}}"){{else if .ReplyHTTPBody}}&out{{else}}http.NewProtoJSON(&out){{end}}, opts...)
+		{{- else}}
+	err = c.cc.Invoke(ctx, "{{.Method}}", path, http.NewProtoJSONField(in, "{{.BodyField}}"), {{if .ResponseBodyHTTPBody}}&responseBody{{else if .ResponseBodyGetter}}http.NewProtoJSONField(&out, "{{.ResponseBodyField}}"){{else if .ReplyHTTPBody}}&out{{else}}http.NewProtoJSON(&out){{end}}, opts...)
+		{{- end}}
 	{{- else}}
-	err = c.cc.Invoke(ctx, "{{.Method}}", path, nil, {{if .ResponseBodyGetter}}&responseBody{{else}}&out{{end}}, opts...)
+	err = c.cc.Invoke(ctx, "{{.Method}}", path, nil, {{if .ResponseBodyHTTPBody}}&responseBody{{else if .ResponseBodyGetter}}http.NewProtoJSONField(&out, "{{.ResponseBodyField}}"){{else if .ReplyHTTPBody}}&out{{else}}http.NewProtoJSON(&out){{end}}, opts...)
 	{{- end}}
 	if err != nil {
 		return nil, err
 	}
-	{{- if .ResponseBodyGetter}}
+	{{- if .ResponseBodyHTTPBody}}
 	{{.ResponseAssignment}}
 	{{- end}}
 	return &out, nil

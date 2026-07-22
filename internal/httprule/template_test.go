@@ -201,6 +201,30 @@ func TestVariablesReturnsCopy(t *testing.T) {
 	}
 }
 
+func TestMatchKeyIgnoresFieldNamesAndEscapeSpelling(t *testing.T) {
+	first, err := Parse("/v1/{name=publishers/*}:archive")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := Parse("/v1/{resource=%70ublishers/*}:archive")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.MatchKey() != second.MatchKey() {
+		t.Fatalf("match keys differ: %q != %q", first.MatchKey(), second.MatchKey())
+	}
+	if first.HasUnboundWildcard() {
+		t.Fatal("variable wildcard reported as unbound")
+	}
+	unbound, err := Parse("/v1/*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !unbound.HasUnboundWildcard() {
+		t.Fatal("bare wildcard was not reported")
+	}
+}
+
 func TestServeMuxPatternDispatch(t *testing.T) {
 	tests := []struct {
 		pattern string

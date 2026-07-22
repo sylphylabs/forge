@@ -11,11 +11,11 @@ import (
 var httpTemplate string
 
 type serviceDesc struct {
-	ServiceType string // Greeter
-	ServiceName string // helloworld.Greeter
-	Metadata    string // api/helloworld/helloworld.proto
-	Methods     []*methodDesc
-	MethodSets  map[string]*methodDesc
+	ServiceType   string // Greeter
+	ServiceName   string // helloworld.Greeter
+	Metadata      string // api/helloworld/helloworld.proto
+	Methods       []*methodDesc
+	ClientMethods []*methodDesc
 }
 
 type methodDesc struct {
@@ -29,6 +29,7 @@ type methodDesc struct {
 	// http_rule
 	Path                 string
 	PathTemplate         string
+	PathFields           []string
 	Method               string
 	HasVars              bool
 	HasBody              bool
@@ -40,20 +41,30 @@ type methodDesc struct {
 	BodyHTTPBody         bool
 	BodyMessage          bool
 	BodyProtoJSON        bool
+	ResponseBodyField    string
 	ResponseBodyGetter   string
 	ResponseBodyType     string
 	ResponseAssignment   string
 	ResponseBodyHTTPBody bool
-	ResponseBodyMessage  bool
 	ReplyHTTPBody        bool
 	ClientStreaming      bool
 	ServerStreaming      bool
+	UnspecifiedMethod    bool
+	UnboundPathWildcard  bool
+	serveMuxPattern      string
+	matchKey             string
 }
 
 func (s *serviceDesc) execute() string {
-	s.MethodSets = make(map[string]*methodDesc)
-	for _, m := range s.Methods {
-		s.MethodSets[m.Name] = m
+	if len(s.ClientMethods) == 0 {
+		seen := make(map[string]struct{})
+		for _, method := range s.Methods {
+			if _, ok := seen[method.Name]; ok {
+				continue
+			}
+			seen[method.Name] = struct{}{}
+			s.ClientMethods = append(s.ClientMethods, method)
+		}
 	}
 	buf := new(bytes.Buffer)
 	tmpl, err := template.New("http").Parse(strings.TrimSpace(httpTemplate))

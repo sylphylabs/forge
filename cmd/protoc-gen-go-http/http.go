@@ -1,10 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
-	"regexp"
 	"strings"
 
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -14,6 +14,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/gofeaturespb"
+
+	"github.com/openkratos/kratos/internal/httprule"
 )
 
 const (
@@ -22,12 +24,10 @@ const (
 	httpBodyFullName     = protoreflect.FullName("google.api.HttpBody")
 )
 
-var methodSets = make(map[string]int)
-
 // generateFile generates a _http.pb.go file containing kratos errors definitions.
-func generateFile(gen *protogen.Plugin, file *protogen.File, omitempty bool, omitemptyPrefix string) *protogen.GeneratedFile {
+func generateFile(gen *protogen.Plugin, file *protogen.File, omitempty bool, omitemptyPrefix string) (*protogen.GeneratedFile, error) {
 	if len(file.Services) == 0 || (omitempty && !hasHTTPRule(file.Services)) {
-		return nil
+		return nil, nil
 	}
 	filename := file.GeneratedFilenamePrefix + "_http.pb.go"
 	g := gen.NewGeneratedFile(filename, file.GoImportPath)
@@ -43,14 +43,16 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, omitempty bool, omi
 	g.P()
 	g.P("package ", file.GoPackageName)
 	g.P()
-	generateFileContent(gen, file, g, omitempty, omitemptyPrefix)
-	return g
+	if err := generateFileContent(gen, file, g, omitempty, omitemptyPrefix); err != nil {
+		return nil, err
+	}
+	return g, nil
 }
 
 // generateFileContent generates the kratos errors definitions, excluding the package statement.
-func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, omitempty bool, omitemptyPrefix string) {
+func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, omitempty bool, omitemptyPrefix string) error {
 	if len(file.Services) == 0 {
-		return
+		return nil
 	}
 	g.P("// This is a compile-time assertion to ensure that this generated file")
 	g.P("// is compatible with the kratos package it is being compiled against.")
@@ -58,12 +60,16 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	g.P("const _ = ", transportHTTPPackage.Ident("SupportPackageIsVersion3"))
 	g.P()
 
+	rules := newRuleSet()
 	for _, service := range file.Services {
-		genService(gen, file, g, service, omitempty, omitemptyPrefix)
+		if err := genService(gen, file, g, service, omitempty, omitemptyPrefix, rules); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func genService(_ *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, omitempty bool, omitemptyPrefix string) {
+func genService(_ *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, omitempty bool, omitemptyPrefix string, rules *ruleSet) error {
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 		g.P("//")
 		g.P(deprecationComment)
@@ -77,18 +83,46 @@ func genService(_ *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFi
 	for _, method := range service.Methods {
 		rule, ok := proto.GetExtension(method.Desc.Options(), annotations.E_Http).(*annotations.HttpRule)
 		if rule != nil && ok {
-			for _, bind := range rule.AdditionalBindings {
-				sd.Methods = append(sd.Methods, buildHTTPRule(g, service, method, bind, omitemptyPrefix))
+			primary, err := buildHTTPRule(g, service, method, rule, 0)
+			if err != nil {
+				return fmt.Errorf("RPC %s: %w", method.Desc.FullName(), err)
 			}
-			sd.Methods = append(sd.Methods, buildHTTPRule(g, service, method, rule, omitemptyPrefix))
+			if err := rules.add(primary); err != nil {
+				return fmt.Errorf("RPC %s: %w", method.Desc.FullName(), err)
+			}
+			sd.Methods = append(sd.Methods, primary)
+			sd.ClientMethods = append(sd.ClientMethods, primary)
+			for i, binding := range rule.AdditionalBindings {
+				if len(binding.AdditionalBindings) != 0 {
+					return fmt.Errorf("RPC %s additional binding %d: nested additional bindings are not allowed", method.Desc.FullName(), i+1)
+				}
+				desc, err := buildHTTPRule(g, service, method, binding, i+1)
+				if err != nil {
+					return fmt.Errorf("RPC %s additional binding %d: %w", method.Desc.FullName(), i+1, err)
+				}
+				if err := rules.add(desc); err != nil {
+					return fmt.Errorf("RPC %s additional binding %d: %w", method.Desc.FullName(), i+1, err)
+				}
+				sd.Methods = append(sd.Methods, desc)
+			}
 		} else if !omitempty && !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
 			path := fmt.Sprintf("%s/%s/%s", omitemptyPrefix, service.Desc.FullName(), method.Desc.Name())
-			sd.Methods = append(sd.Methods, buildMethodDesc(g, method, http.MethodPost, path))
+			template, err := httprule.Parse(path)
+			if err != nil {
+				return fmt.Errorf("RPC %s default rule: %w", method.Desc.FullName(), err)
+			}
+			desc := buildMethodDesc(g, method, http.MethodPost, path, template, 0)
+			if err := rules.add(desc); err != nil {
+				return fmt.Errorf("RPC %s default rule: %w", method.Desc.FullName(), err)
+			}
+			sd.Methods = append(sd.Methods, desc)
+			sd.ClientMethods = append(sd.ClientMethods, desc)
 		}
 	}
 	if len(sd.Methods) != 0 {
 		g.P(sd.execute())
 	}
+	return nil
 }
 
 func hasHTTPRule(services []*protogen.Service) bool {
@@ -103,7 +137,7 @@ func hasHTTPRule(services []*protogen.Service) bool {
 	return false
 }
 
-func buildHTTPRule(g *protogen.GeneratedFile, service *protogen.Service, m *protogen.Method, rule *annotations.HttpRule, omitemptyPrefix string) *methodDesc {
+func buildHTTPRule(g *protogen.GeneratedFile, _ *protogen.Service, m *protogen.Method, rule *annotations.HttpRule, bindingNum int) (*methodDesc, error) {
 	var (
 		path         string
 		method       string
@@ -128,18 +162,28 @@ func buildHTTPRule(g *protogen.GeneratedFile, service *protogen.Service, m *prot
 		path = pattern.Patch
 		method = http.MethodPatch
 	case *annotations.HttpRule_Custom:
+		if pattern.Custom == nil || pattern.Custom.Kind == "" {
+			return nil, errors.New("custom HTTP method is empty")
+		}
 		path = pattern.Custom.Path
 		method = pattern.Custom.Kind
 	}
 	if method == "" {
-		method = http.MethodPost
+		return nil, errors.New("HTTP method is not specified")
 	}
 	if path == "" {
-		path = fmt.Sprintf("%s/%s/%s", omitemptyPrefix, service.Desc.FullName(), m.Desc.Name())
+		return nil, errors.New("HTTP path is empty")
+	}
+	template, err := httprule.Parse(path)
+	if err != nil {
+		return nil, fmt.Errorf("path %q: %w", path, err)
+	}
+	if err := validatePathFields(m.Input.Desc, template.Variables()); err != nil {
+		return nil, fmt.Errorf("path %q: %w", path, err)
 	}
 	body = rule.Body
 	responseBody = rule.ResponseBody
-	md := buildMethodDesc(g, m, method, path)
+	md := buildMethodDesc(g, m, method, path, template, bindingNum)
 	// Client-streaming RPCs are served over WebSocket, whose handshake is always an
 	// HTTP GET regardless of the declared verb. Declaring a body for them is legitimate
 	// (it identifies the streamed message field), so skip the GET/DELETE body warnings.
@@ -160,19 +204,21 @@ func buildHTTPRule(g *protogen.GeneratedFile, service *protogen.Service, m *prot
 		md.BodyHTTPBody = isHTTPBodyMessage(m.Input.Desc)
 		md.BodyProtoJSON = true
 	} else if body != "" {
+		if strings.ContainsRune(body, '.') {
+			return nil, fmt.Errorf("body field %q must be top-level", body)
+		}
 		field := fieldByName(m.Input, body)
 		var fd protoreflect.FieldDescriptor
 		if field != nil {
 			fd = field.Desc
 		}
 		if fd == nil {
-			fmt.Fprintf(
-				os.Stderr,
-				"\u001B[31mERROR\u001B[m: The corresponding body field '%s' declaration in request message could not be found in '%s'\n",
-				body,
-				path,
-			)
-			os.Exit(2)
+			return nil, fmt.Errorf("body field %q does not exist in request %s", body, m.Input.Desc.FullName())
+		}
+		for _, variable := range template.Variables() {
+			if variable.FieldPath == body || strings.HasPrefix(variable.FieldPath, body+".") {
+				return nil, fmt.Errorf("body field %q overlaps path field %q", body, variable.FieldPath)
+			}
 		}
 		md.HasBody = true
 		md.BodyField = body
@@ -188,28 +234,148 @@ func buildHTTPRule(g *protogen.GeneratedFile, service *protogen.Service, m *prot
 	} else {
 		md.HasBody = false
 	}
-	if responseBody != "" && responseBody != "*" {
+	if err := validateQueryFields(m.Input.Desc, template.Variables(), body); err != nil {
+		return nil, fmt.Errorf("query parameters: %w", err)
+	}
+	if responseBody == "*" {
+		return nil, errors.New("response_body \"*\" is invalid; omit response_body for the whole response")
+	}
+	if responseBody != "" {
+		if strings.ContainsRune(responseBody, '.') {
+			return nil, fmt.Errorf("response_body field %q must be top-level", responseBody)
+		}
 		field := fieldByName(m.Output, responseBody)
 		var fd protoreflect.FieldDescriptor
 		if field != nil {
 			fd = field.Desc
 		}
 		if fd == nil {
-			fmt.Fprintf(
-				os.Stderr,
-				"\u001B[31mERROR\u001B[m: The corresponding response_body field '%s' declaration in response message could not be found in '%s'\n",
-				responseBody,
-				path,
-			)
-			os.Exit(2)
+			return nil, fmt.Errorf("response_body field %q does not exist in response %s", responseBody, m.Output.Desc.FullName())
 		}
 		md.ResponseBodyGetter = fieldGetter(field)
+		md.ResponseBodyField = responseBody
 		md.ResponseBodyType = fieldGoType(g, field)
 		md.ResponseAssignment = fieldAssignment(g, "out", field, "responseBody")
 		md.ResponseBodyHTTPBody = isHTTPBodyField(fd)
-		md.ResponseBodyMessage = fd.Kind() == protoreflect.MessageKind && !fd.IsList() && !fd.IsMap()
 	}
-	return md
+	return md, nil
+}
+
+type ruleSet struct {
+	mux        *http.ServeMux
+	matches    map[string]struct{}
+	structures map[string]struct{}
+}
+
+func newRuleSet() *ruleSet {
+	return &ruleSet{
+		mux:        http.NewServeMux(),
+		matches:    make(map[string]struct{}),
+		structures: make(map[string]struct{}),
+	}
+}
+
+func (s *ruleSet) add(method *methodDesc) (err error) {
+	matchKey := method.Method + "\x00" + method.matchKey
+	if _, exists := s.matches[matchKey]; exists {
+		return fmt.Errorf("duplicate HTTP match set for %s %s", method.Method, method.Path)
+	}
+	s.matches[matchKey] = struct{}{}
+
+	pattern := method.serveMuxPattern
+	if method.Method != "*" {
+		pattern = method.Method + " " + pattern
+	}
+	structureKey := method.Method + "\x00" + method.serveMuxPattern
+	if _, exists := s.structures[structureKey]; exists {
+		return nil
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("conflicting HTTP rule %s %s: %v", method.Method, method.Path, recovered)
+		}
+	}()
+	s.mux.Handle(pattern, http.NotFoundHandler())
+	s.structures[structureKey] = struct{}{}
+	return nil
+}
+
+func validatePathFields(message protoreflect.MessageDescriptor, variables []httprule.Variable) error {
+	for _, variable := range variables {
+		fields := message.Fields()
+		parts := strings.Split(variable.FieldPath, ".")
+		for i, part := range parts {
+			field := fields.ByName(protoreflect.Name(part))
+			if field == nil {
+				return fmt.Errorf("path field %q does not exist", strings.Join(parts[:i+1], "."))
+			}
+			if i < len(parts)-1 {
+				if field.IsList() || field.IsMap() || field.Kind() != protoreflect.MessageKind && field.Kind() != protoreflect.GroupKind {
+					return fmt.Errorf("path field %q is not a singular message", strings.Join(parts[:i+1], "."))
+				}
+				fields = field.Message().Fields()
+				continue
+			}
+			if field.IsList() || field.IsMap() {
+				return fmt.Errorf("path field %q is repeated or mapped", variable.FieldPath)
+			}
+			if field.Kind() == protoreflect.MessageKind || field.Kind() == protoreflect.GroupKind {
+				return fmt.Errorf("path field %q is a message", variable.FieldPath)
+			}
+		}
+	}
+	return nil
+}
+
+func validateQueryFields(message protoreflect.MessageDescriptor, variables []httprule.Variable, body string) error {
+	if body == "*" {
+		return nil
+	}
+	pathFields := make(map[string]struct{}, len(variables))
+	for _, variable := range variables {
+		pathFields[variable.FieldPath] = struct{}{}
+	}
+	return validateQueryMessage(message, "", body, pathFields)
+}
+
+func validateQueryMessage(message protoreflect.MessageDescriptor, prefix, body string, pathFields map[string]struct{}) error {
+	fields := message.Fields()
+	for i := range fields.Len() {
+		field := fields.Get(i)
+		name := string(field.Name())
+		path := name
+		if prefix != "" {
+			path = prefix + "." + name
+		}
+		if _, bound := pathFields[path]; bound || body != "" && (path == body || strings.HasPrefix(path, body+".")) {
+			continue
+		}
+		if field.IsMap() {
+			return fmt.Errorf("field %q is a map and cannot be encoded as a query parameter", path)
+		}
+		if field.IsList() && (field.Kind() == protoreflect.MessageKind || field.Kind() == protoreflect.GroupKind) {
+			return fmt.Errorf("field %q is a repeated message and cannot be encoded as a query parameter", path)
+		}
+		if !field.IsList() && (field.Kind() == protoreflect.MessageKind || field.Kind() == protoreflect.GroupKind) && !isScalarQueryMessage(field.Message()) {
+			if err := validateQueryMessage(field.Message(), path, body, pathFields); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func isScalarQueryMessage(message protoreflect.MessageDescriptor) bool {
+	switch message.FullName() {
+	case "google.protobuf.Timestamp", "google.protobuf.Duration", "google.protobuf.BytesValue",
+		"google.protobuf.DoubleValue", "google.protobuf.FloatValue", "google.protobuf.Int64Value",
+		"google.protobuf.Int32Value", "google.protobuf.UInt64Value", "google.protobuf.UInt32Value",
+		"google.protobuf.BoolValue", "google.protobuf.StringValue", "google.protobuf.FieldMask",
+		"google.protobuf.Value", "google.protobuf.Struct":
+		return true
+	default:
+		return false
+	}
 }
 
 func fieldByName(message *protogen.Message, name string) *protogen.Field {
@@ -302,35 +468,7 @@ func scalarGoType(g *protogen.GeneratedFile, field *protogen.Field) string {
 	}
 }
 
-func buildMethodDesc(g *protogen.GeneratedFile, m *protogen.Method, method, path string) *methodDesc {
-	defer func() { methodSets[m.GoName]++ }()
-
-	pathTemplate := path
-	vars := buildPathVars(path)
-
-	for v := range vars {
-		fields := m.Input.Desc.Fields()
-		for _, field := range strings.Split(v, ".") {
-			if strings.TrimSpace(field) == "" {
-				continue
-			}
-			if strings.Contains(field, ":") {
-				field = strings.Split(field, ":")[0]
-			}
-			fd := fields.ByName(protoreflect.Name(field))
-			if fd == nil {
-				fmt.Fprintf(os.Stderr, "\u001B[31mERROR\u001B[m: The corresponding field '%s' declaration in message could not be found in '%s'\n", v, path)
-				os.Exit(2)
-			}
-			if fd.IsMap() {
-				fmt.Fprintf(os.Stderr, "\u001B[31mWARN\u001B[m: The field in path:'%s' shouldn't be a map.\n", v)
-			} else if fd.IsList() {
-				fmt.Fprintf(os.Stderr, "\u001B[31mWARN\u001B[m: The field in path:'%s' shouldn't be a list.\n", v)
-			} else if fd.Kind() == protoreflect.MessageKind || fd.Kind() == protoreflect.GroupKind {
-				fields = fd.Message().Fields()
-			}
-		}
-	}
+func buildMethodDesc(g *protogen.GeneratedFile, m *protogen.Method, method, path string, template *httprule.Template, bindingNum int) *methodDesc {
 	comment := m.Comments.Leading.String() + m.Comments.Trailing.String()
 	if comment != "" {
 		comment = "// " + m.GoName + strings.TrimPrefix(strings.TrimSuffix(comment, "\n"), "//")
@@ -341,20 +479,30 @@ func buildMethodDesc(g *protogen.GeneratedFile, m *protogen.Method, method, path
 		}
 		comment += deprecationComment
 	}
+	variables := template.Variables()
+	pathFields := make([]string, 0, len(variables))
+	for _, variable := range variables {
+		pathFields = append(pathFields, variable.FieldPath)
+	}
 	return &methodDesc{
-		Name:            m.GoName,
-		OriginalName:    string(m.Desc.Name()),
-		Num:             methodSets[m.GoName],
-		Request:         g.QualifiedGoIdent(m.Input.GoIdent),
-		Reply:           g.QualifiedGoIdent(m.Output.GoIdent),
-		Comment:         comment,
-		Path:            pathTemplate,
-		PathTemplate:    pathTemplate,
-		Method:          method,
-		HasVars:         len(vars) > 0,
-		ReplyHTTPBody:   isHTTPBodyMessage(m.Output.Desc),
-		ClientStreaming: m.Desc.IsStreamingClient(),
-		ServerStreaming: m.Desc.IsStreamingServer(),
+		Name:                m.GoName,
+		OriginalName:        string(m.Desc.Name()),
+		Num:                 bindingNum,
+		Request:             g.QualifiedGoIdent(m.Input.GoIdent),
+		Reply:               g.QualifiedGoIdent(m.Output.GoIdent),
+		Comment:             comment,
+		Path:                path,
+		PathTemplate:        path,
+		PathFields:          pathFields,
+		Method:              method,
+		HasVars:             len(template.Variables()) > 0,
+		ReplyHTTPBody:       isHTTPBodyMessage(m.Output.Desc),
+		ClientStreaming:     m.Desc.IsStreamingClient(),
+		ServerStreaming:     m.Desc.IsStreamingServer(),
+		UnspecifiedMethod:   method == "*",
+		UnboundPathWildcard: template.HasUnboundWildcard(),
+		serveMuxPattern:     template.ServeMuxPattern(),
+		matchKey:            template.MatchKey(),
 	}
 }
 
@@ -364,90 +512,6 @@ func isHTTPBodyField(fd protoreflect.FieldDescriptor) bool {
 
 func isHTTPBodyMessage(md protoreflect.MessageDescriptor) bool {
 	return md != nil && md.FullName() == httpBodyFullName
-}
-
-func buildPathVars(path string) (res map[string]*string) {
-	if strings.HasSuffix(path, "/") {
-		fmt.Fprintf(os.Stderr, "\u001B[31mWARN\u001B[m: Path %s should not end with \"/\" \n", path)
-	}
-	pattern := regexp.MustCompile(`(?i){([a-z.0-9_\s]*)=?([^{}]*)}`)
-	matches := pattern.FindAllStringSubmatch(path, -1)
-	res = make(map[string]*string, len(matches))
-	for _, m := range matches {
-		name := strings.TrimSpace(m[1])
-		if len(name) > 1 && len(m[2]) > 0 {
-			res[name] = &m[2]
-		} else {
-			res[name] = nil
-		}
-	}
-	return
-}
-
-func camelCaseVars(s string) string {
-	subs := strings.Split(s, ".")
-	vars := make([]string, 0, len(subs))
-	for _, sub := range subs {
-		vars = append(vars, camelCase(sub))
-	}
-	return strings.Join(vars, ".")
-}
-
-// camelCase returns the CamelCased name.
-// If there is an interior underscore followed by a lower case letter,
-// drop the underscore and convert the letter to upper case.
-// There is a remote possibility of this rewrite causing a name collision,
-// but it's so remote we're prepared to pretend it's nonexistent - since the
-// C++ generator lowercase names, it's extremely unlikely to have two fields
-// with different capitalization.
-// In short, _my_field_name_2 becomes XMyFieldName_2.
-func camelCase(s string) string {
-	if s == "" {
-		return ""
-	}
-	t := make([]byte, 0, 32)
-	i := 0
-	if s[0] == '_' {
-		// Need a capital letter; drop the '_'.
-		t = append(t, 'X')
-		i++
-	}
-	// Invariant: if the next letter is lower case, it must be converted
-	// to upper case.
-	// That is, we process a word at a time, where words are marked by _ or
-	// upper case letter. Digits are treated as words.
-	for ; i < len(s); i++ {
-		c := s[i]
-		if c == '_' && i+1 < len(s) && isASCIILower(s[i+1]) {
-			continue // Skip the underscore in s.
-		}
-		if isASCIIDigit(c) {
-			t = append(t, c)
-			continue
-		}
-		// Assume we have a letter now - if not, it's a bogus identifier.
-		// The next word is a sequence of characters that must start upper case.
-		if isASCIILower(c) {
-			c ^= ' ' // Make it a capital letter.
-		}
-		t = append(t, c) // Guaranteed not lower case.
-		// Accept lower case sequence that follows.
-		for i+1 < len(s) && isASCIILower(s[i+1]) {
-			i++
-			t = append(t, s[i])
-		}
-	}
-	return string(t)
-}
-
-// Is c an ASCII lower-case letter?
-func isASCIILower(c byte) bool {
-	return 'a' <= c && c <= 'z'
-}
-
-// Is c an ASCII digit?
-func isASCIIDigit(c byte) bool {
-	return '0' <= c && c <= '9'
 }
 
 func protocVersion(gen *protogen.Plugin) string {

@@ -51,6 +51,7 @@ func Parse(pattern string) (*Template, error) {
 		t.parts = append(t.parts, part)
 	}
 	t.serveMuxPattern = buildServeMuxPattern(t.parts, verbRaw)
+	t.matchKey = buildMatchKey(t.parts, verbDecoded)
 	return t, nil
 }
 
@@ -244,6 +245,30 @@ func buildServeMuxPattern(parts []pathPart, verb string) string {
 	if verb != "" && lastKind == literalSegment {
 		builder.WriteByte(':')
 		builder.WriteString(verb)
+	}
+	return builder.String()
+}
+
+func buildMatchKey(parts []pathPart, verb string) string {
+	var builder strings.Builder
+	for _, part := range parts {
+		for _, segment := range part.segments {
+			builder.WriteByte('/')
+			switch segment.kind {
+			case literalSegment:
+				fmt.Fprintf(&builder, "L%d:%s", len(segment.decoded), segment.decoded)
+			case singleWildcardSegment:
+				builder.WriteByte('*')
+			case multiWildcardSegment:
+				builder.WriteString("**")
+			}
+		}
+	}
+	if len(parts) == 0 {
+		builder.WriteByte('/')
+	}
+	if verb != "" {
+		fmt.Fprintf(&builder, ":V%d:%s", len(verb), verb)
 	}
 	return builder.String()
 }

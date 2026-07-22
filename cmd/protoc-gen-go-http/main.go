@@ -31,7 +31,9 @@ func main() {
 			if !f.Generate {
 				continue
 			}
-			generateFile(gen, f, *omitempty, *omitemptyPrefix)
+			if _, err := generateFile(gen, f, *omitempty, *omitemptyPrefix); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
