@@ -59,8 +59,10 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at
-iammao@vip.qq.com.
+reported privately to the OpenKratos maintainers through
+https://github.com/openkratos/kratos/security/advisories/new. State clearly
+that the report concerns Code of Conduct enforcement rather than a software
+vulnerability.
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the

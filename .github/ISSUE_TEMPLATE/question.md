@@ -1,10 +1,20 @@
 ---
-name: "\U0001F680 Question"
-about: Ask a question about Kratos.
-title: "[Question]"
+name: Question
+about: Ask about current OpenKratos behavior or migration.
+title: "[Question] "
 labels: question
 assignees: ''
-
 ---
 
-Please see the FAQ in our main README.md before submitting your issue.
+### Question
+
+### What have you tried?
+
+Link the relevant documentation or code and include a minimal example when
+possible.
+
+### Environment
+
+- OpenKratos version or commit:
+- Go version:
+- Relevant transport or module:

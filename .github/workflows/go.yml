@@ -76,13 +76,6 @@ jobs:
       - name: Upload coverage to Codecov
         run: bash <(curl -s https://codecov.io/bash)
 
-      - name: Kratos
-        run: |
-          cd cmd/kratos
-          go build ./...
-        env:
-          GOTOOLCHAIN: auto
-
       - name: HTTP
         run: |
           cd cmd/protoc-gen-go-http
@@ -103,8 +96,8 @@ jobs:
           go-version: 1.27rc2
       - name: Test core
         run: go test ./...
-      - name: Test command modules
+      - name: Test generator modules
         run: |
-          for mod in cmd/kratos cmd/protoc-gen-go-errors cmd/protoc-gen-go-http; do
+          for mod in cmd/protoc-gen-go-errors cmd/protoc-gen-go-http; do
             (cd "$mod" && go test ./...)
           done

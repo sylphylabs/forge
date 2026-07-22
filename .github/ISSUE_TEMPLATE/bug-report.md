@@ -1,26 +1,28 @@
 ---
-name: "\U0001F41B Bug Report"
-about: Report something that's broken. Please ensure your kratos version is still supported.
-title: ''
+name: Bug Report
+about: Report reproducible incorrect OpenKratos behavior.
+title: "[Bug] "
 labels: bug
 assignees: ''
 ---
 
-<!--
-Please answer these questions before submitting your issue. Thanks!
-For questions please use one of our forums: https://go-kratos.dev/docs/getting-started/faq
--->
+### What happened?
 
-#### What happened:
+### What did you expect?
 
-#### What you expected to happen:
+### Minimal reproduction
 
-#### How to reproduce it (as minimally and precisely as possible):
+Include the smallest program, schema, request, or repository that reproduces
+the problem. Remove credentials and private data.
 
-#### Anything else we need to know?:
+### Regression information
 
-#### Environment:
-- Kratos version (use `kratos -v`):
-- Go version (use `go version`):
-- OS (e.g: `cat /etc/os-release`):
-- Others:
+State whether the behavior differs from an earlier OpenKratos revision or from
+upstream Kratos. Link the relevant compatibility entry when one exists.
+
+### Environment
+
+- OpenKratos version or commit (`go list -m github.com/openkratos/kratos`):
+- Go version (`go version`):
+- Operating system and architecture:
+- Transport, registry, config source, or contrib module involved:

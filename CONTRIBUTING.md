@@ -1,121 +1,98 @@
-The kratos community wants to be helped by a wide range of developers, so you'd like to take a few minutes to read this guide before you mention the problem or pull request.
+# Contributing to OpenKratos
 
-## Reporting Bug or Fixing Bugs
-We use GitHub issues to manage issues. If you want to submit , first make sure you've searched for existing issues, pull requests and read our [FAQ](https://go-kratos.dev/docs/intro/faq).
+OpenKratos accepts focused bug fixes, performance work, standard-library
+modernization, and carefully justified compatibility changes. It is maintained
+independently from `go-kratos/kratos`.
 
-When submitting a bug report, use the issue template we provide to clearly describe the problems encountered and how to reproduce, and if convenient it is best to provide a minimal reproduce repository.
+## Before Starting
 
-## Adding new features
+1. Search existing issues and pull requests.
+2. Read [`COMPATIBILITY.md`](COMPATIBILITY.md) for current behavior and
+   [`UPSTREAM.md`](UPSTREAM.md) for the fork policy.
+3. For an upstream change, check
+   [`docs/upstream-adoptions.md`](docs/upstream-adoptions.md) before importing
+   code.
+4. Open a design proposal before implementing a new public abstraction or a
+   broad compatibility break.
 
-In order to accurately distinguish whether the needs put forward by users are the needs or reasonable needs of most users, solicit opinions from the community through the proposal process, and the proposals adopted by the community will be realized as new feature.
-In order to make the proposal process as simple as possible, the process includes three stages: proposal, feature and PR, in which proposal, feature is issue and PR is the specific function implementation.
-In order to facilitate the community to correctly understand the requirements of the proposal, the proposal issue needs to describe the functional requirements and relevant references or literature in detail.
-When most community users agree with this proposal, they will create a feature issue associated with the proposal issue.
-The feature issue needs to describe the implementation method and function demonstration in detail as a reference for the final function implementation.
-After the function is implemented, a merge request will be initiated to associate the proposal issue and feature issue.
-After the merge is completed, Close all issues.
+Use the issue templates. A bug report needs a minimal reproduction and exact
+OpenKratos commit or module version. A proposal must define compatibility,
+migration, and validation before implementation.
 
-## How to submit code
-If you've never submitted code on GitHub, follow these steps:
+## Design Expectations
 
-- First, please fork items to your GitHub account
-- Then create a new feature branch based on the main branch and name it features such as feature-log
-- Write code
-- Submit code to the far end branch
-- Submit a PR request in github
-- Wait for review and merge to the main branch
+- Prefer the Go standard library when it meets the required contract.
+- Keep behavior explicit. Avoid global source rewriting, hidden filesystem
+  mutation, interactive build steps, and import-only side effects.
+- Preserve Go conventions: small interfaces, explicit errors, useful zero
+  values, and context propagation.
+- Do not add a dependency without comparing its maintenance cost, API surface,
+  performance, and standard-library alternatives.
+- Do not preserve upstream behavior automatically when a smaller breaking
+  design is clearer for the v0 release line.
 
-**Note That when you submit a PR request, you first ensure that the code uses the correct coding specifications and that there are complete test cases, and that the information in the submission of the PR is best associated with the relevant issue to ease the workload of the auditor.**
+## Development
 
-## Conventional Commits
+OpenKratos requires Go 1.26. The repository contains nested Go modules, so a
+root-only test does not cover the entire tree.
 
-```
-<type>[optional scope]: <description>
-
-[optional body]
-
-[optional footer(s)]
-```
-
-> More: [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary)
-
-### type
-
-There are the following types of commit:
-
-#### Main
-
-- **fix**: A bug fix
-- **feat**: A new feature
-- **deps**: Changes external dependencies
-- **break**: Changes has break change
-
-#### Other
-
-- **docs**: Documentation only changes
-- **refactor**: A code change that neither fixes a bug nor adds a feature
-- **style**: Changes that do not affect the meaning of the code (white-space, formatting, etc)
-- **test**: Adding missing tests or correcting existing tests
-- **chore** Daily work, examples, etc.
-- **ci**: Changes to our CI configuration files and scripts
-
-### scope
-
-The following is the list of supported scopes:
-
-- transport
-- examples
-- middleware
-- config
-- cmd
-- etc.
-
-### description
-
-The description contains a succinct description of the change
-
-- use the imperative, present tense: "change" not "changed" nor "changes"
-- don't capitalize the first letter
-- no dot (.) at the end
-
-### body
-
-The body should include the motivation for the change and contrast this with previous behavior.
-
-### footer
-
-The footer should contain any information about **Breaking Changes** and is also the place to reference GitHub issues that this commit Closes.
-
-### examples
-
-#### Only commit message
-```
-fix: The log debug level should be -1
+```shell
+./hack/tools.sh tidy
+./hack/tools.sh test
+make lint
 ```
 
-#### Attention
+See [`DEVELOPMENT.md`](DEVELOPMENT.md) for the module matrix, Go 1.27 RC
+validation, and focused benchmarks.
+
+Tests should be deterministic and offline unless they are explicitly marked as
+integration tests. Concurrency changes require race coverage. Performance
+changes require a controlled before-and-after baseline and repeated `benchstat`
+analysis under the rules in
+[`docs/design/performance.md`](docs/design/performance.md).
+
+## Generated Code
+
+Change protobuf sources and generator configuration, then regenerate. Do not
+edit raw protobuf descriptors or apply global text replacement to generated
+`.pb.go` files.
+
+Keep generator versions pinned. Include generated output in the same change as
+its source when the repository already tracks that output.
+
+## Compatibility Documentation
+
+A pull request must update the canonical `COMPATIBILITY.md` and its
+`COMPATIBILITY_zh.md` translation when it changes any of the following:
+
+- public Go API or module path;
+- default runtime behavior;
+- HTTP, gRPC, protobuf, or JSON wire behavior;
+- generated code contract;
+- command or development workflow;
+- minimum Go version or supported platform.
+
+Add an executable migration step under `docs/migration/` for a breaking change.
+Record the exact upstream PR, issue, and source commit in the adoption ledger
+when the work originates upstream.
+
+## Commits and Pull Requests
+
+Use Conventional Commit subjects:
+
+```text
+<type>[optional scope]: <imperative description>
 ```
-refactor!(transport/http): replacement underlying implementation
-```
 
-#### Full commit message
-```
-fix(log): [BREAKING-CHANGE] unable to meet the requirement of log Library
+Common types are `fix`, `feat`, `perf`, `deps`, `docs`, `refactor`, `test`,
+`chore`, and `ci`. Add `!` and a `BREAKING CHANGE:` footer when appropriate.
 
-Explain the reason, purpose, realization method, etc.
+Keep a pull request focused. Its description must state the problem, design,
+compatibility impact, validation commands, and any external service required by
+tests. Preserve upstream authorship and source provenance when adopting code.
 
-Close #777
-Doc change on doc/#111
-BREAKING CHANGE:
-  Breaks log.info api, log.log should be used instead
-```
-## Release
+## Security
 
-You can use `kratos changelog dev` to generate a change log during.
-
-The following is the list of supported types:
-
-- Breaking Change
-- Dependencies
-- Bug Fixes
-- Others
+Do not report vulnerabilities in a public issue. Follow
+[`SECURITY.md`](SECURITY.md) and use the repository's private security advisory
+form.
