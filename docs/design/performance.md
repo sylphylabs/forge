@@ -40,7 +40,7 @@ Individual upstream review outcomes and provenance are tracked in
 
 | Area | Status | Decision |
 | --- | --- | --- |
-| HTTP routing | Implemented; release evidence pending | Use `net/http.ServeMux` plus a small Google AIP template adapter. |
+| HTTP routing | Implemented and validated | Use `net/http.ServeMux` plus a small Google AIP template adapter; accept the documented fixed 404 cost. |
 | WRR selection | Adopted and validated | Detect stale entries without a steady-state node-set scan; retain churn invariants and benchmarks. |
 | P2C selection | Adopted and validated | Use concurrency-safe `math/rand/v2` package functions instead of a per-balancer random-number lock. |
 | Codec content subtype | Implemented and validated | Fast-path exact JSON and scan remaining delimiters with `IndexByte`. |
@@ -82,8 +82,23 @@ recorded in `DEVELOPMENT.md`.
 
 The implementation and focused benchmarks are present in
 `transport/http/routing.go` and `transport/http/routing_benchmark_test.go`.
-The remaining gate is controlled, publishable before-and-after evidence using
-the benchmark rules below.
+
+### OpenKratos result
+
+Ten-sample Apple M5 Pro measurements on Go 1.26.4 cover static hits, parameter
+hits, public parameter reads, misses, and parallel dispatch with 1, 100, and
+1,000 routes. Successful dispatch improves 20.02% to 99.71%, with the largest
+gains as route tables grow. Static hits fall from seven allocations to zero;
+parameter matching falls from eight allocations to six.
+
+The controlled comparison also identifies two accepted costs. Exporting path
+variables uses nine allocations instead of Gorilla's eight, despite reducing
+execution time by 41.00% to 98.24%. The standard-library 404 path uses 208 bytes
+and 12 allocations instead of 96 bytes and four allocations. One-route misses
+therefore regress 53.12% serially and 162.07% in parallel; misses become faster
+at larger route counts as Gorilla's scan cost grows. Commands, full tables,
+environment details, and statistical results are in the
+[HTTP routing benchmark report](../benchmarks/http-routing-2026-07-22.md).
 
 ## WRR Hot Path
 
@@ -263,16 +278,14 @@ release evidence should come from controlled comparative runs.
 
 ### Immediate
 
-- Complete the controlled Gorilla-versus-ServeMux comparison.
 - Investigate replacement-heavy WRR workloads if real discovery profiles show
   that the isolated five-node regression is operationally relevant.
 - Keep performance changes separate from unrelated upstream adoptions.
 
 ### Before the first release
 
-- Publish controlled Gorilla-versus-ServeMux benchmark results.
 - Document selector choice and the operational difference between WRR and P2C.
-- Review dependency removal made possible by the standard-library router.
+- Re-run the routing matrix on the release commit if routing behavior changes.
 
 ### Ongoing
 

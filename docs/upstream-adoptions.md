@@ -31,6 +31,7 @@ All upstream states in this table were verified on July 22, 2026.
 
 | Upstream revision | Area | Decision | OpenKratos record | Rationale |
 | --- | --- | --- | --- | --- |
+| [Issue #3820](https://github.com/go-kratos/kratos/issues/3820) | Gorilla mux request-path cost | Adopted | `3f29df21`; [benchmarks](benchmarks/http-routing-2026-07-22.md) | ServeMux successful dispatch improves 20.02% to 99.71% across the controlled matrix and removes route-count scaling; the fixed 404 and path-variable allocation costs are explicitly accepted. |
 | [PR #3831](https://github.com/go-kratos/kratos/pull/3831) @ `15639816` | WRR steady-state cost | Adopted | `42b647be`; tests `4fa25d1b`; [benchmarks](benchmarks/selectors-2026-07-22.md) | Removes the per-pick node-set scan while retaining churn invariants. |
 | [PR #3832](https://github.com/go-kratos/kratos/pull/3832) @ `584de994` | P2C contention | Adopted | `f1246466`; tests `4fa25d1b`; [benchmarks](benchmarks/selectors-2026-07-22.md) | Removes the per-balancer random-number mutex and adds concurrency coverage. |
 | [PR #3814](https://github.com/go-kratos/kratos/pull/3814) @ `af131a87` | Unsafe default HTTP fallback | Superseded | `transport/http/routing.go` | The ServeMux migration defaults to safe 404 and 405 handling without falling through to `http.DefaultServeMux`. |
