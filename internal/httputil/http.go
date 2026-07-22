@@ -19,11 +19,14 @@ func ContentType(subtype string) string {
 // according rfc7231.
 // contentType is assumed to be lowercase already.
 func ContentSubtype(contentType string) string {
-	left := strings.Index(contentType, "/")
+	if contentType == "application/json" {
+		return "json"
+	}
+	left := strings.IndexByte(contentType, '/')
 	if left == -1 {
 		return ""
 	}
-	right := strings.Index(contentType, ";")
+	right := strings.IndexByte(contentType, ';')
 	if right == -1 {
 		right = len(contentType)
 	}

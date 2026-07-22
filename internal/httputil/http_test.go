@@ -45,3 +45,17 @@ func TestContentType(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkContentSubtype(b *testing.B) {
+	for _, contentType := range []string{
+		"application/json",
+		"application/json; charset=utf-8",
+		"text/html; charset=utf-8",
+	} {
+		b.Run(contentType, func(b *testing.B) {
+			for b.Loop() {
+				_ = ContentSubtype(contentType)
+			}
+		})
+	}
+}
