@@ -93,11 +93,7 @@ func (d *Discovery) register(ctx context.Context, ins *discoveryInstance) (err e
 	p.Set(_paramKeyMetadata, string(metadata))
 
 	// send request to Discovery server.
-	if _, err = d.httpClient.R().
-		SetContext(ctx).
-		SetQueryParamsFromValues(p).
-		SetResult(&res).
-		Post(uri); err != nil {
+	if err = d.postJSON(ctx, uri, p, res); err != nil {
 		d.switchNode()
 		log.Error("Discovery: register client.Get failed",
 			"uri", uri+"?"+p.Encode(), "zone", c.Zone, "env", c.Env, "appid", ins.AppID, "addrs", ins.Addrs, "error", err)

@@ -5,13 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"net/http"
 	"net/url"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/go-resty/resty/v2"
 
 	"github.com/openkratos/kratos/log"
 )
@@ -21,7 +20,7 @@ type Discovery struct {
 	once       sync.Once
 	ctx        context.Context
 	cancelFunc context.CancelFunc
-	httpClient *resty.Client
+	httpClient *http.Client
 
 	node    atomic.Value
 	nodeIdx atomic.Uint64
@@ -57,8 +56,7 @@ func New(c *Config) *Discovery {
 		registry:   map[string]struct{}{},
 	}
 
-	d.httpClient = resty.New().
-		SetTimeout(40 * time.Second)
+	d.httpClient = &http.Client{Timeout: 40 * time.Second}
 
 	// Discovery self found and watch
 	r := d.resolveBuild(_discoveryAppID)
@@ -235,11 +233,7 @@ func (d *Discovery) renew(ctx context.Context, ins *discoveryInstance) (err erro
 	p.Set(_paramKeyAppID, ins.AppID)
 
 	// send request to Discovery server.
-	if _, err = d.httpClient.R().
-		SetContext(ctx).
-		SetQueryParamsFromValues(p).
-		SetResult(&res).
-		Post(uri); err != nil {
+	if err = d.postJSON(ctx, uri, p, res); err != nil {
 		d.switchNode()
 		log.Error("Discovery: renew client.Get failed", "uri", uri, "env", c.Env, "appid", ins.AppID, "hostname", c.Host, "error", err)
 		return
@@ -273,11 +267,7 @@ func (d *Discovery) cancel(ins *discoveryInstance) (err error) {
 
 	// request
 	// send request to Discovery server.
-	if _, err = d.httpClient.R().
-		SetContext(context.Background()).
-		SetQueryParamsFromValues(p).
-		SetResult(&res).
-		Post(uri); err != nil {
+	if err = d.postJSON(context.Background(), uri, p, res); err != nil {
 		d.switchNode()
 		log.Error("Discovery: cancel client.Get failed", "uri", uri, "env", config.Env, "appid", ins.AppID, "hostname", config.Host, "error", err)
 		return
@@ -375,10 +365,7 @@ func (d *Discovery) polls(ctx context.Context) (apps map[string]*disInstancesInf
 
 	// request
 	reqURI := uri + "?" + p.Encode()
-	if _, err = d.httpClient.R().
-		SetContext(ctx).
-		SetQueryParamsFromValues(p).
-		SetResult(res).Get(uri); err != nil {
+	if err = d.getJSON(ctx, uri, p, res); err != nil {
 		d.switchNode()
 		log.Error("Discovery: client.Get failed", "uri", reqURI, "error", err)
 		return nil, err

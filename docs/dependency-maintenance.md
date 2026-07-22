@@ -37,6 +37,8 @@ service-backed CI environment.
 | Nacos test mocks | direct `golang/mock` | `go.uber.org/mock` v0.6.0 | Replaces the archived GoMock repository. |
 | Validation fixtures | direct archived PGV module | Protovalidate plus interface fakes | Retains `Validate() error` compatibility without requiring PGV. |
 | Discovery errors | `pkg/errors` | standard `errors` and wrapped `fmt.Errorf` | Uses standard error identity and wrapping. |
+| Error generator casing | `golang.org/x/text/cases` | standard `strings` | Protobuf identifiers are ASCII, so the generator does not need Unicode language-aware title casing. |
+| Discovery HTTP client | `go-resty/resty/v2` | standard `net/http` and `encoding/json` | The provider only needs query parameters, GET/POST, context cancellation, timeout, and JSON decoding. Non-2xx responses are now explicit errors. |
 
 After these migrations, every direct dependency is current within its selected
 module path.
@@ -61,10 +63,3 @@ OpenKratos should not fork a complete service SDK merely to hide an archived
 transitive dependency; migration becomes actionable when a maintained
 replacement preserves the provider contract and has executable integration
 coverage.
-
-## Deferred Major
-
-`go-resty/resty/v2` is current on its stable v2 line. `resty.dev/v3` is only at
-`v3.0.0-rc.3`, so the Discovery provider remains on v2 until a stable v3 release
-is available and its request, response, retry, and cancellation behavior can be
-validated.

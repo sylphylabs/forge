@@ -3,10 +3,6 @@ package main
 import (
 	"fmt"
 	"strings"
-	"unicode"
-
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -18,8 +14,6 @@ const (
 	errorsPackage = protogen.GoImportPath("github.com/openkratos/kratos/errors")
 	fmtPackage    = protogen.GoImportPath("fmt")
 )
-
-var enCases = cases.Title(language.AmericanEnglish, cases.NoLower)
 
 // generateFile generates a _errors.pb.go file containing kratos errors definitions.
 func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
@@ -109,27 +103,24 @@ func genErrorsReason(_ *protogen.Plugin, _ *protogen.File, g *protogen.Generated
 
 func case2Camel(name string) string {
 	if !strings.Contains(name, "_") {
-		if name == strings.ToUpper(name) {
-			name = strings.ToLower(name)
-		}
-		return enCases.String(name)
+		return titleProtoIdentifier(name)
 	}
 	strs := strings.Split(name, "_")
 	words := make([]string, 0, len(strs))
 	for _, w := range strs {
-		hasLower := false
-		for _, r := range w {
-			if unicode.IsLower(r) {
-				hasLower = true
-				break
-			}
-		}
-		if !hasLower {
-			w = strings.ToLower(w)
-		}
-		w = enCases.String(w)
-		words = append(words, w)
+		words = append(words, titleProtoIdentifier(w))
 	}
 
 	return strings.Join(words, "")
+}
+
+// Protobuf identifiers are ASCII, so language-aware title casing is unnecessary.
+func titleProtoIdentifier(word string) string {
+	if word == "" {
+		return ""
+	}
+	if word == strings.ToUpper(word) {
+		word = strings.ToLower(word)
+	}
+	return strings.ToUpper(word[:1]) + word[1:]
 }

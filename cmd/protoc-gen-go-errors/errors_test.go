@@ -51,6 +51,21 @@ func Test_case2Camel(t *testing.T) {
 			args: args{"system"},
 			want: "System",
 		},
+		{
+			name: "empty segments",
+			args: args{"SYSTEM__ERROR_"},
+			want: "SystemError",
+		},
+		{
+			name: "number suffix",
+			args: args{"ERROR_404"},
+			want: "Error404",
+		},
+		{
+			name: "empty",
+			args: args{""},
+			want: "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
