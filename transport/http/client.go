@@ -228,8 +228,11 @@ func (client *Client) Invoke(ctx context.Context, method, path string, args any,
 		contentType = c.contentType
 		body = bytes.NewReader(data)
 	}
-	url := fmt.Sprintf("%s://%s%s", client.target.Scheme, client.target.Authority, path)
-	req, err := http.NewRequest(method, url, body)
+	requestURL, err := client.target.requestURL(path)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(method, requestURL, body)
 	if err != nil {
 		return err
 	}

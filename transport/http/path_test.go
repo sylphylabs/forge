@@ -43,6 +43,41 @@ func TestBuildPath(t *testing.T) {
 			opts:         []BuildPathOption{WithQueryParams(), WithOmitFields("sub")},
 			want:         "/helloworld/kratos",
 		},
+		{
+			name:         "escape single segment",
+			pathTemplate: "/helloworld/{name}",
+			request:      &binding.HelloRequest{Name: "kratos/admin?enabled=true#fragment"},
+			want:         "/helloworld/kratos%2Fadmin%3Fenabled=true%23fragment",
+		},
+		{
+			name:         "preserve multi segment wildcard",
+			pathTemplate: "/v1/{name=**}",
+			request:      &binding.HelloRequest{Name: "publishers/go lang/books/kratos"},
+			want:         "/v1/publishers/go%20lang/books/kratos",
+		},
+		{
+			name:         "reject mismatched resource structure safely",
+			pathTemplate: "/v1/{name=publishers/*/books/*}",
+			request:      &binding.HelloRequest{Name: "organizations/acme/secrets/root"},
+			want:         "/v1/organizations%2Facme%2Fsecrets%2Froot",
+		},
+		{
+			name:         "proto text field name",
+			pathTemplate: "/v1/{opt_string}",
+			request: func() *binding.HelloRequest {
+				value := "open kratos"
+				return &binding.HelloRequest{OptString: &value}
+			}(),
+			opts: []BuildPathOption{WithQueryParams()},
+			want: "/v1/open%20kratos",
+		},
+		{
+			name:         "nested proto text field name",
+			pathTemplate: "/v1/{sub.name}",
+			request:      &binding.HelloRequest{Sub: &binding.Sub{Name: "openkratos"}},
+			opts:         []BuildPathOption{WithQueryParams()},
+			want:         "/v1/openkratos",
+		},
 	}
 
 	for _, tt := range tests {

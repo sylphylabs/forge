@@ -295,6 +295,34 @@ func TestInvokeAcceptHeader(t *testing.T) {
 	}
 }
 
+func TestInvokePreservesEndpointBasePath(t *testing.T) {
+	rt := &captureRoundTripper{}
+	client, err := NewClient(t.Context(),
+		WithEndpoint("https://api.example.com/base/v1/"),
+		WithTransport(rt),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = client.Invoke(
+		t.Context(),
+		http.MethodGet,
+		"/greeters/a%2Fb?view=full",
+		nil,
+		&emptypb.Empty{},
+		Accept("application/protojson"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := rt.req.URL.EscapedPath(), "/base/v1/greeters/a%2Fb"; got != want {
+		t.Fatalf("request path = %q, want %q", got, want)
+	}
+	if got := rt.req.URL.RawQuery; got != "view=full" {
+		t.Fatalf("request query = %q, want %q", got, "view=full")
+	}
+}
+
 func TestDefaultResponseDecoder(t *testing.T) {
 	resp1 := &http.Response{
 		Header:     make(http.Header),

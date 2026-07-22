@@ -18,9 +18,10 @@ import (
 
 // Target is resolver target
 type Target struct {
-	Scheme    string
-	Authority string
-	Endpoint  string
+	Scheme     string
+	Authority  string
+	Endpoint   string
+	PathPrefix string
 }
 
 func parseTarget(endpoint string, insecure bool) (*Target, error) {
@@ -36,10 +37,51 @@ func parseTarget(endpoint string, insecure bool) (*Target, error) {
 		return nil, err
 	}
 	target := &Target{Scheme: u.Scheme, Authority: u.Host}
-	if len(u.Path) > 1 {
-		target.Endpoint = u.Path[1:]
+	path := strings.TrimPrefix(u.Path, "/")
+	if u.Scheme == schemeDiscovery {
+		target.Endpoint = path
+		if target.Endpoint == "" {
+			target.Endpoint = u.Host
+		}
+		return target, nil
+	}
+	if path != "" {
+		target.PathPrefix = "/" + path
 	}
 	return target, nil
+}
+
+func (t *Target) requestURL(requestPath string) (string, error) {
+	reference, err := url.Parse(requestPath)
+	if err != nil {
+		return "", err
+	}
+	escapedPath := joinEscapedPath(t.PathPrefix, reference.EscapedPath())
+	path, err := url.PathUnescape(escapedPath)
+	if err != nil {
+		return "", err
+	}
+	requestURL := &url.URL{
+		Scheme:   t.Scheme,
+		Host:     t.Authority,
+		Path:     path,
+		RawPath:  escapedPath,
+		RawQuery: reference.RawQuery,
+		Fragment: reference.Fragment,
+	}
+	return requestURL.String(), nil
+}
+
+func joinEscapedPath(prefix, path string) string {
+	prefix = strings.TrimSuffix(prefix, "/")
+	path = strings.TrimPrefix(path, "/")
+	if prefix == "" {
+		return "/" + path
+	}
+	if path == "" {
+		return prefix + "/"
+	}
+	return prefix + "/" + path
 }
 
 type resolver struct {

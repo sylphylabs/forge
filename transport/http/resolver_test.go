@@ -54,6 +54,22 @@ func TestParseTarget(t *testing.T) {
 	if !reflect.DeepEqual(&Target{Scheme: "https", Authority: "127.0.0.1:8000"}, target) {
 		t.Errorf("expect %v, got %v", &Target{Scheme: "https", Authority: "127.0.0.1:8000"}, target)
 	}
+
+	target, err = parseTarget("https://127.0.0.1:8000/api/v1", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(&Target{Scheme: "https", Authority: "127.0.0.1:8000", PathPrefix: "/api/v1"}, target) {
+		t.Errorf("unexpected target: %#v", target)
+	}
+
+	target, err = parseTarget("discovery://greeter", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(&Target{Scheme: "discovery", Authority: "greeter", Endpoint: "greeter"}, target) {
+		t.Errorf("unexpected discovery target: %#v", target)
+	}
 }
 
 type mockRebalancer struct{}
