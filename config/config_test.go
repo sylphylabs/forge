@@ -2,7 +2,9 @@ package config
 
 import (
 	"errors"
+	"sync"
 	"testing"
+	"time"
 )
 
 const (
@@ -58,6 +60,7 @@ type testConfigStruct struct {
 }
 
 type testJSONSource struct {
+	mu   sync.RWMutex
 	data string
 	sig  chan struct{}
 	err  chan struct{}
@@ -68,12 +71,21 @@ func newTestJSONSource(data string) *testJSONSource {
 }
 
 func (p *testJSONSource) Load() ([]*KeyValue, error) {
+	p.mu.RLock()
+	data := p.data
+	p.mu.RUnlock()
 	kv := &KeyValue{
 		Key:    "json",
-		Value:  []byte(p.data),
+		Value:  []byte(data),
 		Format: "json",
 	}
 	return []*KeyValue{kv}, nil
+}
+
+func (p *testJSONSource) setData(data string) {
+	p.mu.Lock()
+	p.data = data
+	p.mu.Unlock()
 }
 
 func (p *testJSONSource) Watch() (Watcher, error) {
@@ -135,7 +147,7 @@ func TestConfig(t *testing.T) {
 	}
 	cf := &config{}
 	cf.opts = opts
-	cf.reader = newReader(opts)
+	cf.reader.Store(newReader(opts))
 
 	err = cf.Load()
 	if err != nil {
@@ -201,5 +213,42 @@ func TestConfig(t *testing.T) {
 	}
 	if len(testConf.Endpoints) != 2 {
 		t.Error("len(testConf.Endpoints) is not equal to 2")
+	}
+}
+
+func TestConfigWatchReloadsCrossSourceReferences(t *testing.T) {
+	reference := newTestJSONSource(`{"endpoint":"${remote.endpoint}"}`)
+	remote := newTestJSONSource(`{"remote":{"endpoint":"one"}}`)
+	c := New(WithSource(reference, remote))
+	if err := c.Load(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+
+	value, err := c.Value("endpoint").String()
+	if err != nil || value != "one" {
+		t.Fatalf("initial endpoint = %q, %v", value, err)
+	}
+	updated := make(chan string, 1)
+	if err := c.Watch("endpoint", func(_ string, value Value) {
+		got, _ := value.String()
+		updated <- got
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	remote.setData(`{"remote":{"endpoint":"two"}}`)
+	remote.sig <- struct{}{}
+	select {
+	case got := <-updated:
+		if got != "two" {
+			t.Fatalf("updated endpoint = %q, want two", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for config update")
+	}
+	value, err = c.Value("endpoint").String()
+	if err != nil || value != "two" {
+		t.Fatalf("current endpoint = %q, %v", value, err)
 	}
 }

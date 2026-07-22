@@ -48,7 +48,7 @@ func (f *file) loadDir(path string) (kvs []*config.KeyValue, err error) {
 	}
 	for _, file := range files {
 		// ignore hidden files
-		if file.IsDir() || strings.HasPrefix(file.Name(), ".") {
+		if file.IsDir() || skipFile(file.Name()) {
 			continue
 		}
 		kv, err := f.loadFile(filepath.Join(path, file.Name()))
@@ -58,6 +58,10 @@ func (f *file) loadDir(path string) (kvs []*config.KeyValue, err error) {
 		kvs = append(kvs, kv)
 	}
 	return
+}
+
+func skipFile(name string) bool {
+	return strings.HasPrefix(name, ".")
 }
 
 func (f *file) Load() (kvs []*config.KeyValue, err error) {

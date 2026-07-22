@@ -34,33 +34,44 @@ func newWatcher(f *file) (config.Watcher, error) {
 }
 
 func (w *watcher) Next() ([]*config.KeyValue, error) {
-	select {
-	case <-w.ctx.Done():
-		return nil, w.ctx.Err()
-	case event := <-w.fw.Events:
-		if event.Has(fsnotify.Rename) {
-			if _, err := os.Stat(event.Name); err == nil || os.IsExist(err) {
-				if err := w.fw.Add(event.Name); err != nil {
-					return nil, err
+	for {
+		select {
+		case <-w.ctx.Done():
+			return nil, w.ctx.Err()
+		case event, ok := <-w.fw.Events:
+			if !ok {
+				return nil, w.ctx.Err()
+			}
+			if skipFile(filepath.Base(event.Name)) {
+				continue
+			}
+			if event.Has(fsnotify.Rename) {
+				if _, err := os.Stat(event.Name); err == nil || os.IsExist(err) {
+					if err := w.fw.Add(event.Name); err != nil {
+						return nil, err
+					}
 				}
 			}
-		}
-		fi, err := os.Stat(w.f.path)
-		if err != nil {
+			fi, err := os.Stat(w.f.path)
+			if err != nil {
+				return nil, err
+			}
+			path := w.f.path
+			if fi.IsDir() {
+				path = filepath.Join(w.f.path, filepath.Base(event.Name))
+			}
+			time.Sleep(time.Millisecond)
+			kv, err := w.f.loadFile(path)
+			if err != nil {
+				return nil, err
+			}
+			return []*config.KeyValue{kv}, nil
+		case err, ok := <-w.fw.Errors:
+			if !ok {
+				return nil, w.ctx.Err()
+			}
 			return nil, err
 		}
-		path := w.f.path
-		if fi.IsDir() {
-			path = filepath.Join(w.f.path, filepath.Base(event.Name))
-		}
-		time.Sleep(time.Millisecond)
-		kv, err := w.f.loadFile(path)
-		if err != nil {
-			return nil, err
-		}
-		return []*config.KeyValue{kv}, nil
-	case err := <-w.fw.Errors:
-		return nil, err
 	}
 }
 

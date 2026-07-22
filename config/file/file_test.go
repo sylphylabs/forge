@@ -101,6 +101,21 @@ func TestFile(t *testing.T) {
 	testWatchDir(t, path, file)
 }
 
+func TestSkipFile(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		want bool
+	}{
+		{name: ".config.yaml", want: true},
+		{name: ".DS_Store", want: true},
+		{name: "config.yaml", want: false},
+	} {
+		if got := skipFile(test.name); got != test.want {
+			t.Errorf("skipFile(%q) = %v, want %v", test.name, got, test.want)
+		}
+	}
+}
+
 func testWatchFile(t *testing.T, path string) {
 	t.Log(path)
 

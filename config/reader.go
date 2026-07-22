@@ -28,7 +28,7 @@ type reader struct {
 	lock   sync.Mutex
 }
 
-func newReader(opts options) Reader {
+func newReader(opts options) *reader {
 	return &reader{
 		opts:   opts,
 		values: make(map[string]any),

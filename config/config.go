@@ -3,8 +3,10 @@ package config
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	// init encoding
@@ -33,7 +35,8 @@ type Config interface {
 
 type config struct {
 	opts      options
-	reader    Reader
+	reader    atomic.Pointer[reader]
+	reloadMu  sync.Mutex
 	cached    sync.Map
 	observers sync.Map
 	watchers  []Watcher
@@ -49,15 +52,14 @@ func New(opts ...Option) Config {
 	for _, opt := range opts {
 		opt(&o)
 	}
-	return &config{
-		opts:   o,
-		reader: newReader(o),
-	}
+	c := &config{opts: o}
+	c.reader.Store(newReader(o))
+	return c
 }
 
 func (c *config) watch(w Watcher) {
 	for {
-		kvs, err := w.Next()
+		_, err := w.Next()
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				log.Info("watcher's ctx cancel", "error", err)
@@ -67,41 +69,47 @@ func (c *config) watch(w Watcher) {
 			log.Error("failed to watch next config", "error", err)
 			continue
 		}
-		if err := c.reader.Merge(kvs...); err != nil {
-			log.Error("failed to merge next config", "error", err)
+		if err := c.reload(); err != nil {
+			log.Error("failed to reload config", "error", err)
 			continue
 		}
-		if err := c.reader.Resolve(); err != nil {
-			log.Error("failed to resolve next config", "error", err)
-			continue
-		}
-		c.cached.Range(func(key, value any) bool {
-			k := key.(string)
-			v := value.(Value)
-			if n, ok := c.reader.Value(k); ok && reflect.TypeOf(n.Load()) == reflect.TypeOf(v.Load()) && !reflect.DeepEqual(n.Load(), v.Load()) {
-				v.Store(n.Load())
-				if o, ok := c.observers.Load(k); ok {
-					o.(Observer)(k, v)
-				}
-			}
-			return true
-		})
 	}
 }
 
+func (c *config) reload() error {
+	c.reloadMu.Lock()
+	defer c.reloadMu.Unlock()
+
+	r, err := loadReader(c.opts)
+	if err != nil {
+		return err
+	}
+	c.reader.Store(r)
+	c.updateCached(r)
+	return nil
+}
+
+func (c *config) updateCached(r Reader) {
+	c.cached.Range(func(key, value any) bool {
+		k := key.(string)
+		v := value.(Value)
+		if n, ok := r.Value(k); ok && reflect.TypeOf(n.Load()) == reflect.TypeOf(v.Load()) && !reflect.DeepEqual(n.Load(), v.Load()) {
+			v.Store(n.Load())
+			if o, ok := c.observers.Load(k); ok {
+				o.(Observer)(k, v)
+			}
+		}
+		return true
+	})
+}
+
 func (c *config) Load() error {
+	r, err := loadReader(c.opts)
+	if err != nil {
+		return err
+	}
+	c.reader.Store(r)
 	for _, src := range c.opts.sources {
-		kvs, err := src.Load()
-		if err != nil {
-			return err
-		}
-		for _, v := range kvs {
-			log.Debug("config loaded", "key", v.Key, "format", v.Format)
-		}
-		if err = c.reader.Merge(kvs...); err != nil {
-			log.Error("failed to merge config source", "error", err)
-			return err
-		}
 		w, err := src.Watch()
 		if err != nil {
 			log.Error("failed to watch config source", "error", err)
@@ -110,18 +118,34 @@ func (c *config) Load() error {
 		c.watchers = append(c.watchers, w)
 		go c.watch(w)
 	}
-	if err := c.reader.Resolve(); err != nil {
-		log.Error("failed to resolve config source", "error", err)
-		return err
-	}
 	return nil
+}
+
+func loadReader(opts options) (*reader, error) {
+	r := newReader(opts)
+	for _, src := range opts.sources {
+		kvs, err := src.Load()
+		if err != nil {
+			return nil, fmt.Errorf("load config source: %w", err)
+		}
+		for _, v := range kvs {
+			log.Debug("config loaded", "key", v.Key, "format", v.Format)
+		}
+		if err := r.Merge(kvs...); err != nil {
+			return nil, fmt.Errorf("merge config source: %w", err)
+		}
+	}
+	if err := r.Resolve(); err != nil {
+		return nil, fmt.Errorf("resolve config source: %w", err)
+	}
+	return r, nil
 }
 
 func (c *config) Value(key string) Value {
 	if v, ok := c.cached.Load(key); ok {
 		return v.(Value)
 	}
-	if v, ok := c.reader.Value(key); ok {
+	if v, ok := c.reader.Load().Value(key); ok {
 		c.cached.Store(key, v)
 		return v
 	}
@@ -129,7 +153,7 @@ func (c *config) Value(key string) Value {
 }
 
 func (c *config) Scan(v any) error {
-	data, err := c.reader.Source()
+	data, err := c.reader.Load().Source()
 	if err != nil {
 		return err
 	}
