@@ -3,6 +3,7 @@ package form
 import (
 	"encoding/base64"
 	"fmt"
+	"math"
 	"net/url"
 	"reflect"
 	"strconv"
@@ -129,9 +130,16 @@ func EncodeField(fieldDescriptor protoreflect.FieldDescriptor, value protoreflec
 			return nullStr, nil
 		}
 		desc := fieldDescriptor.Enum().Values().ByNumber(value.Enum())
+		if desc == nil {
+			return strconv.FormatInt(int64(value.Enum()), 10), nil
+		}
 		return string(desc.Name()), nil
 	case protoreflect.BytesKind:
-		return base64.URLEncoding.EncodeToString(value.Bytes()), nil
+		return base64.StdEncoding.EncodeToString(value.Bytes()), nil
+	case protoreflect.FloatKind:
+		return formatFloat(value.Float(), 32), nil
+	case protoreflect.DoubleKind:
+		return formatFloat(value.Float(), 64), nil
 	case protoreflect.MessageKind, protoreflect.GroupKind:
 		return encodeMessage(fieldDescriptor.Message(), value)
 	default:
@@ -160,12 +168,26 @@ func encodeMessage(msgDescriptor protoreflect.MessageDescriptor, value protorefl
 		if !ok || m == nil {
 			return "", nil
 		}
-		for i, v := range m.Paths {
-			m.Paths[i] = jsonCamelCase(v)
+		paths := make([]string, len(m.Paths))
+		for i, path := range m.Paths {
+			paths[i] = jsonCamelCase(path)
 		}
-		return strings.Join(m.Paths, ","), nil
+		return strings.Join(paths, ","), nil
 	default:
 		return "", fmt.Errorf("unsupported message type: %q", string(msgDescriptor.FullName()))
+	}
+}
+
+func formatFloat(value float64, bits int) string {
+	switch {
+	case math.IsNaN(value):
+		return "NaN"
+	case math.IsInf(value, 1):
+		return "Infinity"
+	case math.IsInf(value, -1):
+		return "-Infinity"
+	default:
+		return strconv.FormatFloat(value, 'g', -1, bits)
 	}
 }
 

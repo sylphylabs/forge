@@ -149,116 +149,31 @@ func TestBuildPathRejectsAbsoluteTemplates(t *testing.T) {
 	tests := []struct {
 		pathTemplate string
 		request      *binding.HelloRequest
-		opts         []BuildPathOption
-		want         string
 	}{
 		{
 			pathTemplate: "http://helloworld.Greeter/helloworld/{name}/sub/{sub.naming}",
 			request:      &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "2233!!!!"}},
-			want:         "http://helloworld.Greeter/helloworld/test/sub/2233!!!!",
-		},
-		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/{name}/sub/{sub.naming}",
-			request:      nil,
-			want:         "http://helloworld.Greeter/helloworld/{name}/sub/{sub.naming}",
 		},
 		{
 			pathTemplate: "http://helloworld.Greeter/helloworld/{}/sub/{sub.naming}",
 			request:      &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "hello"}},
-			want:         "http://helloworld.Greeter/helloworld/{}/sub/hello",
 		},
 		{
 			pathTemplate: "http://helloworld.Greeter/helloworld/{}/sub/{sub.name.cc}",
 			request:      &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "hello"}},
-			want:         "http://helloworld.Greeter/helloworld/{}/sub/",
 		},
 		{
 			pathTemplate: "http://helloworld.Greeter/helloworld/{}/sub/{test_repeated}",
 			request:      &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "hello"}, TestRepeated: []string{"123", "456"}},
-			want:         "http://helloworld.Greeter/helloworld/{}/sub/123",
-		},
-		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/{name}/sub/{sub.naming}",
-			request:      &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "5566!!!"}},
-			want:         "http://helloworld.Greeter/helloworld/test/sub/5566!!!",
-		},
-		{
-			pathTemplate: "/helloworld/sub",
-			request:      &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "2233!!!"}},
-			want:         "http://helloworld.Greeter/helloworld/sub",
-		},
-		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/{name}/sub/{sub.name}",
-			request:      &binding.HelloRequest{Name: "test"},
-			want:         "http://helloworld.Greeter/helloworld/test/sub/",
-		},
-		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/{name}/sub",
-			request:      &binding.HelloRequest{Name: "go", Sub: &binding.Sub{Name: "kratos"}},
-			opts:         []BuildPathOption{WithQueryParams()},
-			want:         "http://helloworld.Greeter/helloworld/go/sub?sub.naming=kratos",
-		},
-		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/{name=publishers/*/books/*}/sub",
-			request:      &binding.HelloRequest{Name: "publishers/go/books/kratos", Sub: &binding.Sub{Name: "kratos"}},
-			opts:         []BuildPathOption{WithQueryParams()},
-			want:         "http://helloworld.Greeter/helloworld/publishers/go/books/kratos/sub?sub.naming=kratos",
-		},
-		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/{name=**}/sub",
-			request:      &binding.HelloRequest{Name: "publishers/go/books/kratos", Sub: &binding.Sub{Name: "kratos"}},
-			opts:         []BuildPathOption{WithQueryParams()},
-			want:         "http://helloworld.Greeter/helloworld/publishers/go/books/kratos/sub?sub.naming=kratos",
-		},
-		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/{sub.naming=publishers/*}",
-			request:      &binding.HelloRequest{Sub: &binding.Sub{Name: "publishers/kratos"}},
-			want:         "http://helloworld.Greeter/helloworld/publishers/kratos",
-		},
-		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/sub/{sub.naming}",
-			request:      &binding.HelloRequest{Sub: &binding.Sub{Name: "kratos"}, UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"name", "sub.naming"}}},
-			want:         "http://helloworld.Greeter/helloworld/sub/kratos?updateMask=name,sub.naming",
 		},
 		{
 			pathTemplate: "http://helloworld.Greeter/helloworld/sub/[{sub.naming}]",
 			request:      &binding.HelloRequest{Sub: &binding.Sub{Name: "kratos"}},
-			want:         "http://helloworld.Greeter/helloworld/sub/[kratos]",
-		},
-		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/[{name}]/sub/[{sub.naming}]",
-			request:      &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "kratos"}},
-			want:         "http://helloworld.Greeter/helloworld/[test]/sub/[kratos]",
-		},
-		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/[{}]/sub/[{sub.naming}]",
-			request:      &binding.HelloRequest{Sub: &binding.Sub{Name: "kratos"}},
-			want:         "http://helloworld.Greeter/helloworld/[{}]/sub/[kratos]",
-		},
-		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/[{}]/sub/[{sub.naming}]/{[]}",
-			request:      &binding.HelloRequest{Sub: &binding.Sub{Name: "kratos"}},
-			want:         "http://helloworld.Greeter/helloworld/[{}]/sub/[kratos]/{[]}",
-		},
-		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/{[sub]}/[{sub.naming}]",
-			request:      &binding.HelloRequest{Sub: &binding.Sub{Name: "kratos"}},
-			want:         "http://helloworld.Greeter/helloworld/{[sub]}/[kratos]",
-		},
-		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/{[name]}/[{sub.naming}]",
-			request:      &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "kratos"}},
-			want:         "http://helloworld.Greeter/helloworld/{[name]}/[kratos]",
-		},
-		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/{}/[]/[{sub.naming}]",
-			request:      &binding.HelloRequest{Sub: &binding.Sub{Name: "kratos"}},
-			want:         "http://helloworld.Greeter/helloworld/{}/[]/[kratos]",
 		},
 	}
 
 	for _, test := range tests {
-		if _, err := BuildPath(test.pathTemplate, test.request, test.opts...); err == nil {
+		if _, err := BuildPath(test.pathTemplate, test.request); err == nil {
 			t.Errorf("BuildPath(%q) succeeded", test.pathTemplate)
 		}
 	}

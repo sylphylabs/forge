@@ -77,6 +77,13 @@ func BuildPath(pathTemplate string, msg proto.Message, opts ...BuildPathOption) 
 	if !options.queryParams {
 		return path, nil
 	}
+	pathFields := make(map[string]struct{}, len(template.Variables()))
+	for _, variable := range template.Variables() {
+		pathFields[variable.FieldPath] = struct{}{}
+	}
+	if err := validateQueryParameters(msg.ProtoReflect().Descriptor(), "", "", pathFields, options.omitFields); err != nil {
+		return "", fmt.Errorf("build HTTP query: %w", err)
+	}
 
 	queryParams, err := form.EncodeValues(msg)
 	if err != nil {
@@ -92,6 +99,59 @@ func BuildPath(pathTemplate string, msg proto.Message, opts ...BuildPathOption) 
 		}
 	}
 	return path, nil
+}
+
+func validateQueryParameters(message protoreflect.MessageDescriptor, protoPrefix, jsonPrefix string, pathFields map[string]struct{}, omitFields []string) error {
+	fields := message.Fields()
+	for i := range fields.Len() {
+		field := fields.Get(i)
+		name := string(field.Name())
+		protoPath := name
+		if protoPrefix != "" {
+			protoPath = protoPrefix + "." + name
+		}
+		jsonPath := field.JSONName()
+		if jsonPrefix != "" {
+			jsonPath = jsonPrefix + "." + field.JSONName()
+		}
+		if _, bound := pathFields[protoPath]; bound || omittedQueryField(protoPath, jsonPath, omitFields) {
+			continue
+		}
+		if field.IsMap() {
+			return fmt.Errorf("field %q is a map and cannot be encoded as a query parameter", protoPath)
+		}
+		if field.IsList() && (field.Kind() == protoreflect.MessageKind || field.Kind() == protoreflect.GroupKind) {
+			return fmt.Errorf("field %q is a repeated message and cannot be encoded as a query parameter", protoPath)
+		}
+		if !field.IsList() && (field.Kind() == protoreflect.MessageKind || field.Kind() == protoreflect.GroupKind) && !isScalarQueryMessage(field.Message()) {
+			if err := validateQueryParameters(field.Message(), protoPath, jsonPath, pathFields, omitFields); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func omittedQueryField(protoPath, jsonPath string, omitted []string) bool {
+	for _, field := range omitted {
+		if protoPath == field || strings.HasPrefix(protoPath, field+".") || jsonPath == field || strings.HasPrefix(jsonPath, field+".") {
+			return true
+		}
+	}
+	return false
+}
+
+func isScalarQueryMessage(message protoreflect.MessageDescriptor) bool {
+	switch message.FullName() {
+	case "google.protobuf.Timestamp", "google.protobuf.Duration", "google.protobuf.BytesValue",
+		"google.protobuf.DoubleValue", "google.protobuf.FloatValue", "google.protobuf.Int64Value",
+		"google.protobuf.Int32Value", "google.protobuf.UInt64Value", "google.protobuf.UInt32Value",
+		"google.protobuf.BoolValue", "google.protobuf.StringValue", "google.protobuf.FieldMask",
+		"google.protobuf.Value", "google.protobuf.Struct":
+		return true
+	default:
+		return false
+	}
 }
 
 func encodedFieldPath(msg proto.Message, fieldPath string) string {

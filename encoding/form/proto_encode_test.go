@@ -1,6 +1,7 @@
 package form
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -49,6 +50,30 @@ func TestEncodeValues(t *testing.T) {
 	want := "a=19&age=18&b=true&bool=false&byte=MTIz&bytes=MTIz&count=3&d=22.22&double=12.33&duration=2m0.000000022s&field=1%2C2&float=12.34&id=2233&int32=32&int64=64&map%5Bkratos%5D=https%3A%2F%2Fgo-kratos.dev%2F&map%5Bkratos_start%5D=https%3A%2F%2Fgo-kratos.dev%2Fdocs%2Fgetting-started%2Fstart%2F&map_int64_key%5B1%5D=kratos&map_int64_key%5B2%5D=go-zero&numberOne=2233&price=11.23&sex=woman&string=go-kratos&strings=3344&strings=5566&timestamp=1970-01-01T00%3A00%3A20.000000002Z&uint32=32&uint64=64&very_simple.component=5566" // nolint:lll
 	if got := query.Encode(); want != got {
 		t.Errorf("\nwant: %s, \ngot: %s", want, got)
+	}
+}
+
+func TestEncodeValuesUsesProtoJSONScalarText(t *testing.T) {
+	mask := &fieldmaskpb.FieldMask{Paths: []string{"foo_bar"}}
+	query, err := EncodeValues(&complex.Complex{
+		D:     math.Inf(1),
+		Byte:  []byte{0xfb, 0xff},
+		Field: mask,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := query.Get("d"); got != "Infinity" {
+		t.Fatalf("double query value = %q, want Infinity", got)
+	}
+	if got := query.Get("byte"); got != "+/8=" {
+		t.Fatalf("bytes query value = %q, want standard base64", got)
+	}
+	if got := query.Get("field"); got != "fooBar" {
+		t.Fatalf("field mask query value = %q, want fooBar", got)
+	}
+	if got := mask.Paths[0]; got != "foo_bar" {
+		t.Fatalf("EncodeValues mutated field mask to %q", got)
 	}
 }
 
