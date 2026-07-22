@@ -48,18 +48,30 @@ func (w *watcher) Next() ([]*registry.ServiceInstance, error) {
 		return item, err
 	}
 
-	select {
-	case <-w.ctx.Done():
-		return nil, w.ctx.Err()
-	case watchResp, ok := <-w.watchChan:
-		if !ok || watchResp.Err() != nil {
-			time.Sleep(time.Second)
-			err := w.reWatch()
-			if err != nil {
-				return nil, err
+	for {
+		select {
+		case <-w.ctx.Done():
+			return nil, w.ctx.Err()
+		case watchResp, ok := <-w.watchChan:
+			if !ok {
+				if err := w.ctx.Err(); err != nil {
+					return nil, err
+				}
+				if err := w.reWatch(); err != nil {
+					return nil, err
+				}
+				return w.getInstance()
 			}
+			if err := watchResp.Err(); err != nil {
+				if err := sleepContext(w.ctx, time.Second); err != nil {
+					return nil, err
+				}
+				if err := w.reWatch(); err != nil {
+					return nil, err
+				}
+			}
+			return w.getInstance()
 		}
-		return w.getInstance()
 	}
 }
 

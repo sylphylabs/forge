@@ -2,6 +2,7 @@ package etcd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"time"
@@ -56,6 +57,10 @@ type Registry struct {
 		When the service instance is deregistered, the corresponding context cancel function is called to stop the heartbeat.
 	*/
 	ctxMap map[string]*serviceCancel
+
+	registerFn  func(context.Context, string, string) (clientv3.LeaseID, error)
+	keepAliveFn func(context.Context, clientv3.LeaseID) (<-chan *clientv3.LeaseKeepAliveResponse, error)
+	retryDelay  func(int) time.Duration
 }
 
 type serviceCancel struct {
@@ -74,12 +79,18 @@ func New(client *clientv3.Client, opts ...Option) (r *Registry) {
 	for _, o := range opts {
 		o(op)
 	}
-	return &Registry{
+	r = &Registry{
 		opts:   op,
 		client: client,
 		kv:     clientv3.NewKV(client),
 		ctxMap: make(map[string]*serviceCancel),
 	}
+	r.registerFn = r.registerWithKV
+	r.keepAliveFn = client.KeepAlive
+	r.retryDelay = func(attempt int) time.Duration {
+		return rand.N(time.Second << min(attempt, 5))
+	}
+	return r
 }
 
 // Register the registration.
@@ -173,70 +184,66 @@ func (r *Registry) registerWithKV(ctx context.Context, key string, value string)
 }
 
 func (r *Registry) heartBeat(ctx context.Context, leaseID clientv3.LeaseID, key string, value string) {
-	curLeaseID := leaseID
-	kac, err := r.client.KeepAlive(ctx, leaseID)
+	keepAlive, err := r.keepAliveFn(ctx, leaseID)
 	if err != nil {
-		curLeaseID = 0
+		keepAlive = nil
 	}
-	randSource := rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0))
-
 	for {
-		if curLeaseID == 0 {
-			// try to registerWithKV
-			var retreat []int
-			for retryCnt := 0; retryCnt < r.opts.maxRetry; retryCnt++ {
-				if ctx.Err() != nil {
-					return
-				}
-				// prevent infinite blocking
-				idChan := make(chan clientv3.LeaseID, 1)
-				errChan := make(chan error, 1)
-				cancelCtx, cancel := context.WithCancel(ctx)
-				go func() {
-					defer cancel()
-					id, registerErr := r.registerWithKV(cancelCtx, key, value)
-					if registerErr != nil {
-						errChan <- registerErr
-					} else {
-						idChan <- id
-					}
-				}()
-
-				select {
-				case <-time.After(3 * time.Second):
-					cancel()
-					continue
-				case <-errChan:
-					continue
-				case curLeaseID = <-idChan:
-				}
-
-				kac, err = r.client.KeepAlive(ctx, curLeaseID)
-				if err == nil {
-					break
-				}
-				retreat = append(retreat, 1<<retryCnt)
-				time.Sleep(time.Duration(retreat[randSource.IntN(len(retreat))]) * time.Second)
-			}
-			if _, ok := <-kac; !ok {
-				// retry failed
+		if keepAlive == nil {
+			keepAlive, err = r.recoverKeepAlive(ctx, key, value)
+			if err != nil {
 				return
 			}
 		}
 
 		select {
-		case _, ok := <-kac:
+		case _, ok := <-keepAlive:
 			if !ok {
-				if ctx.Err() != nil {
-					// channel closed due to context cancel
-					return
-				}
-				// need to retry registration
-				curLeaseID = 0
-				continue
+				keepAlive = nil
 			}
-		case <-r.opts.ctx.Done():
+		case <-ctx.Done():
 			return
 		}
+	}
+}
+
+func (r *Registry) recoverKeepAlive(ctx context.Context, key, value string) (<-chan *clientv3.LeaseKeepAliveResponse, error) {
+	var lastErr error
+	for attempt := 0; attempt < r.opts.maxRetry; attempt++ {
+		attemptCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		leaseID, err := r.registerFn(attemptCtx, key, value)
+		cancel()
+		if err == nil {
+			keepAlive, keepAliveErr := r.keepAliveFn(ctx, leaseID)
+			if keepAliveErr == nil && keepAlive != nil {
+				return keepAlive, nil
+			}
+			err = keepAliveErr
+			if err == nil {
+				err = errors.New("etcd keepalive returned a nil channel")
+			}
+		}
+		lastErr = err
+		if attempt+1 == r.opts.maxRetry {
+			break
+		}
+		if err := sleepContext(ctx, r.retryDelay(attempt)); err != nil {
+			return nil, err
+		}
+	}
+	if lastErr == nil {
+		lastErr = errors.New("etcd heartbeat recovery disabled")
+	}
+	return nil, fmt.Errorf("recover etcd registration after %d attempts: %w", r.opts.maxRetry, lastErr)
+}
+
+func sleepContext(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }
