@@ -1,6 +1,6 @@
 # Google HTTP Transcoding Conformance
 
-Status: Phase 1 accepted design, implementation pending; Phase 2 scope only
+Status: Phase 1 approved for implementation; Phase 2 scope only
 
 Last reviewed: July 22, 2026
 
@@ -59,8 +59,9 @@ Phase 1 covers rules attached directly to protobuf methods:
 - Literal segments, `*`, terminal `**`, field paths, composite resource-name
   variables, and terminal custom verbs.
 - No body, whole-message `body: "*"`, and top-level named body fields.
-- Omitted `response_body`, `response_body: "*"`, and top-level named response
-  fields.
+- Omitted `response_body` and top-level named response fields. The Google
+  contract uses omission for the whole response; `response_body: "*"` is
+  invalid.
 - One level of `additional_bindings`. Nested additional bindings are invalid.
 - Path, body, and query field classification and precedence.
 - `google.api.HttpBody` for whole messages and projected fields.
@@ -124,14 +125,46 @@ The package must support these operations:
 - Recover variable values from `URL.EscapedPath`, preserving the distinction
   between structural `/` and encoded `%2F`.
 
+The initial Go API is concrete and intentionally small:
+
+```go
+type SyntaxError struct {
+	Offset int
+	Reason string
+}
+
+type Variable struct {
+	FieldPath string
+	Template  string
+	Multi     bool
+}
+
+func Parse(pattern string) (*Template, error)
+func (t *Template) Pattern() string
+func (t *Template) ServeMuxPattern() string
+func (t *Template) Variables() []Variable
+func (t *Template) Expand(resolve func(fieldPath string) (string, error)) (string, error)
+func (t *Template) Extract(escapedPath string) (map[string]string, error)
+```
+
+`Variables` returns a copy. `Expand` and `Extract` return wrapped errors with
+template and variable context. The resolver supplies canonical string values;
+the parser package does not import protobuf reflection.
+
 Do not add an interface for the parser. There is one implementation and all
 operations are deterministic pure functions or methods on the parsed template.
 
 The nested generator module may import this internal package because its module
-path is within `github.com/openkratos/kratos`. Its `go.mod` will require the root
-module at the matching release version and use a repository-relative replacement
-for local development. The root module does not depend on the generator, so this
-does not create a module cycle.
+path is within `github.com/openkratos/kratos`. During pre-release development,
+its `go.mod` requires the root module at `v0.0.0` and uses a repository-relative
+replacement. The root module does not depend on the generator, so this does not
+create a module cycle.
+
+The replacement is local-development scaffolding, not a publishable dependency
+contract. Before a generator tag is released, remove the replacement and require
+the matching released root-module version. `go install module@version` must be
+validated against the tagged module because installable modules cannot rely on a
+repository-relative replacement.
 
 ### Server Matching And Extraction
 
@@ -178,12 +211,26 @@ Path expansion must return an error for:
 - A missing or invalid field path.
 - A value that does not satisfy its literal and wildcard resource-name shape.
 - A repeated, map, or terminal message field used as a path variable.
+- A bare `*` or `**` segment that is not owned by a path variable and therefore
+  has no request field from which a generated client can obtain a value.
 - An invalid template.
 
 The current `BuildPath` API cannot report these failures. Before the first
-OpenKratos release, change it to return `(string, error)` and update generated
-clients to propagate the error. This is an intentional pre-v1 source break; do
-not retain silent fallback behavior in a second compatibility helper.
+OpenKratos release, replace it with:
+
+```go
+func BuildPath(pathTemplate string, msg proto.Message, opts ...BuildPathOption) (string, error)
+```
+
+Generated clients propagate the error before invoking the HTTP client. A nil
+message is an error when the template or query projection references request
+fields. This is an intentional pre-v1 source break; do not retain silent
+fallback behavior in a second compatibility helper.
+
+Path and query scalar text follows protobuf JSON lexical rules: enum names,
+base64 bytes, decimal numeric values, `true`/`false`, and the protobuf JSON
+spellings for non-finite floats. Both client projection and server binding use
+the same descriptor-aware conversion; Go debug formatting is not a wire format.
 
 For `custom.kind = "*"`, server registration remains method-unspecified. There
 is no canonical method for a generated client to send. Add an exported
@@ -191,6 +238,10 @@ is no canonical method for a generated client to send. Add an exported
 method return it before network I/O. Callers use `errors.Is`; the client must
 never send `*` as an HTTP request method. A service that needs a generated client
 must declare a concrete primary rule.
+
+Bare path wildcards have the same client-side ambiguity. Servers and raw HTTP
+additional-binding fixtures support them, but a generated primary client returns
+`transport/http.ErrUnboundPathWildcard` before network I/O.
 
 ### Descriptor Validation
 
@@ -202,7 +253,9 @@ Generation fails when:
 - A path variable is missing from the request message.
 - Any component before the leaf is not a singular message.
 - The leaf path field is repeated, a map, or a message/group.
-- `body` or `response_body` is neither `*` nor a top-level existing field.
+- `body` is neither `*` nor a top-level existing field.
+- `response_body` is non-empty and is not a top-level existing field;
+  `response_body: "*"` is rejected.
 - A nested additional binding contains another additional binding.
 - A custom method is empty, or its path is empty.
 - Two generated rules have equivalent method and path match sets.
@@ -240,6 +293,11 @@ Generated clients classify request leaf fields exactly once:
 
 Whole-message and projected-field JSON must follow protobuf JSON semantics.
 Ordinary `encoding/json` is insufficient for descriptor-sensitive values.
+
+Named body and response-body fields are top-level fields, as required by the
+vendored contract. They may be repeated or maps: `HttpRule` explicitly permits
+array request/response bodies through repeated fields, and protobuf maps use the
+corresponding JSON object representation.
 
 Add descriptor-aware helpers that marshal or unmarshal a top-level protobuf
 field while retaining its parent message descriptor. They must cover:
@@ -285,8 +343,12 @@ Phase 1 intentionally changes observable behavior before v1:
   runtime now fail code generation.
 - Projected protobuf fields use ProtoJSON wire representations.
 - `BuildPath` returns an error.
+- `response_body: "*"` fails generation; omit `response_body` to encode the
+  whole response.
 - A wildcard custom method makes its generated client return
   `ErrUnspecifiedHTTPMethod` before network I/O.
+- A primary rule with a bare path wildcard makes its generated client return
+  `ErrUnboundPathWildcard` before network I/O.
 
 These changes require English and Simplified Chinese migration entries. They are
 not optional compatibility modes because two decoding or JSON rules would make
@@ -315,7 +377,7 @@ Phase 1 fixtures must cover at least:
 | Escaping | Unicode, space, `%`, `%2F`, `%2f`, `?`, `#`, encoded literals, malformed escapes |
 | Fields | Nested scalar path, missing field, repeated/map/message leaf rejection, invalid intermediate field |
 | Body | Omitted, `*`, message, scalar, enum, bytes, repeated, map, `HttpBody` |
-| Response body | Omitted, `*`, message, scalar, enum, int64/uint64, repeated, map, `HttpBody` |
+| Response body | Omitted, invalid `*`, message, scalar, enum, int64/uint64, repeated, map, `HttpBody` |
 | Query | Nested leaves, repeated scalar, path/body omission, repeated-message rejection, field-mask behavior |
 | Bindings | Primary plus multiple additional bindings, nested-binding rejection, duplicate/conflict rejection |
 | Protobuf API | Edition 2023 Open and Opaque generated code |
@@ -349,6 +411,9 @@ Phase 1 is complete only when all of the following hold:
   runtime state is involved.
 - Real `protoc` generation compiles and runs for Open and Opaque APIs.
 - All repository Go modules compile after the `BuildPath` API change.
+- The released generator module has no repository-relative `replace` directive,
+  requires the matching root release, and passes a versioned `go install` smoke
+  test.
 - `go vet` passes in the root and generator modules.
 - The primary generated client/server round trip proves `%2F`, ProtoJSON
   projected fields, and concrete custom methods on the wire; raw HTTP fixtures
