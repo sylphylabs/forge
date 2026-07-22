@@ -85,6 +85,29 @@ func TestDirectError(t *testing.T) {
 	}
 }
 
+func TestHealthFailureClassification(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "success"},
+		{name: "caller cancellation", err: context.Canceled, want: false},
+		{name: "deadline", err: context.DeadlineExceeded, want: true},
+		{name: "network", err: net.ErrClosed, want: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isHealthFailure(test.err, nil); got != test.want {
+				t.Fatalf("isHealthFailure(%v) = %v, want %v", test.err, got, test.want)
+			}
+		})
+	}
+	if !isHealthFailure(context.Canceled, func(error) bool { return true }) {
+		t.Fatal("custom error handler should be able to classify cancellation as a failure")
+	}
+}
+
 func TestDirectErrorHandler(t *testing.T) {
 	b := &Builder{
 		ErrHandler: func(err error) bool {

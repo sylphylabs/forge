@@ -148,20 +148,27 @@ func (n *Node) Pick() selector.DoneFunc {
 		n.lag.Store(lag)
 
 		success := uint64(1000) // error value ,if error set 1
-		if di.Err != nil {
-			if n.errHandler != nil && n.errHandler(di.Err) {
-				success = 0
-			}
-			var netErr net.Error
-			if errors.Is(context.DeadlineExceeded, di.Err) || errors.Is(context.Canceled, di.Err) ||
-				errors.IsServiceUnavailable(di.Err) || errors.IsGatewayTimeout(di.Err) || errors.As(di.Err, &netErr) {
-				success = 0
-			}
+		if isHealthFailure(di.Err, n.errHandler) {
+			success = 0
 		}
 		oldSuc := n.success.Load()
 		success = uint64(float64(oldSuc)*w + float64(success)*(1.0-w))
 		n.success.Store(success)
 	}
+}
+
+func isHealthFailure(err error, handler func(error) bool) bool {
+	if err == nil {
+		return false
+	}
+	if handler != nil && handler(err) {
+		return true
+	}
+	var netErr net.Error
+	return errors.Is(err, context.DeadlineExceeded) ||
+		errors.IsServiceUnavailable(err) ||
+		errors.IsGatewayTimeout(err) ||
+		errors.As(err, &netErr)
 }
 
 // Weight is node effective weight.
