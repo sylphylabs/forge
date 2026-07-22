@@ -10,6 +10,7 @@
 ## Design and Evidence
 
 - [Performance modernization](design/performance.md)
+- [Google HTTP transcoding conformance](design/google-http-transcoding.md)
 - [Selector benchmark: July 22, 2026](benchmarks/selectors-2026-07-22.md)
 
 ## Maintenance
