@@ -23,3 +23,7 @@ Use the upstream commit hash in merge or cherry-pick descriptions so provenance 
 
 Review outcomes and local adoption commits are recorded in
 [`docs/upstream-adoptions.md`](docs/upstream-adoptions.md).
+
+Current user-visible differences and migration impact are recorded in
+[`COMPATIBILITY.md`](COMPATIBILITY.md). The adoption ledger may discuss pending
+work; the compatibility document records only accepted and validated behavior.

@@ -4,15 +4,15 @@ Translations: [English](README.md) | [简体中文](README_zh.md)
 
 OpenKratos is an independent, pre-release fork of [go-kratos/kratos](https://github.com/go-kratos/kratos). It explores deliberate breaking changes, faster standard-library-based internals, and a smaller long-term dependency surface. It is not affiliated with or endorsed by the go-kratos maintainers.
 
-The project currently tracks `v0` development and does not provide a stable API or compatibility guarantee. See [UPSTREAM.md](UPSTREAM.md) for its source baseline and synchronization policy.
+The project currently tracks `v0` development and does not provide a stable API or compatibility guarantee. Read [COMPATIBILITY.md](COMPATIBILITY.md) before migrating and [UPSTREAM.md](UPSTREAM.md) for the source baseline and synchronization policy.
 
 ## Features
 
 - API-first development with Protobuf and generated HTTP/gRPC code.
-- Unified [transport](https://go-kratos.dev/docs/component/transport/overview) layer for [HTTP](https://go-kratos.dev/docs/component/transport/http) and [gRPC](https://go-kratos.dev/docs/component/transport/grpc).
+- Unified transport layer for HTTP and gRPC.
 - Standard-library `http.ServeMux` routing with method patterns, path values, and Google AIP template support.
-- Composable [middleware](https://go-kratos.dev/docs/component/middleware/overview) for recovery, logging, validation, tracing, metrics, auth, and more.
-- Pluggable [registry](https://go-kratos.dev/docs/component/registry), [configuration](https://go-kratos.dev/docs/component/config), and [encoding](https://go-kratos.dev/docs/component/encoding) components.
+- Composable middleware for recovery, logging, validation, tracing, metrics, auth, and more.
+- Pluggable registry, configuration, and encoding components.
 - Standard-library `log/slog` based logging with OpenTelemetry extensions in contrib packages.
 - Consistent metadata, errors, validation, OpenAPI, and code-generation workflows.
 - A contrib ecosystem for optional integrations such as registries, config stores, middleware, encodings, and observability.
@@ -24,33 +24,34 @@ The project currently tracks `v0` development and does not provide a stable API 
 - [Go](https://go.dev/dl/) 1.26 or later; Go 1.27 RC is used for forward validation
 - [protoc](https://github.com/protocolbuffers/protobuf)
 - [protoc-gen-go](https://github.com/protocolbuffers/protobuf-go)
+- [Buf](https://buf.build/) or an equivalent `protoc` workflow
 
-### Install the CLI
+### Add OpenKratos
 
 ```shell
-go install github.com/openkratos/kratos/cmd/kratos@latest
-kratos upgrade
+go get github.com/openkratos/kratos@main
 ```
 
-## Create a Service
+OpenKratos intentionally does not ship a project-scaffolding CLI. Project
+creation, dependency upgrades, and execution use the standard Go toolchain.
+
+Install the retained Protobuf generators when the project uses generated HTTP
+bindings or error definitions:
 
 ```shell
-kratos new helloworld
-cd helloworld
-go mod tidy
-kratos run
+go install github.com/openkratos/kratos/cmd/protoc-gen-go-http@main
+go install github.com/openkratos/kratos/cmd/protoc-gen-go-errors@main
 ```
 
-Visit `http://localhost:8000/helloworld/kratos` after the service starts.
+## Generate and Run
 
-For a fuller generated service flow:
+Use the repository's Buf or `protoc` configuration to generate code, then run
+the service directly:
 
 ```shell
-kratos proto add api/helloworld/helloworld.proto
-kratos proto client api/helloworld/helloworld.proto
-kratos proto server api/helloworld/helloworld.proto -t internal/service
+buf generate
 go generate ./...
-kratos run
+go run ./cmd/server -conf ./configs
 ```
 
 ## Usage Example
@@ -85,14 +86,14 @@ OpenKratos started from Kratos v3. Existing Kratos users should treat the module
 
 ## Further Reading
 
-- [Documentation](https://go-kratos.dev/docs/getting-started/start)
-- [Examples](https://github.com/go-kratos/examples)
-- [Project Layout](https://github.com/go-kratos/kratos-layout)
+- [Compatibility contract](COMPATIBILITY.md)
+- [Migration from Kratos v3](docs/migration/kratos-to-openkratos.md)
+- [Documentation index](docs/README.md)
 - [Upstream baseline and synchronization policy](UPSTREAM.md)
 - [Performance modernization](docs/design/performance.md)
 - [Upstream adoption ledger](docs/upstream-adoptions.md)
-- [v2 to v3 upstream migration guide](docs/migration/v2-to-v3.md)
-- [Community Contribution Guide](https://go-kratos.dev/docs/community/contribution)
+- [Contribution guide](CONTRIBUTING.md)
+- [Upstream Kratos documentation](https://go-kratos.dev/docs/getting-started/start) (reference only; behavior may differ)
 
 ## Development
 

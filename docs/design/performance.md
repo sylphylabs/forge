@@ -43,6 +43,7 @@ Individual upstream review outcomes and provenance are tracked in
 | HTTP routing | Implemented; release evidence pending | Use `net/http.ServeMux` plus a small Google AIP template adapter. |
 | WRR selection | Adopted and validated | Detect stale entries without a steady-state node-set scan; retain churn invariants and benchmarks. |
 | P2C selection | Adopted and validated | Use concurrency-safe `math/rand/v2` package functions instead of a per-balancer random-number lock. |
+| Codec content subtype | Implemented and validated | Fast-path exact JSON and scan remaining delimiters with `IndexByte`. |
 | Go 1.27 HTTP/2 | Validated | Use the standard-library-backed HTTP/2 path through a current `golang.org/x/net`; do not retain the legacy build tag. |
 | Future Go APIs | Watch | Evaluate only accepted, shipped APIs against concrete Kratos call sites and benchmarks. |
 
@@ -201,6 +202,47 @@ result for a single request.
   regression coverage.
 - Serial and parallel results across `GOMAXPROCS` 1, 2, 4, 8, and 16 are
   published, and the selector suite passes race detection.
+
+## Content Subtype Hot Path
+
+### Source and scope
+
+- Upstream PR: [go-kratos/kratos#3659](https://github.com/go-kratos/kratos/pull/3659)
+- Upstream commit: `ebe5cf9a26749fc2467e3cf1584b539f0112dcbe`
+- OpenKratos baseline: `4c3d353eac847f9647990b945477add6aca0dec1`
+- OpenKratos implementation: `5a4fea3c01f5853e82be5edda6b41e5e98f0b88c`
+
+`ContentSubtype` runs while selecting request and response codecs. The adopted
+change adds an exact `application/json` fast path and uses `strings.IndexByte`
+for the remaining delimiter scans. This is a function-level microbenchmark; it
+is not an end-to-end HTTP or RPC latency claim.
+
+### OpenKratos result
+
+Ten samples were collected on Apple M5 Pro, macOS 27.0, Go 1.26.4,
+`darwin/arm64`, and `GOMAXPROCS=1`. Baseline and current functions were compiled
+as equivalent benchmark packages and compared with `benchstat`.
+
+The persistent benchmark from the worktree can be applied unchanged to a
+detached baseline checkout and reproduced with:
+
+```shell
+GOMAXPROCS=1 go test ./internal/httputil -run '^$' \
+  -bench '^BenchmarkContentSubtype$' -benchmem -count=10 > old.txt
+GOMAXPROCS=1 go test ./internal/httputil -run '^$' \
+  -bench '^BenchmarkContentSubtype$' -benchmem -count=10 > new.txt
+benchstat old.txt new.txt
+```
+
+| Input | Baseline | Current | Change |
+| --- | ---: | ---: | ---: |
+| `application/json` | 6.890 ns/op | 2.502 ns/op | -63.69% |
+| `application/json; charset=utf-8` | 6.108 ns/op | 4.546 ns/op | -25.58% |
+| `text/html; charset=utf-8` | 6.007 ns/op | 4.899 ns/op | -18.45% |
+
+All comparisons report `p=0.000`, `n=10`. Both implementations remain at
+`0 B/op` and `0 allocs/op`. The persistent benchmark is
+`internal/httputil.BenchmarkContentSubtype`.
 
 ## Benchmark Rules
 

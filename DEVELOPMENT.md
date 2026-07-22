@@ -14,7 +14,7 @@ go1.27rc2 version
 
 ## Modules
 
-OpenKratos contains 28 Go modules. The root `go test ./...` command does not cover nested modules. Use the repository helpers for complete checks:
+OpenKratos contains 27 Go modules. The root `go test ./...` command does not cover nested modules. Use the repository helpers for complete checks:
 
 ```shell
 ./hack/tools.sh tidy
@@ -80,3 +80,15 @@ git remote add origin git@github.com:openkratos/kratos.git
 ```
 
 Do not push upstream Kratos tags to `origin`.
+
+## Documentation Contract
+
+`COMPATIBILITY.md` is the source of truth for accepted differences from Kratos;
+`COMPATIBILITY_zh.md` is its maintained translation. Update both in the same
+change whenever a public API, default behavior, wire format, module, tool, or
+minimum Go version changes. A breaking change also requires an executable
+migration step under `docs/migration/`.
+
+Use `docs/upstream-adoptions.md` for decisions that are still candidates,
+planned, rejected, or awaiting redesign. Do not describe unfinished work as a
+current compatibility fact and do not maintain a speculative roadmap.

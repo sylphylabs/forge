@@ -1,0 +1,231 @@
+# OpenKratos Compatibility with Kratos
+
+Status: pre-release
+
+Last verified: July 22, 2026
+
+OpenKratos is an independent fork of `go-kratos/kratos`. It is not a drop-in
+replacement for Kratos v3 and does not promise source, behavior, or release
+compatibility with future Kratos versions.
+
+This document is the source of truth for intentional differences that have
+been accepted and validated in OpenKratos. Work in progress is not a
+compatibility fact. Proposed and rejected differences belong in
+[`docs/upstream-adoptions.md`](docs/upstream-adoptions.md).
+
+## Comparison Baseline
+
+- Upstream repository: `https://github.com/go-kratos/kratos`
+- Initial upstream commit: `668db92c2c001e9552594ba5a8aede8456af6d7e`
+- Initial upstream release line: Kratos v3
+- OpenKratos release line: v0, currently unreleased
+
+The baseline commit matters because upstream `main` continues to change. An
+entry below describes a difference from that baseline unless it links a newer
+upstream revision explicitly.
+
+## Compatibility Summary
+
+| Area | Kratos v3 baseline | OpenKratos | Impact |
+| --- | --- | --- | --- |
+| Root module | `github.com/go-kratos/kratos/v3` | `github.com/openkratos/kratos` | Source breaking |
+| Release line | v3 | v0 pre-release | Release breaking |
+| Minimum Go version | Go 1.25 | Go 1.26 | Build requirement |
+| Module count | 28, including `cmd/kratos` | 27 | Release and tooling change |
+| Project CLI | `cmd/kratos` | Removed | Workflow breaking |
+| Protobuf generators | Kratos module paths | OpenKratos module paths | Install path change |
+| HTTP protobuf generation | Open API field access | Editions 2023 Open and Opaque API accessors | New generated-code capability |
+| HTTP router | Gorilla mux | Standard-library `http.ServeMux` tree | Behavior breaking |
+| HTTP client paths | Endpoint base paths and escaped variables could be lost | Base paths and AIP-aware escaping are retained | Correctness and URL behavior change |
+| Unknown HTTP routes | Could fall through to `http.DefaultServeMux` | Explicit 404/405 handling | Behavior and security change |
+| HTTP streams | Server request timeout could cancel SSE/WebSocket streams | Request timeout is detached; explicit stream deadlines remain | Behavior change |
+| WRR selector | Scans a node set during steady-state cleanup | Detects stale entries in O(1) before cleanup | Performance only |
+| P2C selector | Per-balancer locked random source | Concurrent `math/rand/v2` top-level source | Performance only |
+| App shutdown | Repeated stop and stage errors were not fully defined | Idempotent stop, joined errors, bounded after-stop stage | API and behavior change |
+| Config watch | Sources could be observed in a partially reloaded state | Complete resolved snapshots are published atomically | Behavior change |
+| OTel attributes | Legacy semconv and mixed transport attributes | semconv v1.41 transport-specific attributes | Telemetry schema change |
+
+## Repository Identity and Versions
+
+Every OpenKratos module and generated package uses the
+`github.com/openkratos/kratos` prefix. OpenKratos is on the v0 release line, so
+its module paths do not carry the upstream `/v3` suffix.
+
+Nested contrib and generator modules follow the same rule. For example:
+
+```text
+github.com/go-kratos/kratos/contrib/middleware/jwt/v3
+github.com/openkratos/kratos/contrib/middleware/jwt
+
+github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v3
+github.com/openkratos/kratos/cmd/protoc-gen-go-http
+```
+
+Until the first release, local development uses `v0.0.0` requirements and
+repository-relative `replace` directives between modules. Published releases
+must tag every released nested module with its module-prefixed tag; a root tag
+does not release nested modules.
+
+## Toolchain
+
+OpenKratos requires Go 1.26 and also validates the root module with Go 1.27 RC.
+The upstream baseline requires Go 1.25. Projects that must remain on Go 1.25
+cannot migrate to OpenKratos without upgrading their toolchain.
+
+The repository currently contains 27 Go modules. Running `go test ./...` at the
+root does not test nested modules; use the repository commands documented in
+[`DEVELOPMENT.md`](DEVELOPMENT.md).
+
+## Project CLI and Code Generation
+
+OpenKratos does not ship the general `kratos` CLI. The removed module included
+project scaffolding, source generation wrappers, an application runner, an
+upgrader, and a changelog helper.
+
+The removal is intentional. The upstream scaffold copied a template and
+performed unrestricted byte replacement across copied files. That replacement
+could mutate an embedded protobuf raw descriptor without updating its encoded
+length, producing an initialization panic. OpenKratos does not preserve or
+repair that implicit source rewriting workflow.
+
+Use explicit tools instead:
+
+| Removed command | Replacement |
+| --- | --- |
+| `kratos new` | Create a normal Go module or use an auditable repository template |
+| `kratos run` | `go run ./cmd/server -conf ./configs` |
+| `kratos proto ...` | A repository-owned Buf or `protoc` configuration |
+| `kratos upgrade` | `go get`, `go install`, and `go mod tidy` |
+| `kratos changelog` | Git history and GitHub release notes |
+
+The following deterministic Protobuf generators remain supported as separate
+modules:
+
+```text
+github.com/openkratos/kratos/cmd/protoc-gen-go-http
+github.com/openkratos/kratos/cmd/protoc-gen-go-errors
+```
+
+`protoc-gen-go-http` declares protobuf Editions support through Edition 2024.
+Generated named `body` and `response_body` access uses API-aware accessors and
+assignment, so Edition 2023 Open and Opaque messages compile for message,
+scalar, repeated, map, explicit-presence, and oneof fields. Whole-message `*`
+bindings retain their existing behavior.
+
+## HTTP Routing
+
+OpenKratos replaces `github.com/gorilla/mux` with a routing tree built on the
+standard library's `http.ServeMux`. Generated Google AIP paths are compiled to
+standard-library method and path patterns. Matched variables remain available
+through both `transport/http.Context.Vars()` and `http.Request.PathValue()`.
+
+The public differences are:
+
+- Literal and more-specific patterns win according to `http.ServeMux`
+  precedence, independent of registration order.
+- Conflicting patterns panic during registration instead of silently selecting
+  the first registered route.
+- AIP variables, terminal `**` wildcards, terminal custom verbs, and
+  single-segment legacy regular expressions are supported.
+- Arbitrary Gorilla regular expressions spanning multiple path segments are
+  rejected. Express the route as an AIP template instead.
+- `StrictSlash` is deprecated and has no effect. Path cleaning and
+  trailing-slash redirects use `http.ServeMux` behavior.
+- `HandlePrefix` uses path-segment prefix semantics, not arbitrary string-prefix
+  matching.
+- Unknown routes do not fall through to the process-wide
+  `http.DefaultServeMux`. Pass it explicitly to `NotFoundHandler` if that
+  behavior is required.
+- A method mismatch uses the configured method-not-allowed handler rather than
+  relying on Gorilla's matcher order.
+- Single-segment path variables percent-encode slash and URL delimiters;
+  structural slashes are retained only for AIP multi-segment templates.
+- Direct HTTP client endpoints retain their configured base path. Discovery
+  service names remain separate from endpoint path prefixes.
+
+Router benchmarks and acceptance criteria are documented in
+[`docs/design/performance.md`](docs/design/performance.md).
+
+## HTTP Streaming
+
+SSE and WebSocket server streams preserve values from the request context but
+detach its deadline and cancellation. A unary HTTP server timeout therefore
+does not terminate a long-lived stream. Stream lifetime is controlled by I/O
+errors, connection closure, and explicit `SetReadDeadline` or
+`SetWriteDeadline` calls.
+
+This differs from the upstream baseline's uniform request-timeout behavior. It
+also means a stream that requires a maximum lifetime must set that policy
+explicitly; the server's unary timeout is not a stream lifetime limit.
+
+## Selector Performance
+
+The selector APIs and selection results are retained, but two implementations
+have different steady-state costs:
+
+- WRR compares the current-weight map size with the active node count and only
+  builds a cleanup set when stale entries can exist.
+- P2C uses concurrency-safe `math/rand/v2` top-level functions, removing the
+  per-balancer random-number mutex.
+
+The adopted upstream revisions, invariant tests, and controlled benchmark
+results are recorded in
+[`docs/benchmarks/selectors-2026-07-22.md`](docs/benchmarks/selectors-2026-07-22.md).
+
+## Application Lifecycle
+
+`App.Stop` is idempotent. Before-stop, deregistration, server-stop, and
+after-stop stages continue independently where safe, and multiple failures are
+returned through `errors.Join` instead of later failures hiding earlier ones.
+`AfterStopTimeout` configures the bounded after-stop stage; its default is ten
+seconds. After-stop callbacks preserve application-context values without
+inheriting its cancellation.
+
+## Config Reload
+
+A watch event rebuilds all configured sources, resolves cross-source
+placeholders, and atomically publishes one complete reader snapshot. Readers no
+longer observe a mixture of old and new source values during reload. File
+watchers silently skip hidden files rather than surfacing them as reload errors.
+
+## Observability
+
+OpenTelemetry tracing uses semantic conventions v1.41. HTTP and gRPC attributes
+are emitted separately, peer ports are integers, gRPC methods are validated,
+and invalid original method strings remain available for diagnosis. The former
+custom `rpc.status_code` field is now `kratos.error.code`, avoiding collision
+with standard RPC semantic attributes.
+
+## Inherited Kratos v3 Behavior
+
+The following are important Kratos v3 behaviors but are not OpenKratos
+differences:
+
+- Logging uses `log/slog`.
+- The errors package exposes standard-library-compatible error wrappers.
+- `encoding/json` and `encoding/protojson` are separate codecs.
+- Generated HTTP handlers bind request data before service middleware runs.
+
+These items only move into the difference sections after OpenKratos changes
+their behavior and completes validation.
+
+## Migration
+
+Follow [`docs/migration/kratos-to-openkratos.md`](docs/migration/kratos-to-openkratos.md)
+for an executable migration checklist. Existing Kratos v2 applications should
+first account for the Kratos v2-to-v3 API changes because OpenKratos starts from
+the v3 design rather than providing a direct v2 compatibility layer.
+
+## Maintenance Rules
+
+Every change that alters a public API, default behavior, wire format, module,
+tool, or supported Go version must update this document in the same change.
+
+- Record current behavior here, not aspirations.
+- Put pending upstream decisions in `docs/upstream-adoptions.md`.
+- Put reproducible measurements in `docs/design/performance.md` or
+  `docs/benchmarks/`.
+- Add migration instructions before merging a breaking change.
+- Link the implementation commit and focused tests after the change is
+  committed.
+- Re-verify the comparison date and baseline before each release.
