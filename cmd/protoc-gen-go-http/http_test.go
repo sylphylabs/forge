@@ -77,8 +77,9 @@ func TestHTTPTemplateClientUsesBuildPathAndProtoJSONHeaders(t *testing.T) {
 	}
 	got := sd.execute()
 	for _, want := range []string{
-		`path := http.BuildPath(pattern, in, http.WithQueryParams())`,
-		`path := http.BuildPath(pattern, in)`,
+		`path, err := http.BuildPath(pattern, in, http.WithQueryParams())`,
+		`path, err := http.BuildPath(pattern, in)`,
+		`if err != nil`,
 		`http.Accept("application/protojson")`,
 		`http.ContentType("application/protojson")`,
 	} {
@@ -188,7 +189,7 @@ func TestHTTPTemplateStreamsAndHTTPBody(t *testing.T) {
 		`ChatHello(Greeter_ChatHelloServer) error`,
 		`stream, err := http.NewWebSocketServerStream(ctx)`,
 		`func (x *Greeter_ChatHelloHTTPClient) open(m *HelloRequest) error`,
-		`path := http.BuildPath(x.pattern, m, http.WithQueryParams())`,
+		`path, err := http.BuildPath(x.pattern, m, http.WithQueryParams())`,
 		`stream, err := x.cc.WebSocket(x.ctx, path, opts...)`,
 		`http.ContentType("application/protojson")`,
 		`return &Greeter_ChatHelloHTTPClient{ctx: ctx, cc: c.cc, pattern: pattern, opts: opts}, nil`,

@@ -68,13 +68,16 @@ func NewGreeterHTTPClient(client *http.Client) GreeterHTTPClient {
 func (c *GreeterHTTPClientImpl) SayHello(ctx context.Context, in *HelloRequest, opts ...http.CallOption) (*HelloReply, error) {
 	var out HelloReply
 	pattern := "/helloworld/{name}"
-	path := http.BuildPath(pattern, in, http.WithQueryParams())
+	path, err := http.BuildPath(pattern, in, http.WithQueryParams())
+	if err != nil {
+		return nil, err
+	}
 	opts = append([]http.CallOption{
 		http.Accept("application/protojson"),
 		http.Operation(OperationGreeterSayHello),
 		http.PathTemplate(pattern),
 	}, opts...)
-	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	err = c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {
 		return nil, err
 	}

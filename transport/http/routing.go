@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,6 +12,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"unicode"
+
+	kratoserrors "github.com/openkratos/kratos/errors"
+	"github.com/openkratos/kratos/internal/httprule"
 )
 
 const internalPathValuePrefix = "__openkratos"
@@ -18,7 +22,8 @@ const internalPathValuePrefix = "__openkratos"
 type routeContextKey struct{}
 
 type matchedRoute struct {
-	route *compiledRoute
+	route  *compiledRoute
+	values map[string]string
 }
 
 type routePart struct {
@@ -37,31 +42,41 @@ type compiledRoute struct {
 	pattern  string
 	template string
 	vars     []routeVariable
+	httpRule *httprule.Template
 }
 
-func (r *compiledRoute) match(req *http.Request) bool {
+func (r *compiledRoute) match(req *http.Request) (map[string]string, bool, error) {
+	if r.httpRule != nil {
+		values, err := r.httpRule.Extract(req.URL.EscapedPath())
+		if stderrors.Is(err, httprule.ErrPathMismatch) {
+			return nil, false, nil
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		return values, true, nil
+	}
+	values := make(map[string]string, len(r.vars))
 	for _, variable := range r.vars {
 		value, ok := variable.value(req)
 		if !ok || variable.validate != nil && !variable.validate.MatchString(value) {
-			return false
+			return nil, false, nil
 		}
+		values[variable.name] = value
 	}
-	return true
+	return values, true, nil
 }
 
-func (r *compiledRoute) setPathValues(req *http.Request) {
-	for _, variable := range r.vars {
-		value, ok := variable.value(req)
-		if ok {
-			req.SetPathValue(variable.name, value)
-		}
+func (r *compiledRoute) setPathValues(req *http.Request, values map[string]string) {
+	for name, value := range values {
+		req.SetPathValue(name, value)
 	}
 }
 
-func (r *compiledRoute) values(req *http.Request) url.Values {
+func (r *compiledRoute) values(raw map[string]string) url.Values {
 	values := make(url.Values, len(r.vars))
 	for _, variable := range r.vars {
-		value, ok := variable.value(req)
+		value, ok := raw[variable.name]
 		if ok {
 			values[variable.name] = []string{value}
 		}
@@ -133,17 +148,22 @@ func (b *routeBucket) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	for i := range *routes {
 		candidate := &(*routes)[i]
-		if !candidate.route.match(req) {
-			continue
-		}
 		if len(candidate.route.vars) == 0 && candidate.route.template == candidate.route.pattern {
 			candidate.handler.ServeHTTP(w, req)
 			return
 		}
-		match := &matchedRoute{route: &candidate.route}
+		values, ok, err := candidate.route.match(req)
+		if err != nil {
+			b.router.serveRouteError(w, req, err)
+			return
+		}
+		if !ok {
+			continue
+		}
+		match := &matchedRoute{route: &candidate.route, values: values}
 		ctx := context.WithValue(req.Context(), routeContextKey{}, match)
 		matchedReq := req.WithContext(ctx)
-		candidate.route.setPathValues(matchedReq)
+		candidate.route.setPathValues(matchedReq, values)
 		candidate.handler.ServeHTTP(w, matchedReq)
 		return
 	}
@@ -165,6 +185,7 @@ type routeMux struct {
 	headers                 []headerRoute
 	notFoundHandler         http.Handler
 	methodNotAllowedHandler http.Handler
+	errorEncoder            EncodeErrorFunc
 }
 
 func newRouteMux() *routeMux {
@@ -307,6 +328,22 @@ func (r *routeMux) serveNotFound(w http.ResponseWriter, req *http.Request) {
 	handler.ServeHTTP(w, req)
 }
 
+func (r *routeMux) serveRouteError(w http.ResponseWriter, req *http.Request, err error) {
+	r.mu.RLock()
+	encode := r.errorEncoder
+	r.mu.RUnlock()
+	if encode == nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	var escape url.EscapeError
+	if stderrors.As(err, &escape) {
+		encode(w, req, kratoserrors.BadRequest("HTTP_TRANSCODING", err.Error()))
+		return
+	}
+	encode(w, req, kratoserrors.InternalServer("HTTP_TRANSCODING", err.Error()))
+}
+
 func routeTemplate(req *http.Request) string {
 	if route, ok := req.Context().Value(routeContextKey{}).(*matchedRoute); ok {
 		return route.route.template
@@ -325,10 +362,31 @@ func requestVars(req *http.Request) url.Values {
 	if !ok || len(route.route.vars) == 0 {
 		return url.Values{}
 	}
-	return route.route.values(req)
+	return route.route.values(route.values)
 }
 
 func compileRoute(template string) (compiledRoute, error) {
+	if usesGoogleTemplate(template) {
+		rule, err := httprule.Parse(template)
+		if err != nil {
+			return compiledRoute{}, err
+		}
+		variables := rule.Variables()
+		compiled := compiledRoute{
+			pattern:  rule.ServeMuxPattern(),
+			template: template,
+			vars:     make([]routeVariable, len(variables)),
+			httpRule: rule,
+		}
+		for i, variable := range variables {
+			compiled.vars[i].name = variable.FieldPath
+		}
+		return compiled, nil
+	}
+	return compileLegacyRoute(template)
+}
+
+func compileLegacyRoute(template string) (compiledRoute, error) {
 	if template == "" || template[0] != '/' {
 		return compiledRoute{}, fmt.Errorf("path must start with '/'")
 	}
@@ -433,6 +491,32 @@ func compileRoute(template string) (compiledRoute, error) {
 		compiled.pattern += "{$}"
 	}
 	return compiled, nil
+}
+
+func usesGoogleTemplate(template string) bool {
+	for cursor := 0; cursor < len(template); {
+		open := strings.IndexByte(template[cursor:], '{')
+		if open < 0 {
+			break
+		}
+		open += cursor
+		close := strings.IndexByte(template[open+1:], '}')
+		if close < 0 {
+			return true
+		}
+		close += open + 1
+		content := template[open+1 : close]
+		if strings.ContainsRune(content, '=') || !strings.ContainsRune(content, ':') && !strings.HasSuffix(content, "...") {
+			return true
+		}
+		cursor = close + 1
+	}
+	for _, segment := range strings.Split(template, "/") {
+		if segment == "*" || segment == "**" {
+			return true
+		}
+	}
+	return false
 }
 
 func parseRouteVariable(content string) (name, valueTemplate string, validate *regexp.Regexp, err error) {

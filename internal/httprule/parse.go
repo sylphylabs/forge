@@ -142,6 +142,9 @@ func parsePart(raw string, offset int) (pathPart, *Variable, error) {
 		if !validFieldPath(fieldPath) {
 			return pathPart{}, nil, syntaxError(offset+1, fmt.Sprintf("invalid field path %q", fieldPath))
 		}
+		if strings.HasPrefix(fieldPath, pathValuePrefix) {
+			return pathPart{}, nil, syntaxError(offset+1, fmt.Sprintf("field path %q uses a reserved prefix", fieldPath))
+		}
 		if strings.ContainsRune(valueTemplate, '=') || valueTemplate == "" {
 			return pathPart{}, nil, syntaxError(offset+1+len(fieldPath), "invalid variable template")
 		}

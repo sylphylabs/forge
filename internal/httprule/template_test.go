@@ -60,6 +60,7 @@ func TestParseRejectsInvalidTemplates(t *testing.T) {
 		"", "v1/books", "/v1/", "/v1//books", "/v1/{name", "/v1/name}",
 		"/v1/x{name}", "/v1/{name=}", "/v1/{name=foo/**/bar}",
 		"/v1/{name=**}/books", "/v1/{name}/{name}", "/v1/{9name}",
+		"/v1/{__openkratos0}",
 		"/v1/{name=foo:bar}", "/v1/books:", "/v1/books:archive/more",
 		"/v1/a b", "/v1/a%2", "/v1/{name={nested}}",
 	}

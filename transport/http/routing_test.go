@@ -1,9 +1,13 @@
 package http
 
 import (
+	stderrors "errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
+
+	kratoserrors "github.com/openkratos/kratos/errors"
 )
 
 func TestCompileRoute(t *testing.T) {
@@ -67,6 +71,69 @@ func TestRouteMuxAIPVariables(t *testing.T) {
 	}
 	if got := w.Body.String(); got != "publishers/acme/books/42" {
 		t.Fatalf("body = %q", got)
+	}
+}
+
+func TestRouteMuxGoogleEscapedVariables(t *testing.T) {
+	srv := NewServer()
+	route := srv.Route("/")
+	route.GET("/single/{name}", func(ctx Context) error {
+		return ctx.String(http.StatusOK, ctx.Vars().Get("name")+"|"+ctx.Request().PathValue("name"))
+	})
+	route.GET("/multi/{name=**}", func(ctx Context) error {
+		return ctx.String(http.StatusOK, ctx.Vars().Get("name")+"|"+ctx.Request().PathValue("name"))
+	})
+
+	tests := []struct {
+		path string
+		want string
+	}{
+		{path: "/single/a%2Fb", want: "a/b|a/b"},
+		{path: "/multi/a%2Fb/c%3Fd", want: "a%2Fb/c?d|a%2Fb/c?d"},
+		{path: "/multi/a%2fb/c", want: "a%2fb/c|a%2fb/c"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			response := httptest.NewRecorder()
+			srv.ServeHTTP(response, request)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+			}
+			if got := response.Body.String(); got != tt.want {
+				t.Fatalf("body = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRouteMuxTranscodingErrorsUseConfiguredEncoder(t *testing.T) {
+	var encoded error
+	srv := NewServer(ErrorEncoder(func(w http.ResponseWriter, _ *http.Request, err error) {
+		encoded = err
+		w.WriteHeader(kratoserrors.Code(err))
+	}))
+	tests := []struct {
+		name string
+		err  error
+		code int
+	}{
+		{name: "malformed escape", err: url.EscapeError("%ZZ"), code: http.StatusBadRequest},
+		{name: "layout invariant", err: stderrors.New("layout mismatch"), code: http.StatusInternalServerError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			encoded = nil
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, "/", nil)
+			srv.router.serveRouteError(response, request, tt.err)
+			if encoded == nil {
+				t.Fatal("configured error encoder was not called")
+			}
+			if got := kratoserrors.Code(encoded); got != tt.code {
+				t.Fatalf("code = %d, want %d", got, tt.code)
+			}
+		})
 	}
 }
 

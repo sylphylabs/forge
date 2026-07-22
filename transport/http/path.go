@@ -1,31 +1,26 @@
 package http
 
 import (
-	"net/url"
+	"encoding/base64"
+	stderrors "errors"
+	"fmt"
+	"math"
 	"reflect"
-	"regexp"
+	"strconv"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/openkratos/kratos/encoding/form"
+	"github.com/openkratos/kratos/internal/httprule"
 )
 
-var pathTemplateParamRE = regexp.MustCompile(`{([.\w]+)(=[^{}]*)?}`)
-
-var escapedPathSegmentSubDelimiters = strings.NewReplacer(
-	"%21", "!",
-	"%24", "$",
-	"%26", "&",
-	"%27", "'",
-	"%28", "(",
-	"%29", ")",
-	"%2A", "*",
-	"%2B", "+",
-	"%2C", ",",
-	"%3B", ";",
-	"%3D", "=",
+var (
+	// ErrUnspecifiedHTTPMethod indicates that a rule cannot select one client method.
+	ErrUnspecifiedHTTPMethod = stderrors.New("http method is unspecified")
+	// ErrUnboundPathWildcard indicates that a template wildcard has no request field.
+	ErrUnboundPathWildcard = stderrors.New("http path template contains an unbound wildcard")
 )
 
 // BuildPathOption configures path construction.
@@ -50,60 +45,57 @@ func WithOmitFields(fields ...string) BuildPathOption {
 	}
 }
 
-// BuildPath builds an HTTP request path from a path template and request message.
-func BuildPath(pathTemplate string, msg any, opts ...BuildPathOption) string {
-	if msg == nil || (reflect.ValueOf(msg).Kind() == reflect.Pointer && reflect.ValueOf(msg).IsNil()) {
-		return pathTemplate
+// BuildPath builds an HTTP request path from a Google HTTP template and request message.
+func BuildPath(pathTemplate string, msg proto.Message, opts ...BuildPathOption) (string, error) {
+	template, err := httprule.Parse(pathTemplate)
+	if err != nil {
+		return "", fmt.Errorf("build HTTP path: %w", err)
 	}
-
 	options := buildPathOptions{}
 	for _, opt := range opts {
 		opt(&options)
 	}
-
-	queryParams, _ := form.EncodeValues(msg)
-	pathParams := make(map[string]struct{})
-	path := pathTemplate
-	if strings.ContainsRune(pathTemplate, '{') {
-		path = pathTemplateParamRE.ReplaceAllStringFunc(pathTemplate, func(in string) string {
-			matches := pathTemplateParamRE.FindStringSubmatch(in)
-			fieldPath := matches[1]
-			queryKey := encodedFieldPath(msg, fieldPath)
-			pathParams[queryKey] = struct{}{}
-			valueTemplate := "*"
-			if matches[2] != "" {
-				valueTemplate = strings.TrimPrefix(matches[2], "=")
-			}
-			return escapePathValue(queryParams.Get(queryKey), valueTemplate)
+	if isNilMessage(msg) {
+		if len(template.Variables()) > 0 {
+			return "", stderrors.New("build HTTP path: request message is nil")
+		}
+		path, err := template.Expand(func(string) (string, error) {
+			return "", stderrors.New("request message is nil")
 		})
+		if err != nil {
+			return "", mapPathError(err)
+		}
+		return path, nil
 	}
 
+	path, err := template.Expand(func(fieldPath string) (string, error) {
+		return pathFieldText(msg.ProtoReflect(), fieldPath)
+	})
+	if err != nil {
+		return "", mapPathError(err)
+	}
 	if !options.queryParams {
-		if v, ok := msg.(proto.Message); ok {
-			if query := form.EncodeFieldMask(v.ProtoReflect()); query != "" {
-				return path + "?" + query
-			}
-		}
-		return path
+		return path, nil
+	}
+
+	queryParams, err := form.EncodeValues(msg)
+	if err != nil {
+		return "", fmt.Errorf("build HTTP query: %w", err)
+	}
+	for _, variable := range template.Variables() {
+		delete(queryParams, encodedFieldPath(msg, variable.FieldPath))
 	}
 	if len(queryParams) > 0 {
-		for key := range pathParams {
-			delete(queryParams, key)
-		}
 		omitQueryParams(queryParams, options.omitFields)
 		if query := queryParams.Encode(); query != "" {
 			path += "?" + query
 		}
 	}
-	return path
+	return path, nil
 }
 
-func encodedFieldPath(msg any, fieldPath string) string {
-	message, ok := msg.(proto.Message)
-	if !ok {
-		return fieldPath
-	}
-	fields := message.ProtoReflect().Descriptor().Fields()
+func encodedFieldPath(msg proto.Message, fieldPath string) string {
+	fields := msg.ProtoReflect().Descriptor().Fields()
 	parts := strings.Split(fieldPath, ".")
 	encoded := make([]string, 0, len(parts))
 	for i, part := range parts {
@@ -126,56 +118,91 @@ func encodedFieldPath(msg any, fieldPath string) string {
 	return strings.Join(encoded, ".")
 }
 
-func escapePathValue(value, valueTemplate string) string {
-	if valueTemplate == "**" {
-		return escapePathSegments(value)
+func isNilMessage(msg proto.Message) bool {
+	if msg == nil {
+		return true
 	}
-	if valueTemplate == "*" {
-		return escapePathSegment(value)
-	}
+	value := reflect.ValueOf(msg)
+	return value.Kind() == reflect.Pointer && value.IsNil()
+}
 
-	templateSegments := strings.Split(valueTemplate, "/")
-	valueSegments := strings.Split(value, "/")
-	escaped := make([]string, 0, len(valueSegments))
-	valueIndex := 0
-	for templateIndex, segment := range templateSegments {
-		switch segment {
-		case "*":
-			if valueIndex >= len(valueSegments) {
-				return escapePathSegment(value)
-			}
-			escaped = append(escaped, escapePathSegment(valueSegments[valueIndex]))
-			valueIndex++
-		case "**":
-			if templateIndex != len(templateSegments)-1 {
-				return escapePathSegment(value)
-			}
-			escaped = append(escaped, escapePathSegments(strings.Join(valueSegments[valueIndex:], "/")))
-			valueIndex = len(valueSegments)
-		default:
-			if valueIndex >= len(valueSegments) || valueSegments[valueIndex] != segment {
-				return escapePathSegment(value)
-			}
-			escaped = append(escaped, segment)
-			valueIndex++
+func mapPathError(err error) error {
+	if stderrors.Is(err, httprule.ErrUnboundWildcard) {
+		return fmt.Errorf("%w: %v", ErrUnboundPathWildcard, err)
+	}
+	return fmt.Errorf("build HTTP path: %w", err)
+}
+
+func pathFieldText(message protoreflect.Message, fieldPath string) (string, error) {
+	parts := strings.Split(fieldPath, ".")
+	for i, part := range parts {
+		field := message.Descriptor().Fields().ByName(protoreflect.Name(part))
+		if field == nil {
+			return "", fmt.Errorf("field %q does not exist", strings.Join(parts[:i+1], "."))
 		}
+		if i < len(parts)-1 {
+			if field.IsList() || field.IsMap() || field.Kind() != protoreflect.MessageKind && field.Kind() != protoreflect.GroupKind {
+				return "", fmt.Errorf("field %q is not a singular message", strings.Join(parts[:i+1], "."))
+			}
+			if field.HasPresence() && !message.Has(field) {
+				return "", fmt.Errorf("field %q is not set", strings.Join(parts[:i+1], "."))
+			}
+			message = message.Get(field).Message()
+			continue
+		}
+		if field.IsList() || field.IsMap() {
+			return "", fmt.Errorf("field %q is repeated or mapped", fieldPath)
+		}
+		if field.Kind() == protoreflect.MessageKind || field.Kind() == protoreflect.GroupKind {
+			return "", fmt.Errorf("field %q is a message", fieldPath)
+		}
+		if field.HasPresence() && !message.Has(field) {
+			return "", fmt.Errorf("field %q is not set", fieldPath)
+		}
+		return formatPathScalar(field, message.Get(field))
 	}
-	if valueIndex != len(valueSegments) {
-		return escapePathSegment(value)
-	}
-	return strings.Join(escaped, "/")
+	return "", fmt.Errorf("field path %q is empty", fieldPath)
 }
 
-func escapePathSegments(value string) string {
-	segments := strings.Split(value, "/")
-	for i := range segments {
-		segments[i] = escapePathSegment(segments[i])
+func formatPathScalar(field protoreflect.FieldDescriptor, value protoreflect.Value) (string, error) {
+	switch field.Kind() {
+	case protoreflect.BoolKind:
+		return strconv.FormatBool(value.Bool()), nil
+	case protoreflect.EnumKind:
+		descriptor := field.Enum().Values().ByNumber(value.Enum())
+		if descriptor == nil {
+			return strconv.FormatInt(int64(value.Enum()), 10), nil
+		}
+		return string(descriptor.Name()), nil
+	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind,
+		protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
+		return strconv.FormatInt(value.Int(), 10), nil
+	case protoreflect.Uint32Kind, protoreflect.Fixed32Kind, protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+		return strconv.FormatUint(value.Uint(), 10), nil
+	case protoreflect.FloatKind:
+		return formatPathFloat(value.Float(), 32), nil
+	case protoreflect.DoubleKind:
+		return formatPathFloat(value.Float(), 64), nil
+	case protoreflect.StringKind:
+		return value.String(), nil
+	case protoreflect.BytesKind:
+		return base64.StdEncoding.EncodeToString(value.Bytes()), nil
+	default:
+		return "", fmt.Errorf("field %q has unsupported kind %s", field.FullName(), field.Kind())
 	}
-	return strings.Join(segments, "/")
 }
 
-func escapePathSegment(value string) string {
-	return escapedPathSegmentSubDelimiters.Replace(url.PathEscape(value))
+func formatPathFloat(value float64, bits int) string {
+	switch {
+	case math.IsNaN(value):
+		return "NaN"
+	case math.IsInf(value, 1):
+		return "Infinity"
+	case math.IsInf(value, -1):
+		return "-Infinity"
+	default:
+		return strconv.FormatFloat(value, 'g', -1, bits)
+	}
 }
 
 func omitQueryParams(values map[string][]string, fields []string) {

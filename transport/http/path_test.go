@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"testing"
 
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
@@ -15,6 +16,7 @@ func TestBuildPath(t *testing.T) {
 		request      *binding.HelloRequest
 		opts         []BuildPathOption
 		want         string
+		wantErr      bool
 	}{
 		{
 			name:         "path",
@@ -47,7 +49,7 @@ func TestBuildPath(t *testing.T) {
 			name:         "escape single segment",
 			pathTemplate: "/helloworld/{name}",
 			request:      &binding.HelloRequest{Name: "kratos/admin?enabled=true#fragment"},
-			want:         "/helloworld/kratos%2Fadmin%3Fenabled=true%23fragment",
+			want:         "/helloworld/kratos%2Fadmin%3Fenabled%3Dtrue%23fragment",
 		},
 		{
 			name:         "preserve multi segment wildcard",
@@ -59,7 +61,7 @@ func TestBuildPath(t *testing.T) {
 			name:         "reject mismatched resource structure safely",
 			pathTemplate: "/v1/{name=publishers/*/books/*}",
 			request:      &binding.HelloRequest{Name: "organizations/acme/secrets/root"},
-			want:         "/v1/organizations%2Facme%2Fsecrets%2Froot",
+			wantErr:      true,
 		},
 		{
 			name:         "proto text field name",
@@ -78,18 +80,72 @@ func TestBuildPath(t *testing.T) {
 			opts:         []BuildPathOption{WithQueryParams()},
 			want:         "/v1/openkratos",
 		},
+		{
+			name:         "field mask query",
+			pathTemplate: "/v1/{name}",
+			request:      &binding.HelloRequest{Name: "books/1", UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"name", "sub.naming"}}},
+			opts:         []BuildPathOption{WithQueryParams()},
+			want:         "/v1/books%2F1?updateMask=name%2Csub.naming",
+		},
+		{
+			name:         "int64 path lexical form",
+			pathTemplate: "/v1/{opt_int64}",
+			request: func() *binding.HelloRequest {
+				value := int64(9223372036854775807)
+				return &binding.HelloRequest{OptInt64: &value}
+			}(),
+			want: "/v1/9223372036854775807",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := BuildPath(tt.pathTemplate, tt.request, tt.opts...); got != tt.want {
+			got, err := BuildPath(tt.pathTemplate, tt.request, tt.opts...)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected an error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
 				t.Errorf("expected %s got %s", tt.want, got)
 			}
 		})
 	}
 }
 
-func TestBuildPathCompatibility(t *testing.T) {
+func TestBuildPathErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		request *binding.HelloRequest
+		wantIs  error
+	}{
+		{name: "invalid template", pattern: "v1/{name}", request: &binding.HelloRequest{Name: "x"}},
+		{name: "missing field", pattern: "/v1/{missing}", request: &binding.HelloRequest{}},
+		{name: "unset optional", pattern: "/v1/{opt_string}", request: &binding.HelloRequest{}},
+		{name: "repeated field", pattern: "/v1/{test_repeated}", request: &binding.HelloRequest{TestRepeated: []string{"a"}}},
+		{name: "message field", pattern: "/v1/{sub}", request: &binding.HelloRequest{Sub: &binding.Sub{Name: "a"}}},
+		{name: "nil request", pattern: "/v1/{name}"},
+		{name: "unbound wildcard", pattern: "/v1/*", request: &binding.HelloRequest{}, wantIs: ErrUnboundPathWildcard},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := BuildPath(tt.pattern, tt.request)
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			if tt.wantIs != nil && !errors.Is(err, tt.wantIs) {
+				t.Fatalf("error = %v, want errors.Is(_, %v)", err, tt.wantIs)
+			}
+		})
+	}
+}
+
+func TestBuildPathRejectsAbsoluteTemplates(t *testing.T) {
 	tests := []struct {
 		pathTemplate string
 		request      *binding.HelloRequest
@@ -127,7 +183,7 @@ func TestBuildPathCompatibility(t *testing.T) {
 			want:         "http://helloworld.Greeter/helloworld/test/sub/5566!!!",
 		},
 		{
-			pathTemplate: "http://helloworld.Greeter/helloworld/sub",
+			pathTemplate: "/helloworld/sub",
 			request:      &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "2233!!!"}},
 			want:         "http://helloworld.Greeter/helloworld/sub",
 		},
@@ -202,8 +258,8 @@ func TestBuildPathCompatibility(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if path := BuildPath(test.pathTemplate, test.request, test.opts...); path != test.want {
-			t.Fatalf("want: %s, got: %s", test.want, path)
+		if _, err := BuildPath(test.pathTemplate, test.request, test.opts...); err == nil {
+			t.Errorf("BuildPath(%q) succeeded", test.pathTemplate)
 		}
 	}
 }
@@ -217,7 +273,7 @@ func BenchmarkBuildPath(b *testing.B) {
 	}{
 		{
 			name:         "NoParams",
-			pathTemplate: "http://helloworld.Greeter/helloworld/sub",
+			pathTemplate: "/helloworld/sub",
 			msg: &binding.HelloRequest{
 				Name: "test",
 				Sub:  &binding.Sub{Name: "kratos"},
@@ -237,7 +293,7 @@ func BenchmarkBuildPath(b *testing.B) {
 		},
 		{
 			name:         "WithParams",
-			pathTemplate: "http://helloworld.Greeter/helloworld/{name}/sub/{sub.naming}",
+			pathTemplate: "/helloworld/{name}/sub/{sub.naming}",
 			msg: &binding.HelloRequest{
 				Name: "test",
 				Sub:  &binding.Sub{Name: "kratos"},
@@ -245,7 +301,7 @@ func BenchmarkBuildPath(b *testing.B) {
 		},
 		{
 			name:         "WithParamsAndQuery",
-			pathTemplate: "http://helloworld.Greeter/helloworld/{name}/sub/{sub.naming}",
+			pathTemplate: "/helloworld/{name}/sub/{sub.naming}",
 			msg: &binding.HelloRequest{
 				Name: "test",
 				Sub:  &binding.Sub{Name: "kratos"},
@@ -261,7 +317,7 @@ func BenchmarkBuildPath(b *testing.B) {
 		b.Run(bm.name, func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				BuildPath(bm.pathTemplate, bm.msg, bm.opts...)
+				_, _ = BuildPath(bm.pathTemplate, bm.msg, bm.opts...)
 			}
 		})
 	}
