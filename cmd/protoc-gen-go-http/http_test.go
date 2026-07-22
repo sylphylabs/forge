@@ -1,6 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -58,15 +62,16 @@ func TestHTTPTemplateClientUsesBuildPathAndProtoJSONHeaders(t *testing.T) {
 				HasVars:      true,
 			},
 			{
-				Name:         "CreateHello",
-				OriginalName: "CreateHello",
-				Request:      "CreateHelloRequest",
-				Reply:        "HelloReply",
-				Path:         "/helloworld",
-				PathTemplate: "/helloworld",
-				Method:       "POST",
-				HasBody:      true,
-				Body:         "",
+				Name:          "CreateHello",
+				OriginalName:  "CreateHello",
+				Request:       "CreateHelloRequest",
+				Reply:         "HelloReply",
+				Path:          "/helloworld",
+				PathTemplate:  "/helloworld",
+				Method:        "POST",
+				HasBody:       true,
+				BodyField:     "*",
+				BodyProtoJSON: true,
 			},
 		},
 	}
@@ -113,19 +118,26 @@ func TestHTTPTemplateStreamsAndHTTPBody(t *testing.T) {
 				ServerStreaming: true,
 			},
 			{
-				Name:          "UploadHello",
-				OriginalName:  "UploadHello",
-				Request:       "UploadHelloRequest",
-				Reply:         "UploadHelloReply",
-				Path:          "/helloworld/upload",
-				PathTemplate:  "/helloworld/upload",
-				Method:        "POST",
-				HasBody:       true,
-				Body:          ".Body",
-				BodyField:     "body",
-				BodyQueryName: "body",
-				BodyHTTPBody:  true,
-				ResponseBody:  ".Body",
+				Name:                "UploadHello",
+				OriginalName:        "UploadHello",
+				Request:             "UploadHelloRequest",
+				Reply:               "UploadHelloReply",
+				Path:                "/helloworld/upload",
+				PathTemplate:        "/helloworld/upload",
+				Method:              "POST",
+				HasBody:             true,
+				BodyField:           "body",
+				BodyQueryName:       "body",
+				BodyGetter:          ".GetBody()",
+				BodyType:            "*HTTPBody",
+				BodyAssignment:      "in.SetBody(body)",
+				BodyHTTPBody:        true,
+				BodyMessage:         true,
+				BodyProtoJSON:       true,
+				ResponseBodyGetter:  ".GetBody()",
+				ResponseBodyType:    "*HTTPBody",
+				ResponseAssignment:  "out.SetBody(responseBody)",
+				ResponseBodyMessage: true,
 			},
 			{
 				Name:            "ChatData",
@@ -136,10 +148,13 @@ func TestHTTPTemplateStreamsAndHTTPBody(t *testing.T) {
 				PathTemplate:    "/v1/bitto/chat",
 				Method:          "GET",
 				HasBody:         true,
-				Body:            ".Data",
 				BodyField:       "data",
 				BodyQueryName:   "data",
+				BodyGetter:      ".GetData()",
+				BodyType:        "*Data",
+				BodyAssignment:  "in.SetData(body)",
 				BodyMessage:     true,
+				BodyProtoJSON:   true,
 				ClientStreaming: true,
 				ServerStreaming: true,
 			},
@@ -154,9 +169,11 @@ func TestHTTPTemplateStreamsAndHTTPBody(t *testing.T) {
 				PathTemplate:    "/v1/bitto/text",
 				Method:          "GET",
 				HasBody:         true,
-				Body:            ".Text",
 				BodyField:       "text",
 				BodyQueryName:   "text",
+				BodyGetter:      ".GetText()",
+				BodyType:        "string",
+				BodyAssignment:  "in.SetText(body)",
 				BodyMessage:     false,
 				ClientStreaming: true,
 				ServerStreaming: true,
@@ -175,12 +192,12 @@ func TestHTTPTemplateStreamsAndHTTPBody(t *testing.T) {
 		`stream, err := x.cc.WebSocket(x.ctx, path, opts...)`,
 		`http.ContentType("application/protojson")`,
 		`return &Greeter_ChatHelloHTTPClient{ctx: ctx, cc: c.cc, pattern: pattern, opts: opts}, nil`,
-		`http.ContentType(http.BodyContentType(in.Body))`,
+		`http.ContentType(http.BodyContentType(in.GetBody()))`,
 		`http.WithOmitFields("body")`,
-		`return ctx.Result(200, reply.Body)`,
+		`return ctx.Result(200, reply.GetBody())`,
 		// Client-streaming RPC with a streamable (message-kind) named body field.
 		`stream, err := http.NewWebSocketServerStream(ctx, http.WithStreamBodyField("data"))`,
-		`return x.ClientStream.Send(m.Data)`,
+		`return x.ClientStream.Send(m.GetData())`,
 		// Client-streaming RPC with a scalar named body: whole message is streamed.
 		`func (x *Greeter_ChatTextHTTPClient) Send(m *ChatTextRequest) error`,
 	} {
@@ -197,4 +214,73 @@ func TestHTTPTemplateStreamsAndHTTPBody(t *testing.T) {
 	if strings.Contains(got, `http.WithStreamBodyField("text")`) {
 		t.Fatalf("scalar named body should not emit WithStreamBodyField:\n%s", got)
 	}
+}
+
+func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping protoc integration test in short mode")
+	}
+	for _, tool := range []string{"go", "protoc"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("%s is not installed: %v", tool, err)
+		}
+	}
+
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	protobufDir := strings.TrimSpace(runCommand(t, ".", "go", "list", "-m", "-f", "{{.Dir}}", "google.golang.org/protobuf"))
+	protocPath, err := exec.LookPath("protoc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	protocPath, err = filepath.EvalSymlinks(protocPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	protocInclude := filepath.Join(filepath.Dir(filepath.Dir(protocPath)), "include")
+	tmp := t.TempDir()
+	bin := filepath.Join(tmp, "bin")
+	if err := os.Mkdir(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	plugin := filepath.Join(bin, "protoc-gen-go-http")
+	runCommand(t, ".", "go", "build", "-o", plugin, ".")
+	runCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go"), "google.golang.org/protobuf/cmd/protoc-gen-go")
+
+	cmd := exec.Command(
+		"protoc",
+		"-I", "testdata",
+		"-I", protocInclude,
+		"-I", filepath.Join(protobufDir, "src"),
+		"-I", filepath.Join(root, "third_party"),
+		"--go_out="+tmp,
+		"--go_opt=module=opaque.test",
+		"--go-http_out="+tmp,
+		"--go-http_opt=module=opaque.test",
+		"opaque/opaque.proto",
+		"open/open.proto",
+	)
+	cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("protoc failed: %v\n%s", err, output)
+	}
+
+	goMod := fmt.Sprintf("module opaque.test\n\ngo 1.26.0\n\nrequire github.com/openkratos/kratos v0.0.0\n\nreplace github.com/openkratos/kratos => %s\n", root)
+	if err := os.WriteFile(filepath.Join(tmp, "go.mod"), []byte(goMod), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runCommand(t, tmp, "go", "test", "-mod=mod", "./...")
+}
+
+func runCommand(t *testing.T, dir, name string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%s %s failed: %v\n%s", name, strings.Join(args, " "), err, output)
+	}
+	return string(output)
 }

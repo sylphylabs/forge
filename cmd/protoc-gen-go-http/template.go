@@ -32,13 +32,19 @@ type methodDesc struct {
 	Method               string
 	HasVars              bool
 	HasBody              bool
-	Body                 string
 	BodyField            string
 	BodyQueryName        string
+	BodyGetter           string
+	BodyType             string
+	BodyAssignment       string
 	BodyHTTPBody         bool
 	BodyMessage          bool
-	ResponseBody         string
+	BodyProtoJSON        bool
+	ResponseBodyGetter   string
+	ResponseBodyType     string
+	ResponseAssignment   string
 	ResponseBodyHTTPBody bool
+	ResponseBodyMessage  bool
 	ReplyHTTPBody        bool
 	ClientStreaming      bool
 	ServerStreaming      bool

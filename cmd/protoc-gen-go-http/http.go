@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/gofeaturespb"
 )
 
 const (
@@ -155,11 +156,15 @@ func buildHTTPRule(g *protogen.GeneratedFile, service *protogen.Service, m *prot
 	}
 	if body == "*" {
 		md.HasBody = true
-		md.Body = ""
 		md.BodyField = "*"
 		md.BodyHTTPBody = isHTTPBodyMessage(m.Input.Desc)
+		md.BodyProtoJSON = true
 	} else if body != "" {
-		fd := m.Input.Desc.Fields().ByName(protoreflect.Name(body))
+		field := fieldByName(m.Input, body)
+		var fd protoreflect.FieldDescriptor
+		if field != nil {
+			fd = field.Desc
+		}
 		if fd == nil {
 			fmt.Fprintf(
 				os.Stderr,
@@ -170,20 +175,25 @@ func buildHTTPRule(g *protogen.GeneratedFile, service *protogen.Service, m *prot
 			os.Exit(2)
 		}
 		md.HasBody = true
-		md.Body = "." + camelCaseVars(body)
 		md.BodyField = body
 		md.BodyQueryName = fd.JSONName()
+		md.BodyGetter = fieldGetter(field)
+		md.BodyType = fieldGoType(g, field)
+		md.BodyAssignment = fieldAssignment(g, "in", field, "body")
 		md.BodyHTTPBody = isHTTPBodyField(fd)
 		// A singular message-kind body field can be streamed frame-by-frame for
 		// client-streaming RPCs (each frame carries just this field's payload).
 		md.BodyMessage = fd.Kind() == protoreflect.MessageKind && !fd.IsList() && !fd.IsMap()
+		md.BodyProtoJSON = md.BodyMessage
 	} else {
 		md.HasBody = false
 	}
-	if responseBody == "*" {
-		md.ResponseBody = ""
-	} else if responseBody != "" {
-		fd := m.Output.Desc.Fields().ByName(protoreflect.Name(responseBody))
+	if responseBody != "" && responseBody != "*" {
+		field := fieldByName(m.Output, responseBody)
+		var fd protoreflect.FieldDescriptor
+		if field != nil {
+			fd = field.Desc
+		}
 		if fd == nil {
 			fmt.Fprintf(
 				os.Stderr,
@@ -193,10 +203,103 @@ func buildHTTPRule(g *protogen.GeneratedFile, service *protogen.Service, m *prot
 			)
 			os.Exit(2)
 		}
-		md.ResponseBody = "." + camelCaseVars(responseBody)
+		md.ResponseBodyGetter = fieldGetter(field)
+		md.ResponseBodyType = fieldGoType(g, field)
+		md.ResponseAssignment = fieldAssignment(g, "out", field, "responseBody")
 		md.ResponseBodyHTTPBody = isHTTPBodyField(fd)
+		md.ResponseBodyMessage = fd.Kind() == protoreflect.MessageKind && !fd.IsList() && !fd.IsMap()
 	}
 	return md
+}
+
+func fieldByName(message *protogen.Message, name string) *protogen.Field {
+	for _, field := range message.Fields {
+		if string(field.Desc.Name()) == name {
+			return field
+		}
+	}
+	return nil
+}
+
+func fieldGetter(field *protogen.Field) string {
+	getter, _ := field.MethodName("Get")
+	return "." + getter + "()"
+}
+
+func fieldAssignment(g *protogen.GeneratedFile, target string, field *protogen.Field, value string) string {
+	if field.Parent.APILevel != gofeaturespb.GoFeatures_API_OPEN {
+		setter, _ := field.MethodName("Set")
+		return fmt.Sprintf("%s.%s(%s)", target, setter, value)
+	}
+	if field.Oneof != nil && !field.Oneof.Desc.IsSynthetic() {
+		return fmt.Sprintf(
+			"%s.%s = &%s{%s: %s}",
+			target,
+			field.Oneof.GoName,
+			g.QualifiedGoIdent(field.GoIdent),
+			field.GoName,
+			value,
+		)
+	}
+	if openStructFieldIsPointer(field) {
+		return fmt.Sprintf("%s.%s = &%s", target, field.GoName, value)
+	}
+	return fmt.Sprintf("%s.%s = %s", target, field.GoName, value)
+}
+
+func openStructFieldIsPointer(field *protogen.Field) bool {
+	if !field.Desc.HasPresence() || field.Desc.IsList() || field.Desc.IsMap() {
+		return false
+	}
+	switch field.Desc.Kind() {
+	case protoreflect.BytesKind, protoreflect.MessageKind, protoreflect.GroupKind:
+		return false
+	default:
+		return true
+	}
+}
+
+func fieldGoType(g *protogen.GeneratedFile, field *protogen.Field) string {
+	switch {
+	case field.Desc.IsMap():
+		key := scalarGoType(g, field.Message.Fields[0])
+		value := scalarGoType(g, field.Message.Fields[1])
+		return fmt.Sprintf("map[%s]%s", key, value)
+	}
+	base := scalarGoType(g, field)
+	if field.Desc.IsList() {
+		return "[]" + base
+	}
+	return base
+}
+
+func scalarGoType(g *protogen.GeneratedFile, field *protogen.Field) string {
+	switch field.Desc.Kind() {
+	case protoreflect.BoolKind:
+		return "bool"
+	case protoreflect.EnumKind:
+		return g.QualifiedGoIdent(field.Enum.GoIdent)
+	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind:
+		return "int32"
+	case protoreflect.Uint32Kind, protoreflect.Fixed32Kind:
+		return "uint32"
+	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
+		return "int64"
+	case protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+		return "uint64"
+	case protoreflect.FloatKind:
+		return "float32"
+	case protoreflect.DoubleKind:
+		return "float64"
+	case protoreflect.StringKind:
+		return "string"
+	case protoreflect.BytesKind:
+		return "[]byte"
+	case protoreflect.MessageKind, protoreflect.GroupKind:
+		return "*" + g.QualifiedGoIdent(field.Message.GoIdent)
+	default:
+		panic(fmt.Sprintf("unsupported protobuf field kind %s", field.Desc.Kind()))
+	}
 }
 
 func buildMethodDesc(g *protogen.GeneratedFile, m *protogen.Method, method, path string) *methodDesc {

@@ -1,0 +1,61 @@
+edition = "2023";
+
+package openkratos.opaque.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/go_features.proto";
+
+option go_package = "opaque.test/testpb";
+option features.(pb.go).api_level = API_OPAQUE;
+
+message Payload {
+  string value = 1;
+}
+
+message Request {
+  Payload payload = 1;
+  string text = 2;
+  repeated string tags = 3;
+  map<string, string> labels = 4;
+}
+
+message Reply {
+  Payload payload = 1;
+  string text = 2;
+  repeated string tags = 3;
+  map<string, string> labels = 4;
+}
+
+service OpaqueService {
+  rpc MessageBody(Request) returns (Reply) {
+    option (google.api.http) = {
+      post: "/v1/message"
+      body: "payload"
+      response_body: "payload"
+    };
+  }
+
+  rpc ScalarBody(Request) returns (Reply) {
+    option (google.api.http) = {
+      post: "/v1/scalar"
+      body: "text"
+      response_body: "text"
+    };
+  }
+
+  rpc RepeatedBody(Request) returns (Reply) {
+    option (google.api.http) = {
+      post: "/v1/repeated"
+      body: "tags"
+      response_body: "tags"
+    };
+  }
+
+  rpc MapBody(Request) returns (Reply) {
+    option (google.api.http) = {
+      post: "/v1/map"
+      body: "labels"
+      response_body: "labels"
+    };
+  }
+}

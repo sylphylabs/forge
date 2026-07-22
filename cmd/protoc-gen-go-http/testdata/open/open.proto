@@ -1,0 +1,41 @@
+edition = "2023";
+
+package openkratos.open.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/go_features.proto";
+
+option go_package = "opaque.test/openpb";
+option features.(pb.go).api_level = API_OPEN;
+
+message Request {
+  string text = 1;
+  oneof selection {
+    string choice = 2;
+  }
+}
+
+message Reply {
+  string text = 1;
+  oneof selection {
+    string choice = 2;
+  }
+}
+
+service OpenService {
+  rpc ScalarBody(Request) returns (Reply) {
+    option (google.api.http) = {
+      post: "/v1/open/scalar"
+      body: "text"
+      response_body: "text"
+    };
+  }
+
+  rpc OneofBody(Request) returns (Reply) {
+    option (google.api.http) = {
+      post: "/v1/open/oneof"
+      body: "choice"
+      response_body: "choice"
+    };
+  }
+}
