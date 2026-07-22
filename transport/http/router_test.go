@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -218,14 +219,20 @@ func TestRouterHandleWildcardMethod(t *testing.T) {
 func TestRouter_ContextDataRace(t *testing.T) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	ctx := context.Background()
-	srvPort := 38888
-	srvAddr := fmt.Sprintf(":%d", srvPort)
-	srv := NewServer(Timeout(time.Millisecond*50), Address(srvAddr))
+	ctx := t.Context()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(upstream.Close)
+	srv := NewServer(Timeout(time.Millisecond*50), Listener(listener))
 
 	router := srv.Route("/")
 	router.GET("/ping", func(ctx Context) error {
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://www.baidu.com", nil)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, upstream.URL, nil)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return ctx.String(200, err.Error())
@@ -234,19 +241,11 @@ func TestRouter_ContextDataRace(t *testing.T) {
 		return ctx.String(200, "pong")
 	})
 
-	// start server
+	serverErr := make(chan error, 1)
 	go func() {
-		if err := srv.Start(ctx); err != nil {
-			if errors.Is(err, http.ErrServerClosed) {
-				return
-			}
-			panic(err)
-		}
+		serverErr <- srv.Start(ctx)
 	}()
 
-	time.Sleep(time.Second)
-
-	// start client
 	workers := 10
 	wg := sync.WaitGroup{}
 	wg.Add(workers)
@@ -254,7 +253,7 @@ func TestRouter_ContextDataRace(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 50; j++ {
-				req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/ping", srvPort), nil)
+				req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+listener.Addr().String()+"/ping", nil)
 				res, err := http.DefaultClient.Do(req)
 				if err != nil {
 					break
@@ -264,6 +263,10 @@ func TestRouter_ContextDataRace(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	_ = srv.Stop(ctx)
-	t.Log("test end")
+	if err := srv.Stop(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-serverErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
+		t.Fatal(err)
+	}
 }
