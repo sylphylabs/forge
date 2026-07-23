@@ -39,6 +39,17 @@ func DecodeValue(msg proto.Message, key, value string) error {
 	if !strings.ContainsRune(key, '.') {
 		return populateFieldValues(msg.ProtoReflect(), []string{key}, []string{value})
 	}
+	const maxStackFieldDepth = 8
+	var fields [maxStackFieldDepth]string
+	path := key
+	for i := range fields {
+		field, rest, found := strings.Cut(path, ".")
+		fields[i] = field
+		if !found {
+			return populateFieldValues(msg.ProtoReflect(), fields[:i+1], []string{value})
+		}
+		path = rest
+	}
 	return populateFieldValues(msg.ProtoReflect(), strings.Split(key, "."), []string{value})
 }
 

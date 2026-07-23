@@ -179,6 +179,27 @@ func TestUnmarshal(t *testing.T) {
 	}
 }
 
+func BenchmarkDecodeValue(b *testing.B) {
+	b.Run("simple", func(b *testing.B) {
+		var target bdtest.HelloRequest
+		b.ReportAllocs()
+		for b.Loop() {
+			if err := DecodeValue(&target, "name", "kratos"); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("nested", func(b *testing.B) {
+		var target bdtest.HelloRequest
+		b.ReportAllocs()
+		for b.Loop() {
+			if err := DecodeValue(&target, "sub.naming", "go"); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
 //nolint:staticcheck
 func TestProtoEncodeDecode(t *testing.T) {
 	in := &complex.Complex{
