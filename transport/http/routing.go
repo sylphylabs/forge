@@ -263,16 +263,20 @@ func (r *routeMux) walk(fn WalkRouteFunc) error {
 
 func (r *routeMux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.mu.RLock()
-	headers := slices.Clone(r.headers)
+	var headerHandler http.Handler
+	for _, route := range r.headers {
+		if req.Header.Get(route.key) == route.value {
+			headerHandler = route.handler
+			break
+		}
+	}
 	notFound := r.notFoundHandler
 	methodNotAllowed := r.methodNotAllowedHandler
 	r.mu.RUnlock()
 
-	for _, route := range headers {
-		if req.Header.Get(route.key) == route.value {
-			route.handler.ServeHTTP(w, req)
-			return
-		}
+	if headerHandler != nil {
+		headerHandler.ServeHTTP(w, req)
+		return
 	}
 
 	if notFound == nil && methodNotAllowed == nil {

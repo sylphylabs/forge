@@ -20,6 +20,17 @@ func (*benchmarkResponseWriter) Write(p []byte) (int, error) { return io.Discard
 func (*benchmarkResponseWriter) WriteHeader(int)             {}
 
 func BenchmarkRouteMux(b *testing.B) {
+	b.Run("header-static", func(b *testing.B) {
+		router := newRouteMux()
+		router.handleHeader("X-Route", "special", http.HandlerFunc(benchmarkHandler))
+		router.handle(http.MethodGet, "/static", http.HandlerFunc(benchmarkHandler), false)
+		benchmarkRouter(b, router, "/static", false)
+	})
+	b.Run("header-match", func(b *testing.B) {
+		router := newRouteMux()
+		router.handleHeader("X-Route", "special", http.HandlerFunc(benchmarkHandler))
+		benchmarkRouterWithHeader(b, router, "/static", "X-Route", "special")
+	})
 	for _, routes := range []int{1, 100, 1000} {
 		b.Run(fmt.Sprintf("static/%d", routes), func(b *testing.B) {
 			router := newRouteMux()
@@ -105,6 +116,18 @@ func BenchmarkRouteMux(b *testing.B) {
 			}
 			benchmarkRouter(b, router, "/missing", true)
 		})
+	}
+}
+
+func benchmarkRouterWithHeader(b *testing.B, handler http.Handler, path, key, value string) {
+	b.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set(key, value)
+	w := &benchmarkResponseWriter{header: make(http.Header)}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		handler.ServeHTTP(w, req)
 	}
 }
 
