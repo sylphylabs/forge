@@ -544,6 +544,13 @@ validates clean generation, descriptor and extension behavior, presence,
 standard idempotency semantics plus `idempotency_class`, and a nested consumer
 using a temporary local replacement.
 
+The OpenKratos runtime repository now contains the shared descriptor resolver
+in `internal/operationpolicy`. It implements deterministic service/method
+merging, fail-closed access validation, permission and class validation,
+standard idempotency checks, immutable permission results, and unary-only
+enforcement. Generated operation values, runtime provider compilation, and
+transport attachment remain later phases and are not current runtime behavior.
+
 ### Phase 1: API publication
 
 - Add `policy/v1` to `github.com/openkratos/api`.
