@@ -81,11 +81,11 @@ jobs:
       - name: Upload coverage to Codecov
         run: bash <(curl -s https://codecov.io/bash)
 
-      - name: HTTP
+      - name: Generator module
         run: |
-          cd cmd/protoc-gen-go-http
-          go build ./...
-          go test ./...
+          cd cmd
+          GOWORK=off go build ./...
+          GOWORK=off go test ./...
         env:
           GOTOOLCHAIN: auto
 
@@ -103,6 +103,5 @@ jobs:
         run: go test ./...
       - name: Test generator modules
         run: |
-          for mod in cmd/protoc-gen-go-errors cmd/protoc-gen-go-http; do
-            (cd "$mod" && go test ./...)
-          done
+          cd cmd
+          GOWORK=off go test ./...

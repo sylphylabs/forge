@@ -13,6 +13,7 @@
 - [HTTP request-path optimization plan](design/http-request-path-optimization.md)
 - [Public Protobuf API module](design/public-protobuf-api-module.md)
 - [OpenKratos Protobuf generation](design/protobuf-generation.md)
+- [OpenAPI 3.2 generation](design/openapi-3.2.md)
 - [Generated middleware wiring](design/generated-middleware.md)
 - [Asynchronous message transport](design/message-transport.md)
 - [Performance modernization](design/performance.md)

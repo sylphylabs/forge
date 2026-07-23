@@ -343,7 +343,7 @@ Candidate boundaries:
   acknowledgement semantics, retry policy, and delivery-specific fields stay
   in nested modules; adapters do not add a second operation parser or global
   provider registry.
-- OpenAPI 3.1 generation is a build-time artifact derived from protobuf
+- OpenAPI 3.2 generation is a build-time artifact derived from protobuf
   descriptors, `google.api.HttpRule`, validation annotations, and the shared
   operation model. It is not runtime reflection over registered handlers.
 - Generated schemas and handlers use the same path, body, response projection,
@@ -357,8 +357,8 @@ Acceptance gates:
 - Every adapter passes upstream protocol conformance where a suite exists.
 - Cross-transport fixtures prove operation names, error mapping, cancellation,
   metadata, and JSON behavior.
-- OpenAPI artifacts have deterministic golden tests and validate with an
-  independent OpenAPI 3.1 parser.
+- OpenAPI artifacts have deterministic golden tests and validate with the
+  official OpenAPI 3.2 schema and an independent parser.
 - A browser-oriented external consumer proves the supported gRPC-Web or Connect
   path without a framework-specific proxy.
 
