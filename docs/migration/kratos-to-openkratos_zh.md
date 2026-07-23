@@ -106,14 +106,42 @@ enum value override 同样需要从 `(errors.code)` 改为
 `(openkratos.errors.v1.code)`。修改源文件后应重新生成 helper；generator 不再携带
 旧 annotation 的私有 fallback descriptor。
 
-在 Buf 配置或工具依赖中固定 OpenKratos 生成器版本：
+用统一的 OpenKratos 生成器替换原有两个 generator module，并在 Buf 配置或工具
+依赖中固定版本：
 
 ```text
-github.com/openkratos/kratos/cmd/protoc-gen-go-http
-github.com/openkratos/kratos/cmd/protoc-gen-go-errors
+github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
 ```
 
-修改路径后重新生成 HTTP client、HTTP server 和错误辅助代码：
+把 `go-http` 与 `go-errors` plugin 配置合并为一个 `go-openkratos` entry，然后重新
+生成 HTTP client、HTTP server 和错误辅助代码：
+
+```yaml
+# 修改前
+plugins:
+  - local: protoc-gen-go-http
+    out: gen/go
+    opt: paths=source_relative,omitempty=true
+  - local: protoc-gen-go-errors
+    out: gen/go
+    opt: paths=source_relative
+
+# OpenKratos
+plugins:
+  - local: protoc-gen-go-openkratos
+    out: gen/go
+    opt: paths=source_relative,http_omitempty=true
+```
+
+generator option 名称映射如下：
+
+| 原 `go-http` option | `go-openkratos` option |
+| --- | --- |
+| `omitempty` | `http_omitempty` |
+| `omitempty_prefix` | `http_omitempty_prefix` |
+
+errors 与 HTTP 不再需要额外 feature list。统一生成器只在输入 descriptor 确实需要
+对应产物时才生成文件。
 
 ```shell
 buf generate

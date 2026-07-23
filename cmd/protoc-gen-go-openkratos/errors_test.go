@@ -47,9 +47,9 @@ func TestGenerateOpenKratosErrorAnnotations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("protogen.Options.New() error = %v", err)
 	}
-	generated := generateFile(plugin, plugin.FilesByPath[file.GetName()])
+	generated := generateErrorFile(plugin, plugin.FilesByPath[file.GetName()])
 	if generated == nil {
-		t.Fatal("generateFile() returned nil")
+		t.Fatal("generateErrorFile() returned nil")
 	}
 
 	response := plugin.Response()

@@ -11,14 +11,14 @@ import (
 
 var (
 	showVersion     = flag.Bool("version", false, "print the version and exit")
-	omitempty       = flag.Bool("omitempty", true, "omit if google.api is empty")
-	omitemptyPrefix = flag.String("omitempty_prefix", "", "omit if google.api is empty")
+	omitempty       = flag.Bool("http_omitempty", true, "omit HTTP output if google.api is empty")
+	omitemptyPrefix = flag.String("http_omitempty_prefix", "", "prefix for generated default HTTP routes")
 )
 
 func main() {
 	flag.Parse()
 	if *showVersion {
-		fmt.Printf("protoc-gen-go-http %v\n", release)
+		fmt.Printf("protoc-gen-go-openkratos %v\n", release)
 		return
 	}
 	protogen.Options{
@@ -31,7 +31,8 @@ func main() {
 			if !f.Generate {
 				continue
 			}
-			if _, err := generateFile(gen, f, *omitempty, *omitemptyPrefix); err != nil {
+			generateErrorFile(gen, f)
+			if _, err := generateHTTPFile(gen, f, *omitempty, *omitemptyPrefix); err != nil {
 				return err
 			}
 		}

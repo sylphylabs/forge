@@ -249,7 +249,7 @@ additional-binding fixtures support them, but a generated primary client returns
 
 ### Descriptor Validation
 
-`protoc-gen-go-http` validates every rule before rendering source. An error
+`protoc-gen-go-openkratos` validates every rule before rendering source. An error
 includes the fully qualified RPC name, rule path, and offending field path.
 
 Generation fails when:
@@ -435,7 +435,7 @@ go test -race ./transport/http
 go test ./...
 go vet ./...
 
-cd cmd/protoc-gen-go-http
+cd cmd/protoc-gen-go-openkratos
 go test ./...
 go vet ./...
 ```

@@ -68,7 +68,7 @@ github.com/go-kratos/kratos/contrib/middleware/jwt/v3
 github.com/openkratos/kratos/contrib/middleware/jwt
 
 github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v3
-github.com/openkratos/kratos/cmd/protoc-gen-go-http
+github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
 ```
 
 Until the first release, local development uses `v0.0.0` requirements and
@@ -83,7 +83,7 @@ and CI use Go 1.27 RC2. The upstream baseline requires Go 1.25. Projects that
 must remain on Go 1.25 or Go 1.26 cannot migrate to OpenKratos without upgrading
 their toolchain.
 
-The repository currently contains 27 Go modules. Running `go test ./...` at the
+The repository currently contains 26 Go modules. Running `go test ./...` at the
 root does not test nested modules; use the repository commands documented in
 [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
@@ -109,15 +109,14 @@ Use explicit tools instead:
 | `kratos upgrade` | `go get`, `go install`, and `go mod tidy` |
 | `kratos changelog` | Git history and GitHub release notes |
 
-The following deterministic Protobuf generators remain supported as separate
-modules:
+OpenKratos-owned Protobuf generation is consolidated into one deterministic
+module:
 
 ```text
-github.com/openkratos/kratos/cmd/protoc-gen-go-http
-github.com/openkratos/kratos/cmd/protoc-gen-go-errors
+github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
 ```
 
-`protoc-gen-go-http` declares protobuf Editions support through Edition 2024.
+`protoc-gen-go-openkratos` declares protobuf Editions support through Edition 2024.
 Real `protoc` fixtures compile and execute Edition 2023 Open and Opaque APIs for
 message, scalar, repeated, map, explicit-presence, and oneof fields.
 

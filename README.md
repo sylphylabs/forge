@@ -36,12 +36,11 @@ go get github.com/openkratos/kratos@main
 OpenKratos intentionally does not ship a project-scaffolding CLI. Project
 creation, dependency upgrades, and execution use the standard Go toolchain.
 
-Install the retained Protobuf generators when the project uses generated HTTP
-bindings or error definitions:
+Install the OpenKratos Protobuf generator when the project uses generated HTTP
+bindings, middleware plans, or error definitions:
 
 ```shell
-go install github.com/openkratos/kratos/cmd/protoc-gen-go-http@main
-go install github.com/openkratos/kratos/cmd/protoc-gen-go-errors@main
+go install github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos@main
 ```
 
 ## Generate and Run

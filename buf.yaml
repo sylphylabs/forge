@@ -2,7 +2,7 @@ version: v2
 modules:
   - path: .
     excludes:
-      - cmd/protoc-gen-go-errors
+      - cmd/protoc-gen-go-openkratos
       - third_party
 deps:
   - buf.build/bufbuild/protovalidate
@@ -11,7 +11,7 @@ lint:
   use:
     - STANDARD
   ignore:
-    - cmd/protoc-gen-go-http/testdata
+    - cmd/protoc-gen-go-openkratos/testdata
     - contrib/middleware/validate/internal/testdata
     - internal/testdata
 breaking:

@@ -6,7 +6,7 @@ import (
 	"text/template"
 )
 
-//go:embed errorsTemplate.tpl
+//go:embed errors_template.tpl
 var errorsTemplate string
 
 type errorInfo struct {

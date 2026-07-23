@@ -255,7 +255,7 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 	if err := os.Mkdir(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	plugin := filepath.Join(bin, "protoc-gen-go-http")
+	plugin := filepath.Join(bin, "protoc-gen-go-openkratos")
 	runCommand(t, ".", "go", "build", "-o", plugin, ".")
 	runCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go"), "google.golang.org/protobuf/cmd/protoc-gen-go")
 
@@ -266,8 +266,8 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 		"-I", filepath.Join(root, "third_party"),
 		"--go_out=" + tmp,
 		"--go_opt=module=opaque.test",
-		"--go-http_out=" + tmp,
-		"--go-http_opt=module=opaque.test",
+		"--go-openkratos_out=" + tmp,
+		"--go-openkratos_opt=module=opaque.test",
 		"opaque/opaque.proto",
 		"open/open.proto",
 	}
@@ -310,7 +310,20 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 		t.Fatal("generated output changed between identical protoc runs")
 	}
 
-	goMod := fmt.Sprintf("module opaque.test\n\ngo 1.27rc2\n\nrequire github.com/openkratos/kratos v0.0.0\n\nreplace github.com/openkratos/kratos => %s\n", root)
+	apiRoot := filepath.Join(filepath.Dir(root), "OpenKratos-api")
+	goMod := fmt.Sprintf(`module opaque.test
+
+go 1.27rc2
+
+require (
+	github.com/openkratos/api v0.0.0
+	github.com/openkratos/kratos v0.0.0
+)
+
+replace github.com/openkratos/api => %s
+
+replace github.com/openkratos/kratos => %s
+`, apiRoot, root)
 	if err := os.WriteFile(filepath.Join(tmp, "go.mod"), []byte(goMod), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -636,7 +649,7 @@ func TestInvalidHTTPRulesFailGeneration(t *testing.T) {
 	if err := os.Mkdir(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	plugin := filepath.Join(bin, "protoc-gen-go-http")
+	plugin := filepath.Join(bin, "protoc-gen-go-openkratos")
 	runCommand(t, ".", "go", "build", "-o", plugin, ".")
 
 	const header = `syntax = "proto3";
@@ -729,7 +742,7 @@ service API { rpc Get(Request) returns (Reply) { option (google.api.http) = { ge
 				"-I", dir,
 				"-I", protocInclude,
 				"-I", filepath.Join(root, "third_party"),
-				"--go-http_out="+dir,
+				"--go-openkratos_out="+dir,
 				"invalid.proto",
 			)
 			cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))

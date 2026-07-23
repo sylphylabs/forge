@@ -11,21 +11,12 @@
       "dependsOn": []
     },
     {
-      "path": "cmd/protoc-gen-go-errors",
-      "module": "github.com/openkratos/kratos/cmd/protoc-gen-go-errors",
+      "path": "cmd/protoc-gen-go-openkratos",
+      "module": "github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos",
       "kind": "tool",
       "support": "official",
       "owner": "openkratos-maintainers",
-      "tagPrefix": "cmd/protoc-gen-go-errors",
-      "dependsOn": []
-    },
-    {
-      "path": "cmd/protoc-gen-go-http",
-      "module": "github.com/openkratos/kratos/cmd/protoc-gen-go-http",
-      "kind": "tool",
-      "support": "official",
-      "owner": "openkratos-maintainers",
-      "tagPrefix": "cmd/protoc-gen-go-http",
+      "tagPrefix": "cmd/protoc-gen-go-openkratos",
       "dependsOn": ["github.com/openkratos/kratos"]
     },
     {

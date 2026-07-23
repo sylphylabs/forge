@@ -110,16 +110,43 @@ Enum-value overrides similarly change from `(errors.code)` to
 the generator no longer carries a private fallback descriptor for the old
 annotations.
 
-Change generator module paths and pin the selected revision in the project's
-Buf configuration or tool dependencies:
+Replace both inherited generator modules with the unified OpenKratos generator
+and pin the selected revision in the project's Buf configuration or tool
+dependencies:
 
 ```text
-github.com/openkratos/kratos/cmd/protoc-gen-go-http
-github.com/openkratos/kratos/cmd/protoc-gen-go-errors
+github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
 ```
 
-Regenerate HTTP clients, HTTP servers, and error helpers after changing the
-module path:
+Replace `go-http` and `go-errors` plugin entries with one `go-openkratos`
+entry, then regenerate HTTP clients, HTTP servers, and error helpers:
+
+```yaml
+# Before
+plugins:
+  - local: protoc-gen-go-http
+    out: gen/go
+    opt: paths=source_relative,omitempty=true
+  - local: protoc-gen-go-errors
+    out: gen/go
+    opt: paths=source_relative
+
+# OpenKratos
+plugins:
+  - local: protoc-gen-go-openkratos
+    out: gen/go
+    opt: paths=source_relative,http_omitempty=true
+```
+
+Generator option names change as follows:
+
+| Previous `go-http` option | `go-openkratos` option |
+| --- | --- |
+| `omitempty` | `http_omitempty` |
+| `omitempty_prefix` | `http_omitempty_prefix` |
+
+There is no feature list for errors or HTTP. The unified generator emits each
+artifact only when the input descriptor requires it.
 
 ```shell
 buf generate

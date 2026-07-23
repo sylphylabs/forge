@@ -66,7 +66,7 @@ github.com/go-kratos/kratos/contrib/middleware/jwt/v3
 github.com/openkratos/kratos/contrib/middleware/jwt
 
 github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v3
-github.com/openkratos/kratos/cmd/protoc-gen-go-http
+github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
 ```
 
 首次发布前，仓库内部 module 使用临时的 `v0.0.0` requirement 和相对路径
@@ -78,7 +78,7 @@ module tag 不会自动发布嵌套 module。
 OpenKratos 要求 Go 1.27。在 final 工具链发布前，开发与 CI 使用 Go 1.27 RC2。
 上游基线要求 Go 1.25，因此仍需停留在 Go 1.25 或 Go 1.26 的项目无法直接迁移。
 
-仓库当前包含 27 个 Go module。根目录的 `go test ./...` 不会覆盖嵌套 module，
+仓库当前包含 26 个 Go module。根目录的 `go test ./...` 不会覆盖嵌套 module，
 完整验证方式见 [`DEVELOPMENT.md`](DEVELOPMENT.md)。
 
 ## 项目 CLI 与代码生成
@@ -98,14 +98,13 @@ panic。OpenKratos 不保留或修补这种隐式改写源码的工作流。
 | `kratos upgrade` | `go get`、`go install` 与 `go mod tidy` |
 | `kratos changelog` | Git 历史与 GitHub release notes |
 
-以下确定性的 Protobuf generator 仍作为独立 module 保留：
+OpenKratos 自有的 Protobuf 生成已合并为一个确定性的 module：
 
 ```text
-github.com/openkratos/kratos/cmd/protoc-gen-go-http
-github.com/openkratos/kratos/cmd/protoc-gen-go-errors
+github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
 ```
 
-`protoc-gen-go-http` 声明支持到 protobuf Edition 2024。真实 `protoc` fixture
+`protoc-gen-go-openkratos` 声明支持到 protobuf Edition 2024。真实 `protoc` fixture
 已经对 Edition 2023 Open/Opaque API 的 message、scalar、repeated、map、显式
 presence 与 oneof 字段完成编译和执行验证。
 
