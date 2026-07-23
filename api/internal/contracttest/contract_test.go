@@ -10,7 +10,6 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 
 	"github.com/openkratos/api/errors/v1"
-	"github.com/openkratos/api/policy/v1"
 )
 
 func TestErrorStatusRoundTrip(t *testing.T) {
@@ -47,49 +46,11 @@ func TestErrorStatusRoundTrip(t *testing.T) {
 	}
 }
 
-func TestPolicyPresence(t *testing.T) {
-	operationPolicy := new(policy.OperationPolicy)
-	if err := protojson.Unmarshal([]byte(`{
-		"access": "ACCESS_PUBLIC",
-		"validateRequest": false,
-		"permissions": {},
-		"idempotencyClass": "",
-		"rateClass": "read"
-	}`), operationPolicy); err != nil {
-		t.Fatal(err)
-	}
-
-	fields := operationPolicy.ProtoReflect().Descriptor().Fields()
-	for _, name := range []protoreflect.Name{"access", "validate_request", "permissions", "idempotency_class", "rate_class"} {
-		field := fields.ByName(name)
-		if field == nil || !operationPolicy.ProtoReflect().Has(field) {
-			t.Errorf("field %q has no presence", name)
-		}
-	}
-	if operationPolicy.GetValidateRequest() {
-		t.Fatal("present false validate_request decoded as true")
-	}
-	if operationPolicy.GetIdempotencyClass() != "" {
-		t.Fatalf("idempotency_class = %q, want explicit empty value", operationPolicy.GetIdempotencyClass())
-	}
-}
-
 func TestCustomOptions(t *testing.T) {
 	enumOptions := new(descriptorpb.EnumOptions)
 	proto.SetExtension(enumOptions, errors.E_DefaultCode, int32(500))
 	if got := proto.GetExtension(enumOptions, errors.E_DefaultCode); got != int32(500) {
 		t.Fatalf("default error code = %v, want 500", got)
-	}
-
-	serviceOptions := new(descriptorpb.ServiceOptions)
-	want := &policy.OperationPolicy{
-		Access:          policy.Access_ACCESS_AUTHENTICATED.Enum(),
-		ValidateRequest: proto.Bool(true),
-	}
-	proto.SetExtension(serviceOptions, policy.E_DefaultPolicy, want)
-	got, ok := proto.GetExtension(serviceOptions, policy.E_DefaultPolicy).(*policy.OperationPolicy)
-	if !ok || !proto.Equal(got, want) {
-		t.Fatalf("default policy = %v, want %v", got, want)
 	}
 }
 
@@ -101,8 +62,6 @@ func TestExtensionAllocations(t *testing.T) {
 	}{
 		{"google.protobuf.EnumOptions", 500101, "openkratos.errors.v1.default_code"},
 		{"google.protobuf.EnumValueOptions", 500102, "openkratos.errors.v1.code"},
-		{"google.protobuf.ServiceOptions", 500201, "openkratos.policy.v1.default_policy"},
-		{"google.protobuf.MethodOptions", 500202, "openkratos.policy.v1.policy"},
 	}
 	for _, test := range tests {
 		extension, err := protoregistry.GlobalTypes.FindExtensionByNumber(test.message, test.number)
@@ -116,20 +75,11 @@ func TestExtensionAllocations(t *testing.T) {
 	}
 }
 
-func TestStandardIdempotencyRemainsIndependent(t *testing.T) {
+func TestStandardIdempotency(t *testing.T) {
 	options := &descriptorpb.MethodOptions{
 		IdempotencyLevel: descriptorpb.MethodOptions_IDEMPOTENT.Enum(),
 	}
-	operationPolicy := &policy.OperationPolicy{
-		IdempotencyClass: proto.String("request-key"),
-	}
-	proto.SetExtension(options, policy.E_Policy, operationPolicy)
-
 	if got := options.GetIdempotencyLevel(); got != descriptorpb.MethodOptions_IDEMPOTENT {
 		t.Fatalf("idempotency level = %v", got)
-	}
-	got, ok := proto.GetExtension(options, policy.E_Policy).(*policy.OperationPolicy)
-	if !ok || got.GetIdempotencyClass() != "request-key" {
-		t.Fatalf("idempotency policy = %v", got)
 	}
 }

@@ -8,7 +8,6 @@ package testv1
 
 import (
 	_ "github.com/openkratos/api/errors/v1"
-	_ "github.com/openkratos/api/policy/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -161,17 +160,16 @@ var File_test_v1_consumer_proto protoreflect.FileDescriptor
 
 const file_test_v1_consumer_proto_rawDesc = "" +
 	"\n" +
-	"\x16test/v1/consumer.proto\x12\x12openkratos.test.v1\x1a!openkratos/errors/v1/errors.proto\x1a!openkratos/policy/v1/policy.proto\"(\n" +
+	"\x16test/v1/consumer.proto\x12\x12openkratos.test.v1\x1a!openkratos/errors/v1/errors.proto\"(\n" +
 	"\x12GetDocumentRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"&\n" +
 	"\x10GetDocumentReply\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name*]\n" +
 	"\rFailureReason\x12\x1e\n" +
 	"\x1aFAILURE_REASON_UNSPECIFIED\x10\x00\x12$\n" +
-	"\x18FAILURE_REASON_NOT_FOUND\x10\x01\x1a\x06\xb0\x98\xf4\x01\x94\x03\x1a\x06\xa8\x98\xf4\x01\xf4\x032\xba\x01\n" +
-	"\x0fDocumentService\x12\x8c\x01\n" +
-	"\vGetDocument\x12&.openkratos.test.v1.GetDocumentRequest\x1a$.openkratos.test.v1.GetDocumentReply\"/Ҟ\xf4\x01'\b\x03\x12\x10\n" +
-	"\x0edocuments.read*\vrequest-key2\x04read\x90\x02\x02\x1a\x18ʞ\xf4\x01\x13\b\x02\x18\x01 \x01:\vinteractiveB4Z2example.com/openkratos/api-consumer/test/v1;testv1b\x06proto3"
+	"\x18FAILURE_REASON_NOT_FOUND\x10\x01\x1a\x06\xb0\x98\xf4\x01\x94\x03\x1a\x06\xa8\x98\xf4\x01\xf4\x032s\n" +
+	"\x0fDocumentService\x12`\n" +
+	"\vGetDocument\x12&.openkratos.test.v1.GetDocumentRequest\x1a$.openkratos.test.v1.GetDocumentReply\"\x03\x90\x02\x02B4Z2example.com/openkratos/api-consumer/test/v1;testv1b\x06proto3"
 
 var (
 	file_test_v1_consumer_proto_rawDescOnce sync.Once

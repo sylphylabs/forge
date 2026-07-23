@@ -3,7 +3,6 @@ syntax = "proto3";
 package openkratos.test.v1;
 
 import "openkratos/errors/v1/errors.proto";
-import "openkratos/policy/v1/policy.proto";
 
 option go_package = "example.com/openkratos/api-consumer/test/v1;testv1";
 
@@ -23,21 +22,7 @@ message GetDocumentReply {
 }
 
 service DocumentService {
-  option (openkratos.policy.v1.default_policy) = {
-    access: ACCESS_AUTHENTICATED
-    validate_request: true
-    audit: true
-    budget_class: "interactive"
-  };
-
   rpc GetDocument(GetDocumentRequest) returns (GetDocumentReply) {
     option idempotency_level = IDEMPOTENT;
-    option (openkratos.policy.v1.policy) = {
-      access: ACCESS_AUTHORIZED
-      permissions: { require_all: "documents.read" }
-      idempotency_class: "request-key"
-      rate_class: "read"
-    };
   }
 }
-

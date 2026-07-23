@@ -7,7 +7,6 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 
 	"github.com/openkratos/api/errors/v1"
-	"github.com/openkratos/api/policy/v1"
 )
 
 func TestErrorAnnotations(t *testing.T) {
@@ -24,16 +23,11 @@ func TestErrorAnnotations(t *testing.T) {
 	}
 }
 
-func TestOperationPolicyAnnotations(t *testing.T) {
+func TestStandardMethodOptions(t *testing.T) {
 	service := File_test_v1_consumer_proto.Services().ByName("DocumentService")
 	if service == nil {
 		t.Fatal("DocumentService descriptor is missing")
 	}
-	servicePolicy, ok := proto.GetExtension(service.Options(), policy.E_DefaultPolicy).(*policy.OperationPolicy)
-	if !ok || servicePolicy.GetAccess() != policy.Access_ACCESS_AUTHENTICATED {
-		t.Fatalf("service policy = %v", servicePolicy)
-	}
-
 	method := service.Methods().ByName("GetDocument")
 	if method == nil {
 		t.Fatal("GetDocument descriptor is missing")
@@ -41,18 +35,5 @@ func TestOperationPolicyAnnotations(t *testing.T) {
 	methodOptions := method.Options().(*descriptorpb.MethodOptions)
 	if got := methodOptions.GetIdempotencyLevel(); got != descriptorpb.MethodOptions_IDEMPOTENT {
 		t.Fatalf("idempotency level = %v", got)
-	}
-	methodPolicy, ok := proto.GetExtension(methodOptions, policy.E_Policy).(*policy.OperationPolicy)
-	if !ok {
-		t.Fatalf("method policy type = %T", proto.GetExtension(methodOptions, policy.E_Policy))
-	}
-	if methodPolicy.GetAccess() != policy.Access_ACCESS_AUTHORIZED {
-		t.Fatalf("method access = %v", methodPolicy.GetAccess())
-	}
-	if methodPolicy.GetIdempotencyClass() != "request-key" {
-		t.Fatalf("idempotency class = %q", methodPolicy.GetIdempotencyClass())
-	}
-	if got := methodPolicy.GetPermissions().GetRequireAll(); len(got) != 1 || got[0] != "documents.read" {
-		t.Fatalf("required permissions = %v", got)
 	}
 }

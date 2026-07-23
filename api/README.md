@@ -17,16 +17,17 @@ need Protobuf tooling.
 
 - `openkratos/errors/v1/errors.proto` defines the portable error status and
   enum annotations.
-- `openkratos/policy/v1/policy.proto` defines operation-policy annotations.
+
+Middleware wiring belongs in generated Go service plans rather than Protobuf.
+The API module publishes no operation-policy or middleware-naming schema.
 
 `openkratos.errors.v1.Status` deliberately preserves the OpenKratos error
 envelope `{code, reason, message, metadata}`. It is not replaced by
 `google.rpc.Status`, which cannot represent the stable `reason` and string
 metadata map as the same contract.
 
-Proto options declare portable requirements only. Runtime middleware,
-credentials, provider configuration, concrete limits, and deployment secrets
-do not belong in this module.
+Runtime middleware, credentials, provider configuration, concrete limits, and
+deployment secrets do not belong in this module.
 
 ## Local Validation
 
