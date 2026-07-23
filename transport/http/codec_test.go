@@ -48,6 +48,21 @@ func TestDefaultRequestDecoder(t *testing.T) {
 	}
 }
 
+func BenchmarkDefaultRequestDecoder(b *testing.B) {
+	body := []byte(`{"name":"openkratos"}`)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/protojson")
+	var target binding.HelloRequest
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		target.Reset()
+		if err := DefaultRequestDecoder(req, &target); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestDefaultRequestVarsProto(t *testing.T) {
 	srv := NewServer(Timeout(0))
 	srv.Route("").GET("/hello/{name}", func(ctx Context) error {
