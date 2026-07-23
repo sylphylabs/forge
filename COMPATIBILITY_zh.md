@@ -35,6 +35,7 @@ OpenKratos 也不会仅为了兼容 Kratos 而保留 API。如果已有更清晰
 | 版本线 | v3 | v0 预发布 | 发布不兼容 |
 | 最低 Go 版本 | Go 1.25 | Go 1.27 | 构建要求变化 |
 | Module 数量 | 28，包含 `cmd/kratos` | 27 | 发布和工具变化 |
+| 异步消息 Transport | 没有协议中立的异步契约 | 根 module 提供 `transport/message`；broker SDK 适配器仍是可选嵌套 module | 新增 API；不承诺 broker wire 兼容 |
 | 项目 CLI | `cmd/kratos` | 已移除 | 工作流不兼容 |
 | Protobuf generator | Kratos module 路径 | OpenKratos module 路径 | 安装路径变化 |
 | Contrib provider SDK | 旧 provider major 与已归档直接依赖 | 当前稳定 major 与受维护的标准替代 | 源码与依赖图变化 |

@@ -11,6 +11,7 @@ OpenKratos 是 [go-kratos/kratos](https://github.com/go-kratos/kratos) 的独立
 - 以 Protobuf 为中心定义 API，并生成 HTTP/gRPC 代码。
 - 基于标准库 `http.ServeMux` 的路由，支持方法模式、路径参数和 Google AIP 模板。
 - 统一的 Transport 抽象，支持 HTTP 和 gRPC。
+- 协议中立的异步消息契约，broker 适配器按需引入。
 - 可组合的 Middleware，覆盖 Recovery、Logging、Validation、Tracing、Metrics、Auth 等场景。
 - 插件化的 Registry、Config 和 Encoding 能力。
 - 基于标准库 `log/slog` 的日志能力，OpenTelemetry 扩展由 contrib 包提供。

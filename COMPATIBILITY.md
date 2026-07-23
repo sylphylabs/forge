@@ -37,6 +37,7 @@ upstream revision explicitly.
 | Release line | v3 | v0 pre-release | Release breaking |
 | Minimum Go version | Go 1.25 | Go 1.27 | Build requirement |
 | Module count | 28, including `cmd/kratos` | 27 | Release and tooling change |
+| Asynchronous message transport | No protocol-neutral async contract | Root module exposes `transport/message`; broker SDK adapters remain optional nested modules | New API; no broker wire compatibility claim |
 | Project CLI | `cmd/kratos` | Removed | Workflow breaking |
 | Protobuf generators | Kratos module paths | OpenKratos module paths | Install path change |
 | Contrib provider SDKs | Older provider majors and archived direct dependencies | Current stable majors and standard maintained replacements | Source and dependency graph change |

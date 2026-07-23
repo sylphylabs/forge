@@ -10,6 +10,7 @@ The project currently tracks `v0` development and does not provide a stable API 
 
 - API-first development with Protobuf and generated HTTP/gRPC code.
 - Unified transport layer for HTTP and gRPC.
+- Protocol-neutral asynchronous message contract with optional broker adapters.
 - Standard-library `http.ServeMux` routing with method patterns, path values, and Google AIP template support.
 - Composable middleware for recovery, logging, validation, tracing, metrics, auth, and more.
 - Pluggable registry, configuration, and encoding components.
