@@ -2,13 +2,17 @@
 
 状态：预发布
 
-最后核对：2026 年 7 月 22 日
+最后核对：2026 年 7 月 23 日
 
 本文是 [`COMPATIBILITY.md`](COMPATIBILITY.md) 的中文翻译；如果两份文档存在
 歧义，以英文规范版本为准。
 
 OpenKratos 是 `go-kratos/kratos` 的独立 fork，不是 Kratos v3 的直接替代品，
 也不承诺与未来 Kratos 版本保持源码、行为或发布兼容。
+
+OpenKratos 也不会仅为了兼容 Kratos 而保留 API。如果已有更清晰或更高效的替代
+方案，并且变更有充分技术依据，就可以移除旧 API。这类移除属于有意的破坏性
+更新，必须同时提供可执行的迁移说明。
 
 本文只记录已经被 OpenKratos 接受并完成验证的有意差异。尚未完成的工作不是
 兼容性事实；拟采用、待重做或已拒绝的上游变更记录在
@@ -38,7 +42,7 @@ OpenKratos 是 `go-kratos/kratos` 的独立 fork，不是 Kratos v3 的直接替
 | HTTP protobuf 生成 | Open API 字段访问 | Editions 2023 Open/Opaque API accessor | 新增生成能力 |
 | Google HTTP transcoding | 路由、body、query 分别解析且仅部分支持 | 共享路径语法、严格生成校验、ProtoJSON 投影和 additional bindings | API 与 wire 行为不兼容 |
 | HTTP router | Gorilla mux | 标准库 `http.ServeMux` 路由树 | 行为不兼容 |
-| HTTP client 路径 | endpoint base path 和转义变量可能丢失 | 保留 base path，并按 AIP 规则转义 | 正确性与 URL 行为变化 |
+| HTTP client 路径 | endpoint base path 和转义变量可能丢失 | 保留 base path、按 AIP 规则转义，生成 client 复用已编译路径计划 | 正确性、生成代码与性能变化 |
 | 未匹配 HTTP 路由 | 可能落入 `http.DefaultServeMux` | 显式处理 404/405 | 行为与安全变化 |
 | HTTP stream | 请求 timeout 可能取消 SSE/WebSocket | 分离请求 timeout，保留显式 stream deadline | 行为变化 |
 | WRR selector | 稳态清理会扫描节点集合 | 先以 O(1) 判断是否存在过期项 | 仅性能变化 |
@@ -123,8 +127,15 @@ query、path 顺序绑定，因此 URL path 始终具有最终优先级。
 含糊的 custom 声明都会让生成失败，且不会留下部分生成文件。若要编码整条响应，
 应省略 `response_body`。
 
-`transport/http.BuildPath` 现在返回 `(string, error)`。生成 client 会在网络请求
-前返回展开错误。Primary `custom.kind: "*"` 返回
+生成 client 要求 `transport/http.SupportPackageIsVersion4`，并为每个固定 binding
+保存一个并发安全的 `CompiledPath`。因此模板解析与 descriptor 校验不再发生在
+稳态请求路径中。旧生成文件仍可通过 version 3 sentinel 编译，但必须重新生成后
+才能使用已编译路径计划。
+
+`transport/http.BuildPath` 返回 `(string, error)`，继续作为真正动态模板的便捷
+API。手写代码如果反复使用固定模板，应通过 `CompilePath` 或 `MustCompilePath`
+只编译一次，再为每个请求调用 `CompiledPath.Build`。生成 client 与手写 client
+都会在网络请求前返回展开错误。Primary `custom.kind: "*"` 返回
 `ErrUnspecifiedHTTPMethod`；primary 路径中的裸 `*` 或 `**` 返回
 `ErrUnboundPathWildcard`。Server 与原始 HTTP client 仍可使用这两类规则。
 
@@ -258,9 +269,13 @@ Kratos v2 应用还需要先处理 v2 到 v3 的 API 变化，因为 OpenKratos 
 任何修改公开 API、默认行为、wire format、module、工具或最低 Go 版本的变更，
 都必须在同一变更中更新英文规范文档和本文。
 
+与 Kratos 兼容本身不是保留较差公开 API 的理由。破坏性替代只有在迁移文档已
+说明技术依据、替代 API、新旧代码示例、重新生成要求与验证步骤后才能合并。
+
 - 本文只记录当前事实，不记录愿望；
 - 待决上游变更写入 `docs/upstream-adoptions.md`；
 - 可复现性能数据写入 `docs/design/performance.md` 或 `docs/benchmarks/`；
-- 破坏性更新合并前必须提供迁移步骤；
+- 破坏性更新合并前必须提供迁移步骤与替代 API；没有明确用途的兼容 shim 不应
+  长期保留；
 - 变更提交后补充 implementation commit 与聚焦测试链接；
 - 每次发布前重新核对比较日期与基线。

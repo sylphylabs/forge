@@ -2,6 +2,8 @@
 
 OpenKratos 是预发布的独立 fork，并不是 Kratos 的原地升级版本。请在独立分支中
 执行迁移，并在修改依赖前阅读 [`COMPATIBILITY.md`](../../COMPATIBILITY.md)。
+OpenKratos 可能直接替换 Kratos API，而不是保留兼容 shim；每项已接受的移除都会
+在本文记录替代方案与验证步骤。
 
 ## 1. 建立迁移基线
 
@@ -80,6 +82,11 @@ go mod tidy
 不要通过全局文本替换修改 `.pb.go`。应修改 `.proto` 源文件和生成配置，然后重新
 生成代码。
 
+当前生成的 HTTP 文件会断言 `transport/http.SupportPackageIsVersion4`，从而在
+编译期发现“新 generator 搭配旧 runtime”的错误组合。仍断言 version 3 的旧生成
+文件可以继续编译，但会在每次请求中解析固定路径模板。必须重新生成 client 与
+server 才能使用预编译路径实现；只升级 runtime module 不会改写已有生成代码。
+
 ## 4. 替换 Kratos CLI 工作流
 
 OpenKratos 不提供通用的 `kratos` 可执行文件。
@@ -128,7 +135,11 @@ OpenKratos 使用标准库 `http.ServeMux` 的优先级规则，不再依赖 Gor
 - 生成 client 只使用 primary binding；additional binding 是 server 提供给原始
   REST client 的替代入口。
 
-手写的 `transport/http.BuildPath` 调用必须处理 error：
+生成 client 会为每个固定 binding 编译一次并复用并发安全的 `CompiledPath`；路径
+展开错误仍会在网络 I/O 前返回。
+
+手写的 `transport/http.BuildPath` 调用必须处理 error。模板本身需要动态选择时，
+继续使用这个 API：
 
 ```go
 path, err := http.BuildPath(pattern, request, http.WithQueryParams())
@@ -136,6 +147,28 @@ if err != nil {
 	return err
 }
 ```
+
+对于重复使用的固定模板，应将逐请求编译：
+
+```go
+// 迁移前：每次调用都解析并校验同一个模板。
+path, err := http.BuildPath(
+	"/v1/users/{name}", request, http.WithQueryParams(),
+)
+```
+
+替换为可复用的路径计划：
+
+```go
+var userPath = http.MustCompilePath(
+	"/v1/users/{name}", new(pb.GetUserRequest), http.WithQueryParams(),
+)
+
+path, err := userPath.Build(request)
+```
+
+如果非法配置应作为 error 从 constructor 或初始化流程返回，应使用 `CompilePath`；
+程序自身拥有的 literal 模板和生成代码可以使用 `MustCompilePath`。
 
 对于 primary `custom.kind: "*"`，生成 client 无法推导 HTTP method；对于 primary
 路径中的裸 `*`/`**`，生成 client 也没有可取值的请求字段。这两类调用会在网络
@@ -183,10 +216,11 @@ go vet ./...
 - [ ] 替换直接使用的 Google/gofrs UUID import，并检查 application ID version 变化。
 - [ ] 固定 OpenKratos generator 版本。
 - [ ] 从源文件重新生成所有 Go 代码。
+- [ ] 确认生成的 HTTP 文件断言 `SupportPackageIsVersion4`。
 - [ ] 使用 Go 与 Buf 命令替代 `kratos` CLI。
 - [ ] 检查路由优先级、冲突、prefix、斜杠、404 与 405。
 - [ ] 重新生成并测试每个 inline `google.api.HttpRule` binding。
-- [ ] 修改 `BuildPath` 调用并处理 error。
+- [ ] 动态模板继续使用 `BuildPath`；重复使用的固定模板只编译一次。
 - [ ] 检查 body/query 分类、ProtoJSON wire value 和 `%2F` 路径。
 - [ ] 为 HTTP stream 定义显式生命周期策略。
 - [ ] 运行 race test、vet 和服务集成测试。

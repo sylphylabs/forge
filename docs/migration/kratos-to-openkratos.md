@@ -3,6 +3,9 @@
 OpenKratos is a pre-release fork, not an in-place Kratos upgrade. Perform the
 migration on a branch and review the current differences in
 [`COMPATIBILITY.md`](../../COMPATIBILITY.md) before changing dependencies.
+OpenKratos may replace Kratos APIs instead of retaining compatibility shims;
+each accepted removal is documented here with its replacement and validation
+steps.
 
 ## 1. Establish a Baseline
 
@@ -82,6 +85,14 @@ go mod tidy
 Do not edit generated `.pb.go` files with global text replacement. Change the
 `.proto` source and generator configuration, then regenerate.
 
+Current generated HTTP files assert
+`transport/http.SupportPackageIsVersion4`. This intentionally catches a stale
+runtime paired with a newer generator at compile time. Older generated files
+that assert version 3 still compile, but they parse fixed path templates on
+each request. Regenerate clients and servers to use the precompiled path
+implementation; upgrading only the runtime module does not rewrite generated
+code.
+
 ## 4. Replace Kratos CLI Workflows
 
 OpenKratos does not provide the general `kratos` executable.
@@ -134,7 +145,11 @@ previous generator accepted with a warning or deferred until runtime.
 - Expect the generated client to use only the primary binding. Additional
   bindings remain raw REST entry points on the server.
 
-Hand-written callers of `transport/http.BuildPath` must handle its error:
+Generated clients compile each fixed binding once and reuse a concurrency-safe
+`CompiledPath`; expansion errors are still returned before network I/O.
+
+Hand-written callers of `transport/http.BuildPath` must handle its error. Keep
+this API when the template itself is selected dynamically:
 
 ```go
 path, err := http.BuildPath(pattern, request, http.WithQueryParams())
@@ -142,6 +157,29 @@ if err != nil {
 	return err
 }
 ```
+
+For a fixed template used repeatedly, replace per-request compilation:
+
+```go
+// Before: parses and validates the same template on every call.
+path, err := http.BuildPath(
+	"/v1/users/{name}", request, http.WithQueryParams(),
+)
+```
+
+with a reusable path plan:
+
+```go
+var userPath = http.MustCompilePath(
+	"/v1/users/{name}", new(pb.GetUserRequest), http.WithQueryParams(),
+)
+
+path, err := userPath.Build(request)
+```
+
+Use `CompilePath` in constructors or setup code when invalid configuration
+should be returned as an error rather than panic. Use `MustCompilePath` for
+literal templates owned by the program or generated code.
 
 A generated client cannot infer a method for primary `custom.kind: "*"`, or a
 request value for a primary bare `*`/`**` path wildcard. Those calls now return
@@ -194,10 +232,11 @@ graceful shutdown in integration tests used by the service.
 - [ ] Replace direct Google/gofrs UUID imports and review the application ID version change.
 - [ ] Pin the OpenKratos generator revisions.
 - [ ] Regenerate all generated Go files from source.
+- [ ] Confirm generated HTTP files assert `SupportPackageIsVersion4`.
 - [ ] Replace `kratos` CLI commands with Go and Buf commands.
 - [ ] Review route precedence, conflicts, prefixes, slashes, 404, and 405.
 - [ ] Regenerate and test every inline `google.api.HttpRule` binding.
-- [ ] Migrate `BuildPath` callers to handle errors.
+- [ ] Keep `BuildPath` for dynamic templates; compile repeated fixed templates once.
 - [ ] Review body/query classification, ProtoJSON wire values, and `%2F` paths.
 - [ ] Define explicit HTTP stream lifetime policies.
 - [ ] Run race tests, vet, and service integration tests.

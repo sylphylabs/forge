@@ -2,11 +2,16 @@
 
 Status: pre-release
 
-Last verified: July 22, 2026
+Last verified: July 23, 2026
 
 OpenKratos is an independent fork of `go-kratos/kratos`. It is not a drop-in
 replacement for Kratos v3 and does not promise source, behavior, or release
 compatibility with future Kratos versions.
+
+OpenKratos also does not retain a Kratos API solely for compatibility. An API
+may be removed when a clearer or more efficient replacement is available and
+the change is technically justified. Such removals are intentional breaking
+changes and must ship with executable migration guidance.
 
 This document is the source of truth for intentional differences that have
 been accepted and validated in OpenKratos. Work in progress is not a
@@ -39,7 +44,7 @@ upstream revision explicitly.
 | HTTP protobuf generation | Open API field access | Editions 2023 Open and Opaque API accessors | New generated-code capability |
 | Google HTTP transcoding | Partial, independently parsed route/body/query behavior | Shared path grammar, strict generation, ProtoJSON projection, and additional bindings | API and wire behavior breaking |
 | HTTP router | Gorilla mux | Standard-library `http.ServeMux` tree | Behavior breaking |
-| HTTP client paths | Endpoint base paths and escaped variables could be lost | Base paths and AIP-aware escaping are retained | Correctness and URL behavior change |
+| HTTP client paths | Endpoint base paths and escaped variables could be lost | Base paths and AIP-aware escaping are retained; generated clients reuse compiled path plans | Correctness, generated-code, and performance change |
 | Unknown HTTP routes | Could fall through to `http.DefaultServeMux` | Explicit 404/405 handling | Behavior and security change |
 | HTTP streams | Server request timeout could cancel SSE/WebSocket streams | Request timeout is detached; explicit stream deadlines remain | Behavior change |
 | WRR selector | Scans a node set during steady-state cleanup | Detects stale entries in O(1) before cleanup | Performance only |
@@ -137,11 +142,20 @@ or conflicting bindings, and ambiguous custom declarations fail generation
 without emitting a partial file. Omit `response_body` to encode the whole
 response.
 
-`transport/http.BuildPath` now returns `(string, error)`. Generated clients
-propagate expansion errors before network I/O. A primary `custom.kind: "*"`
-returns `ErrUnspecifiedHTTPMethod`; a primary bare `*` or `**` path returns
-`ErrUnboundPathWildcard`. Servers and raw HTTP clients may still use both rule
-forms.
+Generated clients require `transport/http.SupportPackageIsVersion4` and keep a
+concurrency-safe `CompiledPath` for each fixed binding. Template parsing and
+descriptor validation are therefore removed from the steady-state request
+path. Existing generated files continue to compile through the version 3
+sentinel, but must be regenerated to receive compiled path plans.
+
+`transport/http.BuildPath` returns `(string, error)` and remains the convenience
+API for genuinely dynamic templates. Hand-written code that repeatedly uses a
+fixed template should compile it once with `CompilePath` or `MustCompilePath`
+and call `CompiledPath.Build` for each request. Generated and hand-written
+clients propagate expansion errors before network I/O. A primary
+`custom.kind: "*"` returns `ErrUnspecifiedHTTPMethod`; a primary bare `*` or
+`**` path returns `ErrUnboundPathWildcard`. Servers and raw HTTP clients may
+still use both rule forms.
 
 External `google.api.Service` configuration and
 `fully_decode_reserved_expansion` are not implemented; they remain the
@@ -299,11 +313,17 @@ the v3 design rather than providing a direct v2 compatibility layer.
 Every change that alters a public API, default behavior, wire format, module,
 tool, or supported Go version must update this document in the same change.
 
+Kratos compatibility is not a reason by itself to retain an inferior public
+API. A breaking replacement is acceptable only when its rationale, replacement
+API, old and new code examples, regeneration requirements, and validation steps
+are documented in the migration guide before the implementation is merged.
+
 - Record current behavior here, not aspirations.
 - Put pending upstream decisions in `docs/upstream-adoptions.md`.
 - Put reproducible measurements in `docs/design/performance.md` or
   `docs/benchmarks/`.
-- Add migration instructions before merging a breaking change.
+- Add migration instructions and a replacement API before merging a breaking
+  change; do not leave a compatibility shim without an explicit purpose.
 - Link the implementation commit and focused tests after the change is
   committed.
 - Re-verify the comparison date and baseline before each release.
