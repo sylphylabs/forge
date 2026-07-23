@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package openkratos.errors.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/openkratos/api/errors/v1;errorsv1";
+option java_multiple_files = true;
+option java_package = "com.github.openkratos.errors.v1";
+
+// Status is the portable error representation used by OpenKratos transports.
+message Status {
+  int32 code = 1;
+  string reason = 2;
+  string message = 3;
+  map<string, string> metadata = 4;
+}
+
+// default_code declares the default transport status for an error enum.
+extend google.protobuf.EnumOptions {
+  int32 default_code = 500101;
+}
+
+// code overrides the transport status for one error enum value.
+extend google.protobuf.EnumValueOptions {
+  int32 code = 500102;
+}
+

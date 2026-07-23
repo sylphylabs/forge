@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package openkratos.policy.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/openkratos/api/policy/v1;policyv1";
+option java_multiple_files = true;
+option java_package = "com.github.openkratos.policy.v1";
+
+// Access declares the identity and authorization requirement for an operation.
+enum Access {
+  ACCESS_UNSPECIFIED = 0;
+  ACCESS_PUBLIC = 1;
+  ACCESS_AUTHENTICATED = 2;
+  ACCESS_AUTHORIZED = 3;
+}
+
+// PermissionPolicy declares permissions required by an authorized operation.
+message PermissionPolicy {
+  repeated string require_all = 1;
+  repeated string require_any = 2;
+}
+
+// OperationPolicy declares portable operation requirements. Named classes are
+// resolved to application-owned implementations during service registration.
+message OperationPolicy {
+  optional Access access = 1;
+  PermissionPolicy permissions = 2;
+  optional bool validate_request = 3;
+  optional bool audit = 4;
+  optional string idempotency_class = 5;
+  optional string rate_class = 6;
+  optional string budget_class = 7;
+}
+
+// default_policy declares policy inherited by methods in a service.
+extend google.protobuf.ServiceOptions {
+  OperationPolicy default_policy = 500201;
+}
+
+// policy overrides present service-policy fields for one method.
+extend google.protobuf.MethodOptions {
+  OperationPolicy policy = 500202;
+}
+

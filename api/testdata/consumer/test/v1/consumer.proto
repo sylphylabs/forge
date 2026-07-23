@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package openkratos.test.v1;
+
+import "openkratos/errors/v1/errors.proto";
+import "openkratos/policy/v1/policy.proto";
+
+option go_package = "example.com/openkratos/api-consumer/test/v1;testv1";
+
+enum FailureReason {
+  option (openkratos.errors.v1.default_code) = 500;
+
+  FAILURE_REASON_UNSPECIFIED = 0;
+  FAILURE_REASON_NOT_FOUND = 1 [(openkratos.errors.v1.code) = 404];
+}
+
+message GetDocumentRequest {
+  string name = 1;
+}
+
+message GetDocumentReply {
+  string name = 1;
+}
+
+service DocumentService {
+  option (openkratos.policy.v1.default_policy) = {
+    access: ACCESS_AUTHENTICATED
+    validate_request: true
+    audit: true
+    budget_class: "interactive"
+  };
+
+  rpc GetDocument(GetDocumentRequest) returns (GetDocumentReply) {
+    option idempotency_level = IDEMPOTENT;
+    option (openkratos.policy.v1.policy) = {
+      access: ACCESS_AUTHORIZED
+      permissions: { require_all: "documents.read" }
+      idempotency_class: "request-key"
+      rate_class: "read"
+    };
+  }
+}
+
