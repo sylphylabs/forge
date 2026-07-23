@@ -1,6 +1,6 @@
 # OpenAPI 3.2 Generation
 
-Status: Phase 1 implemented locally; validation and advanced 3.2 features pending
+Status: Phase 1 implemented and schema-validated; advanced 3.2 features pending
 
 ## Decision
 
@@ -88,6 +88,11 @@ Applications migrating from Google's gnostic plugin should remove
 Existing explicit error responses can remain; the plugin fills missing content
 schemas automatically.
 
+Generated fixtures are parsed independently with `libopenapi` and validated
+with `jsonschema/v6` against libopenapi's embedded official OpenAPI 3.2 schema.
+These dependencies are confined to the generator module and do not enter the
+OpenKratos runtime module.
+
 ## Deliberate Limitations
 
 Declaring version 3.2 does not mean every new OAS 3.2 object is expressible
@@ -105,12 +110,10 @@ changing only the version string is not sufficient evidence of support.
 
 ## Next Gates
 
-1. Validate generated artifacts against the official OpenAPI 3.2 schema and
-   an independent parser.
-2. Share normalized HTTP binding analysis with `protoc-gen-go-http` so paths,
+1. Share normalized HTTP binding analysis with `protoc-gen-go-http` so paths,
    bodies, response projection, and custom verbs cannot drift.
-3. Add a method-level error declaration that links RPC methods to generated
+2. Add a method-level error declaration that links RPC methods to generated
    error enum values, then emit exact status/reason response documentation.
-4. Project supported Protovalidate and field-behavior annotations into JSON
+3. Project supported Protovalidate and field-behavior annotations into JSON
    Schema constraints.
-5. Design explicit `QUERY` and streaming behavior before enabling either.
+4. Design explicit `QUERY` and streaming behavior before enabling either.

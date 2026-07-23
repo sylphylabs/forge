@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
 	v3 "github.com/google/gnostic/openapiv3"
 	"github.com/openkratos/kratos/cmd/internal/generator"
 	openapigen "github.com/openkratos/kratos/cmd/internal/openapi/generator"
+	"github.com/pb33f/libopenapi"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"google.golang.org/genproto/googleapis/api/annotations"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -46,6 +49,7 @@ func TestGenerateOpenAPI32UsesOpenKratosErrorEnvelope(t *testing.T) {
 	if strings.Contains(content, "google.rpc.Status:") {
 		t.Fatalf("generated OpenAPI should not use google.rpc.Status for default errors:\n%s", content)
 	}
+	validateOpenAPI32(t, content)
 }
 
 func TestGenerateOpenAPIPatchesAnnotatedErrorResponses(t *testing.T) {
@@ -93,6 +97,42 @@ func findResponse(t *testing.T, document *v3.Document, name string) *v3.Response
 	}
 	t.Fatalf("response %q not found", name)
 	return nil
+}
+
+func validateOpenAPI32(t *testing.T, content string) {
+	t.Helper()
+
+	document, err := libopenapi.NewDocument([]byte(content))
+	if err != nil {
+		t.Fatalf("parse generated OpenAPI with libopenapi: %v", err)
+	}
+	if document.GetSpecInfo().Version != defaultOpenAPIVersion {
+		t.Fatalf("independent parser version = %q, want %q", document.GetSpecInfo().Version, defaultOpenAPIVersion)
+	}
+	compiler := jsonschema.NewCompiler()
+	officialSchema, err := jsonschema.UnmarshalJSON(bytes.NewBufferString(document.GetSpecInfo().APISchema))
+	if err != nil {
+		t.Fatalf("decode official OpenAPI 3.2 schema: %v", err)
+	}
+	const schemaURL = "https://spec.openapis.org/oas/3.2/schema/2025-09-17"
+	if err := compiler.AddResource(schemaURL, officialSchema); err != nil {
+		t.Fatalf("load official OpenAPI 3.2 schema: %v", err)
+	}
+	schema, err := compiler.Compile(schemaURL)
+	if err != nil {
+		t.Fatalf("compile official OpenAPI 3.2 schema: %v", err)
+	}
+	documentJSON := document.GetSpecInfo().GetSpecJSONBytes()
+	if documentJSON == nil {
+		t.Fatal("independent parser did not produce a JSON representation")
+	}
+	instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(*documentJSON))
+	if err != nil {
+		t.Fatalf("decode generated OpenAPI as JSON: %v", err)
+	}
+	if err := schema.Validate(instance); err != nil {
+		t.Fatalf("generated document does not validate against the official OpenAPI 3.2 schema: %v", err)
+	}
 }
 
 func newOpenAPIPlugin(t *testing.T) *protogen.Plugin {
