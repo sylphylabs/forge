@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	"github.com/openkratos/kratos/internal/testdata/binding"
 )
 
 type benchmarkResponseWriter struct {
@@ -152,6 +154,22 @@ func BenchmarkServerRoute(b *testing.B) {
 			return ctx.BindVars(&target)
 		})
 		benchmarkRouter(b, srv, "/resource/42", false)
+	})
+	b.Run("parameter-proto-nested", func(b *testing.B) {
+		srv := NewServer(Timeout(0))
+		srv.Route("").GET("/resource/{sub.naming}", func(ctx Context) error {
+			var target binding.HelloRequest
+			return ctx.BindVars(&target)
+		})
+		benchmarkRouter(b, srv, "/resource/42", false)
+	})
+	b.Run("parameter-aip", func(b *testing.B) {
+		srv := NewServer(Timeout(0))
+		srv.Route("").GET("/v1/{name=publishers/*/books/*}", func(ctx Context) error {
+			ctx.Response().(*benchmarkResponseWriter).value = ctx.Vars().Get("name")
+			return nil
+		})
+		benchmarkRouter(b, srv, "/v1/publishers/acme/books/42", false)
 	})
 }
 

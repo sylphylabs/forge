@@ -256,7 +256,7 @@ type serverFilter struct {
 }
 
 func (f *serverFilter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	f.serve(w, req, nil, nil)
+	f.serve(w, req, nil, nil, nil)
 }
 
 func (f *serverFilter) serveMatchedRoute(
@@ -264,8 +264,9 @@ func (f *serverFilter) serveMatchedRoute(
 	req *http.Request,
 	route *compiledRoute,
 	values map[string]string,
+	captureNames []string,
 ) {
-	f.serve(w, req, route, values)
+	f.serve(w, req, route, values, captureNames)
 }
 
 func (f *serverFilter) serve(
@@ -273,6 +274,7 @@ func (f *serverFilter) serve(
 	req *http.Request,
 	route *compiledRoute,
 	values map[string]string,
+	captureNames []string,
 ) {
 	ctx := req.Context()
 	if f.server.timeout > 0 {
@@ -299,7 +301,7 @@ func (f *serverFilter) serve(
 	}
 	tr.request = req.WithContext(transport.NewServerContext(ctx, tr))
 	if route != nil {
-		route.setPathValues(tr.request, values)
+		route.setPathValues(tr.request, values, captureNames)
 	}
 	f.next.ServeHTTP(w, tr.request)
 }

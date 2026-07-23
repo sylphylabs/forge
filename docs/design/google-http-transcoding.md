@@ -193,8 +193,9 @@ reverse-decode non-reserved characters but preserve `%2F` or `%2f` exactly as
 received. Matching never captures the leading `/`.
 
 `Context.Vars()` and `Request.PathValue(fieldPath)` must return the same public
-value. Internal ServeMux wildcard names remain inaccessible and continue using
-the reserved OpenKratos prefix.
+value. Templates that need synthetic ServeMux wildcard names use the reserved
+OpenKratos prefix. The router clears those captures before application
+middleware and handlers run, so they remain inaccessible to application code.
 
 Malformed request-target escapes are rejected with HTTP 400 before application
 middleware runs. A capture-layout mismatch after ServeMux selected a route is an

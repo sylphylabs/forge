@@ -12,17 +12,25 @@ import (
 
 func TestCompileRoute(t *testing.T) {
 	tests := []struct {
-		template string
-		pattern  string
-		direct   bool
+		template   string
+		pattern    string
+		muxPattern string
+		direct     bool
 	}{
 		{template: "/", pattern: "/{$}"},
-		{template: "/users/{id}", pattern: "/users/{__openkratos0}", direct: true},
 		{
-			template: "/v1/{parent}/{id}",
-			pattern:  "/v1/{__openkratos0}/{__openkratos1}",
-			direct:   true,
+			template:   "/users/{id}",
+			pattern:    "/users/{__openkratos0}",
+			muxPattern: "/users/{id}",
+			direct:     true,
 		},
+		{
+			template:   "/v1/{parent}/{id}",
+			pattern:    "/v1/{__openkratos0}/{__openkratos1}",
+			muxPattern: "/v1/{parent}/{id}",
+			direct:     true,
+		},
+		{template: "/users/{user.name}", pattern: "/users/{__openkratos0}", direct: true},
 		{
 			template: "/v1/{message.name=publishers/*/books/*}",
 			pattern:  "/v1/publishers/{__openkratos0}/books/{__openkratos1}",
@@ -40,6 +48,13 @@ func TestCompileRoute(t *testing.T) {
 			}
 			if got.pattern != tt.pattern {
 				t.Fatalf("pattern = %q, want %q", got.pattern, tt.pattern)
+			}
+			wantMuxPattern := tt.muxPattern
+			if wantMuxPattern == "" {
+				wantMuxPattern = tt.pattern
+			}
+			if got.muxPattern != wantMuxPattern {
+				t.Fatalf("muxPattern = %q, want %q", got.muxPattern, wantMuxPattern)
 			}
 			if got.directPathValues != tt.direct {
 				t.Fatalf("directPathValues = %t, want %t", got.directPathValues, tt.direct)
@@ -69,6 +84,9 @@ func TestCompileRouteRejectsMiddleMultiWildcard(t *testing.T) {
 func TestRouteMuxAIPVariables(t *testing.T) {
 	srv := NewServer()
 	srv.Route("/").GET("/v1/{message.name=publishers/*/books/*}", func(ctx Context) error {
+		if got := ctx.Request().PathValue("__openkratos0"); got != "" {
+			t.Errorf("internal path value = %q", got)
+		}
 		return ctx.String(http.StatusOK, ctx.Vars().Get("message.name"))
 	})
 
@@ -87,9 +105,15 @@ func TestRouteMuxGoogleEscapedVariables(t *testing.T) {
 	srv := NewServer()
 	route := srv.Route("/")
 	route.GET("/single/{name}", func(ctx Context) error {
+		if got := ctx.Request().PathValue("__openkratos0"); got != "" {
+			t.Errorf("internal path value = %q", got)
+		}
 		return ctx.String(http.StatusOK, ctx.Vars().Get("name")+"|"+ctx.Request().PathValue("name"))
 	})
 	route.GET("/multi/{name=**}", func(ctx Context) error {
+		if got := ctx.Request().PathValue("__openkratos0"); got != "" {
+			t.Errorf("internal path value = %q", got)
+		}
 		return ctx.String(http.StatusOK, ctx.Vars().Get("name")+"|"+ctx.Request().PathValue("name"))
 	})
 
@@ -150,9 +174,15 @@ func TestRouteMuxConstraintVariants(t *testing.T) {
 	srv := NewServer()
 	route := srv.Route("/")
 	route.GET("/items/{id:[0-9]+}", func(ctx Context) error {
+		if got := ctx.Request().PathValue("__openkratos0"); got != "" {
+			t.Errorf("internal path value = %q", got)
+		}
 		return ctx.String(http.StatusOK, "id:"+ctx.Vars().Get("id"))
 	})
 	route.GET("/items/{slug}", func(ctx Context) error {
+		if got := ctx.Request().PathValue("__openkratos0"); got != "" {
+			t.Errorf("internal path value = %q", got)
+		}
 		return ctx.String(http.StatusOK, "slug:"+ctx.Vars().Get("slug"))
 	})
 
@@ -166,6 +196,23 @@ func TestRouteMuxConstraintVariants(t *testing.T) {
 		if got := w.Body.String(); got != want {
 			t.Errorf("%s body = %q, want %q", path, got, want)
 		}
+	}
+}
+
+func TestRouteMuxSimpleNameVariantsShareBucket(t *testing.T) {
+	srv := NewServer()
+	route := srv.Route("/")
+	route.GET("/aliases/{first}", func(ctx Context) error {
+		return ctx.String(http.StatusOK, "first:"+ctx.Vars().Get("first"))
+	})
+	route.GET("/aliases/{second}", func(ctx Context) error {
+		return ctx.String(http.StatusOK, "second:"+ctx.Vars().Get("second"))
+	})
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/aliases/value", nil))
+	if got := w.Body.String(); got != "first:value" {
+		t.Fatalf("body = %q", got)
 	}
 }
 
@@ -195,6 +242,9 @@ func TestRouteMuxCustomVerbVariants(t *testing.T) {
 func TestRouteMuxPathValue(t *testing.T) {
 	srv := NewServer()
 	srv.Route("/").GET("/users/{user.name}", func(ctx Context) error {
+		if got := ctx.Request().PathValue("__openkratos0"); got != "" {
+			t.Errorf("internal path value = %q", got)
+		}
 		return ctx.String(http.StatusOK, ctx.Request().PathValue("user.name"))
 	})
 	req := httptest.NewRequest(http.MethodGet, "/users/kratos", nil)

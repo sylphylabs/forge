@@ -353,6 +353,9 @@ func TestMatchedRoutePreservesRequestSemantics(t *testing.T) {
 		if got := request.PathValue("name"); got != "kratos" {
 			t.Fatalf("path value = %q", got)
 		}
+		if got := request.PathValue("__openkratos0"); got != "" {
+			t.Fatalf("internal path value = %q", got)
+		}
 		if got := ctx.Value(contextKey{}); got != "value" {
 			t.Fatalf("context value = %v", got)
 		}

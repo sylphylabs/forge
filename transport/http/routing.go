@@ -36,6 +36,8 @@ type routeVariable struct {
 
 type compiledRoute struct {
 	pattern          string
+	muxPattern       string
+	captureNames     []string
 	template         string
 	vars             []routeVariable
 	httpRule         *httprule.Template
@@ -67,15 +69,26 @@ func (r *compiledRoute) match(req *http.Request) (map[string]string, bool, error
 	return values, true, nil
 }
 
-func (r *compiledRoute) setPathValues(req *http.Request, values map[string]string) {
+func (r *compiledRoute) setPathValues(req *http.Request, values map[string]string, captureNames []string) {
 	if r.directPathValues {
-		for _, variable := range r.vars {
-			req.SetPathValue(variable.name, req.PathValue(variable.parts[0].pathValue))
+		for i, variable := range r.vars {
+			captureName := variable.parts[0].pathValue
+			if i < len(captureNames) {
+				captureName = captureNames[i]
+			}
+			if captureName != variable.name {
+				req.SetPathValue(variable.name, req.PathValue(captureName))
+			}
 		}
-		return
+	} else {
+		for name, value := range values {
+			req.SetPathValue(name, value)
+		}
 	}
-	for name, value := range values {
-		req.SetPathValue(name, value)
+	for _, name := range captureNames {
+		if strings.HasPrefix(name, internalPathValuePrefix) {
+			req.SetPathValue(name, "")
+		}
 	}
 }
 
@@ -125,13 +138,15 @@ type routeVariant struct {
 }
 
 type matchedRouteHandler interface {
-	serveMatchedRoute(http.ResponseWriter, *http.Request, *compiledRoute, map[string]string)
+	serveMatchedRoute(http.ResponseWriter, *http.Request, *compiledRoute, map[string]string, []string)
 }
 
 type routeBucket struct {
-	router *routeMux
-	mu     sync.Mutex
-	routes atomic.Pointer[[]routeVariant]
+	router       *routeMux
+	pattern      string
+	captureNames []string
+	mu           sync.Mutex
+	routes       atomic.Pointer[[]routeVariant]
 }
 
 func (b *routeBucket) add(route routeVariant) {
@@ -148,6 +163,7 @@ func (b *routeBucket) add(route routeVariant) {
 }
 
 func (b *routeBucket) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	req.Pattern = b.pattern
 	routes := b.routes.Load()
 	if routes == nil {
 		b.router.serveNotFound(w, req)
@@ -168,12 +184,12 @@ func (b *routeBucket) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			continue
 		}
 		if handler, ok := candidate.handler.(matchedRouteHandler); ok {
-			handler.serveMatchedRoute(w, req, &candidate.route, values)
+			handler.serveMatchedRoute(w, req, &candidate.route, values, b.captureNames)
 			return
 		}
 		ctx := context.WithValue(req.Context(), routeContextKey{}, &candidate.route)
 		matchedReq := req.WithContext(ctx)
-		candidate.route.setPathValues(matchedReq, values)
+		candidate.route.setPathValues(matchedReq, values, b.captureNames)
 		candidate.handler.ServeHTTP(w, matchedReq)
 		return
 	}
@@ -217,17 +233,22 @@ func (r *routeMux) handle(method, template string, handler http.Handler, walk bo
 
 func (r *routeMux) handleCompiled(method string, route compiledRoute, handler http.Handler, walk bool) {
 	pattern := route.pattern
+	muxPattern := route.muxPattern
+	if muxPattern == "" {
+		muxPattern = route.pattern
+	}
 	if method != "*" {
 		pattern = method + " " + pattern
+		muxPattern = method + " " + muxPattern
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	bucket := r.buckets[pattern]
 	if bucket == nil {
-		bucket = &routeBucket{router: r}
+		bucket = &routeBucket{router: r, pattern: pattern, captureNames: route.captureNames}
 		bucket.add(routeVariant{route: route, handler: handler})
-		r.mux.Handle(pattern, bucket)
+		r.mux.Handle(muxPattern, bucket)
 		r.buckets[pattern] = bucket
 	} else {
 		bucket.add(routeVariant{route: route, handler: handler})
@@ -416,6 +437,8 @@ func compileRoute(template string) (compiledRoute, error) {
 			vars:     make([]routeVariable, len(variables)),
 			httpRule: rule,
 		}
+		compiled.muxPattern = compiled.pattern
+		compiled.captureNames = serveMuxCaptureNames(compiled.pattern)
 		compiled.directPathValues = len(variables) > 0 && !rule.HasUnboundWildcard() && !rule.HasCustomVerb()
 		for i, variable := range variables {
 			compiled.vars[i].name = variable.FieldPath
@@ -424,6 +447,20 @@ func compileRoute(template string) (compiledRoute, error) {
 				continue
 			}
 			compiled.vars[i].parts = []routePart{{pathValue: fmt.Sprintf("%s%d", internalPathValuePrefix, i)}}
+		}
+		if compiled.directPathValues {
+			for i, variable := range variables {
+				if !strings.ContainsRune(variable.FieldPath, '.') && i < len(compiled.captureNames) {
+					capture := compiled.captureNames[i]
+					compiled.muxPattern = strings.Replace(
+						compiled.muxPattern,
+						"{"+capture+"}",
+						"{"+variable.FieldPath+"}",
+						1,
+					)
+					compiled.captureNames[i] = variable.FieldPath
+				}
+			}
 		}
 		return compiled, nil
 	}
@@ -534,7 +571,32 @@ func compileLegacyRoute(template string) (compiledRoute, error) {
 	} else if strings.HasSuffix(compiled.pattern, "/") {
 		compiled.pattern += "{$}"
 	}
+	compiled.muxPattern = compiled.pattern
+	compiled.captureNames = serveMuxCaptureNames(compiled.pattern)
 	return compiled, nil
+}
+
+func serveMuxCaptureNames(pattern string) []string {
+	var names []string
+	for cursor := 0; cursor < len(pattern); {
+		open := strings.IndexByte(pattern[cursor:], '{')
+		if open < 0 {
+			break
+		}
+		open += cursor
+		close := strings.IndexByte(pattern[open+1:], '}')
+		if close < 0 {
+			break
+		}
+		close += open + 1
+		name := pattern[open+1 : close]
+		name = strings.TrimSuffix(name, "...")
+		if name != "$" {
+			names = append(names, name)
+		}
+		cursor = close + 1
+	}
+	return names
 }
 
 func usesGoogleTemplate(template string) bool {
