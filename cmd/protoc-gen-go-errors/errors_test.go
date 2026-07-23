@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	errorsv1 "github.com/openkratos/api/errors/v1"
+	errorapi "github.com/openkratos/api/errors/v1"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -14,9 +14,9 @@ import (
 
 func TestGenerateOpenKratosErrorAnnotations(t *testing.T) {
 	enumOptions := new(descriptorpb.EnumOptions)
-	proto.SetExtension(enumOptions, errorsv1.E_DefaultCode, int32(500))
+	proto.SetExtension(enumOptions, errorapi.E_DefaultCode, int32(500))
 	valueOptions := new(descriptorpb.EnumValueOptions)
-	proto.SetExtension(valueOptions, errorsv1.E_Code, int32(404))
+	proto.SetExtension(valueOptions, errorapi.E_Code, int32(404))
 
 	file := &descriptorpb.FileDescriptorProto{
 		Name:       proto.String("test/v1/errors.proto"),
@@ -39,7 +39,7 @@ func TestGenerateOpenKratosErrorAnnotations(t *testing.T) {
 		FileToGenerate: []string{file.GetName()},
 		ProtoFile: []*descriptorpb.FileDescriptorProto{
 			protodesc.ToFileDescriptorProto(descriptorpb.File_google_protobuf_descriptor_proto),
-			protodesc.ToFileDescriptorProto(errorsv1.File_openkratos_errors_v1_errors_proto),
+			protodesc.ToFileDescriptorProto(errorapi.File_openkratos_errors_v1_errors_proto),
 			file,
 		},
 	}

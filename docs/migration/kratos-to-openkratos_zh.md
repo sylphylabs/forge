@@ -77,10 +77,12 @@ github.com/go-kratos/kratos/v3/errors.Status
 github.com/openkratos/api/errors/v1.Status
 ```
 
-runtime 的 `errors.Error` 会嵌入 `errorsv1.Status`，因此 `err.Code`、
-`err.Reason`、`err.Message` 与 `err.Metadata` 等字段访问保持不变。待 OpenKratos API
-module 发布后，还需更新 `.proto` import 与 enum annotation；不应继续保留或
-vendor 继承自 Kratos 的任一份 `errors/errors.proto`。
+API import path `github.com/openkratos/api/errors/v1` 声明的 package 名是
+`errors`。runtime 内部将其 alias 为 `errorapi`，并在 `errors.Error` 中嵌入
+`errorapi.Status`，因此 `err.Code`、`err.Reason`、`err.Message` 与
+`err.Metadata` 等字段访问保持不变。待 OpenKratos API module 发布后，还需更新
+`.proto` import 与 enum annotation；不应继续保留或 vendor 继承自 Kratos 的任一份
+`errors/errors.proto`。
 
 schema 的具体改写如下：
 

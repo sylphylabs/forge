@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	errorsv1 "github.com/openkratos/api/errors/v1"
+	errorapi "github.com/openkratos/api/errors/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -125,7 +125,7 @@ func TestStatusContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("proto.Marshal() error = %v", err)
 	}
-	var status errorsv1.Status
+	var status errorapi.Status
 	if err := proto.Unmarshal(wire, &status); err != nil {
 		t.Fatalf("proto.Unmarshal() error = %v", err)
 	}

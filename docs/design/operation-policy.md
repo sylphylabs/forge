@@ -100,7 +100,7 @@ concrete values and implementations.
 | --- | --- |
 | File | `openkratos/policy/v1/policy.proto` |
 | Protobuf package | `openkratos.policy.v1` |
-| Go package | `github.com/openkratos/api/policy/v1;policyv1` |
+| Go package | `github.com/openkratos/api/policy/v1;policy` |
 | BSR module | `buf.build/openkratos/api` |
 
 ### Proposed v1 shape
@@ -114,7 +114,7 @@ syntax = "proto3";
 
 package openkratos.policy.v1;
 
-option go_package = "github.com/openkratos/api/policy/v1;policyv1";
+option go_package = "github.com/openkratos/api/policy/v1;policy";
 
 import "google/protobuf/descriptor.proto";
 

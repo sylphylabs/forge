@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	errorsv1 "github.com/openkratos/api/errors/v1"
+	errorapi "github.com/openkratos/api/errors/v1"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 )
@@ -53,7 +53,7 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 }
 
 func genErrorsReason(_ *protogen.Plugin, _ *protogen.File, g *protogen.GeneratedFile, enum *protogen.Enum) bool {
-	defaultCode := proto.GetExtension(enum.Desc.Options(), errorsv1.E_DefaultCode)
+	defaultCode := proto.GetExtension(enum.Desc.Options(), errorapi.E_DefaultCode)
 	code := 0
 	if ok := defaultCode.(int32); ok != 0 {
 		code = int(ok)
@@ -64,7 +64,7 @@ func genErrorsReason(_ *protogen.Plugin, _ *protogen.File, g *protogen.Generated
 	var ew errorWrapper
 	for _, v := range enum.Values {
 		enumCode := code
-		eCode := proto.GetExtension(v.Desc.Options(), errorsv1.E_Code)
+		eCode := proto.GetExtension(v.Desc.Options(), errorapi.E_Code)
 		if ok := eCode.(int32); ok != 0 {
 			enumCode = int(ok)
 		}

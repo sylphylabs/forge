@@ -79,9 +79,11 @@ github.com/go-kratos/kratos/v3/errors.Status
 github.com/openkratos/api/errors/v1.Status
 ```
 
-The runtime `errors.Error` embeds `errorsv1.Status`, so field selectors such as
-`err.Code`, `err.Reason`, `err.Message`, and `err.Metadata` remain unchanged.
-Update `.proto` imports and enum annotations when the OpenKratos API module is
+The API import path `github.com/openkratos/api/errors/v1` declares package
+`errors`. The runtime aliases that package as `errorapi` and embeds
+`errorapi.Status` in `errors.Error`, so field selectors such as `err.Code`,
+`err.Reason`, `err.Message`, and `err.Metadata` remain unchanged. Update
+`.proto` imports and enum annotations when the OpenKratos API module is
 published; do not retain or vendor one of the inherited `errors/errors.proto`
 copies.
 

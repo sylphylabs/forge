@@ -121,8 +121,8 @@ import "openkratos/policy/v1/policy.proto";
 Generated Go code imports:
 
 ```go
-import errorsv1 "github.com/openkratos/api/errors/v1"
-import policyv1 "github.com/openkratos/api/policy/v1"
+import "github.com/openkratos/api/errors/v1"
+import "github.com/openkratos/api/policy/v1"
 ```
 
 Source files and generated files are kept in different directories. Generated
@@ -166,7 +166,7 @@ The first OpenKratos error contract uses:
 | --- | --- |
 | File | `openkratos/errors/v1/errors.proto` |
 | Protobuf package | `openkratos.errors.v1` |
-| Go package | `github.com/openkratos/api/errors/v1;errorsv1` |
+| Go package | `github.com/openkratos/api/errors/v1;errors` |
 | BSR module | `buf.build/openkratos/api` |
 
 The version belongs in the Protobuf package and file path. A future incompatible
@@ -206,7 +206,7 @@ syntax = "proto3";
 
 package openkratos.errors.v1;
 
-option go_package = "github.com/openkratos/api/errors/v1;errorsv1";
+option go_package = "github.com/openkratos/api/errors/v1;errors";
 
 import "google/protobuf/descriptor.proto";
 
@@ -280,7 +280,9 @@ The runtime package `github.com/openkratos/kratos/errors` owns Go error behavior
 - preserving causes without serializing private Go implementation details.
 
 It does not own a second generated Protobuf message. Its error value wraps or
-embeds `errorsv1.Status` from `github.com/openkratos/api/errors/v1`.
+embeds `errorapi.Status` from `github.com/openkratos/api/errors/v1`, using an
+internal alias to distinguish the API contract from the runtime `errors`
+package.
 
 The public API module must remain usable without the runtime module. The
 dependency direction is always:
@@ -422,7 +424,7 @@ local repository state.
 
 ### Phase 2: Runtime adoption
 
-- Change runtime error values to use `errorsv1.Status`.
+- Change runtime error values to use `errorapi.Status`.
 - Preserve explicit Go error-chain and transport conversion behavior selected
   for OpenKratos.
 - Remove the root generated error schema and update focused tests.
