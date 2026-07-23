@@ -35,16 +35,16 @@ type Builder struct {
 	match    MatchFunc
 	compiled []*regexp.Regexp
 
-	ms []middleware.Middleware
+	ms []middleware.UnaryMiddleware
 }
 
 // Server selector middleware
-func Server(ms ...middleware.Middleware) *Builder {
+func Server(ms ...middleware.UnaryMiddleware) *Builder {
 	return &Builder{ms: ms}
 }
 
 // Client selector middleware
-func Client(ms ...middleware.Middleware) *Builder {
+func Client(ms ...middleware.UnaryMiddleware) *Builder {
 	return &Builder{client: true, ms: ms}
 }
 
@@ -73,7 +73,7 @@ func (b *Builder) Match(fn MatchFunc) *Builder {
 }
 
 // Build is Builder's Build, for example: Server().Path(m1,m2).Build()
-func (b *Builder) Build() middleware.Middleware {
+func (b *Builder) Build() middleware.UnaryMiddleware {
 	var transporter func(ctx context.Context) (transport.Transporter, bool)
 	if b.client {
 		transporter = clientTransporter
@@ -123,13 +123,13 @@ func (b *Builder) matches(ctx context.Context, transporter transporter) bool {
 }
 
 // selector middleware
-func selector(transporter transporter, match func(context.Context, transporter) bool, ms ...middleware.Middleware) middleware.Middleware {
-	return func(handler middleware.Handler) middleware.Handler {
+func selector(transporter transporter, match func(context.Context, transporter) bool, ms ...middleware.UnaryMiddleware) middleware.UnaryMiddleware {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
 			if !match(ctx, transporter) {
 				return handler(ctx, req)
 			}
-			return middleware.Chain(ms...)(handler)(ctx, req)
+			return middleware.ChainUnary(ms...)(handler)(ctx, req)
 		}
 	}
 }

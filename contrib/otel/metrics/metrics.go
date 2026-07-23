@@ -99,12 +99,12 @@ type options struct {
 }
 
 // Server is middleware server-side metrics.
-func Server(opts ...Option) middleware.Middleware {
+func Server(opts ...Option) middleware.UnaryMiddleware {
 	op := options{}
 	for _, o := range opts {
 		o(&op)
 	}
-	return func(handler middleware.Handler) middleware.Handler {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (any, error) {
 			// if requests and seconds are nil, return directly
 			if op.requests == nil && op.seconds == nil {
@@ -157,12 +157,12 @@ func Server(opts ...Option) middleware.Middleware {
 }
 
 // Client is middleware client-side metrics.
-func Client(opts ...Option) middleware.Middleware {
+func Client(opts ...Option) middleware.UnaryMiddleware {
 	op := options{}
 	for _, o := range opts {
 		o(&op)
 	}
-	return func(handler middleware.Handler) middleware.Handler {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (any, error) {
 			var (
 				code      int

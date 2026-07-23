@@ -40,8 +40,8 @@ type validator interface {
 //		}
 //	    return nil
 //	})
-func Validator(validators ...ValidatorFunc) middleware.Middleware {
-	return func(handler middleware.Handler) middleware.Handler {
+func Validator(validators ...ValidatorFunc) middleware.UnaryMiddleware {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
 			if v, ok := req.(validator); ok {
 				if err := v.Validate(); err != nil {

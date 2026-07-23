@@ -43,9 +43,9 @@ func WithTracerName(tracerName string) Option {
 }
 
 // Server returns a new server middleware for OpenTelemetry.
-func Server(opts ...Option) middleware.Middleware {
+func Server(opts ...Option) middleware.UnaryMiddleware {
 	tracer := NewTracer(trace.SpanKindServer, opts...)
-	return func(handler middleware.Handler) middleware.Handler {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
 			if tr, ok := transport.FromServerContext(ctx); ok {
 				var span trace.Span
@@ -59,9 +59,9 @@ func Server(opts ...Option) middleware.Middleware {
 }
 
 // Client returns a new client middleware for OpenTelemetry.
-func Client(opts ...Option) middleware.Middleware {
+func Client(opts ...Option) middleware.UnaryMiddleware {
 	tracer := NewTracer(trace.SpanKindClient, opts...)
-	return func(handler middleware.Handler) middleware.Handler {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
 			if tr, ok := transport.FromClientContext(ctx); ok {
 				var span trace.Span

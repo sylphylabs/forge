@@ -37,7 +37,7 @@ func (s *Server) unaryServerInterceptor() grpc.UnaryServerInterceptor {
 			return handler(ctx, req)
 		}
 		if next := s.middleware.Match(tr.Operation()); len(next) > 0 {
-			h = middleware.Chain(next...)(h)
+			h = middleware.ChainUnary(next...)(h)
 		}
 		reply, err := h(ctx, req)
 		if len(replyHeader) > 0 {
@@ -85,7 +85,7 @@ func (s *Server) streamServerInterceptor() grpc.StreamServerInterceptor {
 		}
 
 		if next := s.streamMiddleware.Match(info.FullMethod); len(next) > 0 {
-			middleware.Chain(next...)(h)
+			middleware.ChainUnary(next...)(h)
 		}
 
 		ctx = context.WithValue(ctx, stream{
@@ -122,7 +122,7 @@ func (w *wrappedStream) SendMsg(m any) error {
 	}
 
 	if next := w.middleware.Match(info.Operation()); len(next) > 0 {
-		h = middleware.Chain(next...)(h)
+		h = middleware.ChainUnary(next...)(h)
 	}
 
 	_, err := h(w.ctx, m)
@@ -140,7 +140,7 @@ func (w *wrappedStream) RecvMsg(m any) error {
 	}
 
 	if next := w.middleware.Match(info.Operation()); len(next) > 0 {
-		h = middleware.Chain(next...)(h)
+		h = middleware.ChainUnary(next...)(h)
 	}
 
 	_, err := h(w.ctx, m)

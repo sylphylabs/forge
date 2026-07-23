@@ -86,14 +86,14 @@ func WithParserOptions(opts ...jwt.ParserOption) Option {
 }
 
 // Server is a server auth middleware. Check the token and extract the info from token.
-func Server(keyFunc jwt.Keyfunc, opts ...Option) middleware.Middleware {
+func Server(keyFunc jwt.Keyfunc, opts ...Option) middleware.UnaryMiddleware {
 	o := &options{
 		signingMethod: jwt.SigningMethodHS256,
 	}
 	for _, opt := range opts {
 		opt(o)
 	}
-	return func(handler middleware.Handler) middleware.Handler {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (any, error) {
 			if header, ok := transport.FromServerContext(ctx); ok {
 				if keyFunc == nil {
@@ -138,7 +138,7 @@ func Server(keyFunc jwt.Keyfunc, opts ...Option) middleware.Middleware {
 }
 
 // Client is a client jwt middleware.
-func Client(keyProvider jwt.Keyfunc, opts ...Option) middleware.Middleware {
+func Client(keyProvider jwt.Keyfunc, opts ...Option) middleware.UnaryMiddleware {
 	claims := jwt.RegisteredClaims{}
 	o := &options{
 		signingMethod: jwt.SigningMethodHS256,
@@ -147,7 +147,7 @@ func Client(keyProvider jwt.Keyfunc, opts ...Option) middleware.Middleware {
 	for _, opt := range opts {
 		opt(o)
 	}
-	return func(handler middleware.Handler) middleware.Handler {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (any, error) {
 			if keyProvider == nil {
 				return nil, ErrNeedTokenProvider

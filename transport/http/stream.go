@@ -656,7 +656,7 @@ func (client *Client) ServerSentEvent(ctx context.Context, method, path string, 
 	var p selector.Peer
 	ctx = selector.NewPeerContext(ctx, &p)
 	if len(client.opts.middleware) > 0 {
-		h = middleware.Chain(client.opts.middleware...)(h)
+		h = middleware.ChainUnary(client.opts.middleware...)(h)
 	}
 	stream, err := h(ctx, args)
 	if err != nil {
@@ -767,7 +767,7 @@ func (client *Client) WebSocket(ctx context.Context, path string, opts ...CallOp
 	var p selector.Peer
 	ctx = selector.NewPeerContext(ctx, &p)
 	if len(client.opts.middleware) > 0 {
-		h = middleware.Chain(client.opts.middleware...)(h)
+		h = middleware.ChainUnary(client.opts.middleware...)(h)
 	}
 	stream, err := h(ctx, nil)
 	if err != nil {

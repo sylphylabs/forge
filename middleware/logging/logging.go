@@ -20,11 +20,11 @@ type Redacter interface {
 }
 
 // Server is an server logging middleware.
-func Server(logger *slog.Logger) middleware.Middleware {
+func Server(logger *slog.Logger) middleware.UnaryMiddleware {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return func(handler middleware.Handler) middleware.Handler {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
 			var (
 				code      int32
@@ -69,11 +69,11 @@ func Server(logger *slog.Logger) middleware.Middleware {
 }
 
 // Client is a client logging middleware.
-func Client(logger *slog.Logger) middleware.Middleware {
+func Client(logger *slog.Logger) middleware.UnaryMiddleware {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return func(handler middleware.Handler) middleware.Handler {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
 			var (
 				code      int32

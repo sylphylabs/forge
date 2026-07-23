@@ -180,9 +180,9 @@ func BenchmarkMiddlewareDispatch(b *testing.B) {
 	terminal := func(context.Context, any) (any, error) { return nil, nil }
 	for _, count := range []int{0, 1, 3} {
 		b.Run(fmt.Sprintf("dynamic/%d", count), func(b *testing.B) {
-			middlewares := make([]middleware.Middleware, count)
+			middlewares := make([]middleware.UnaryMiddleware, count)
 			for i := range middlewares {
-				middlewares[i] = func(next middleware.Handler) middleware.Handler { return next }
+				middlewares[i] = func(next middleware.UnaryHandler) middleware.UnaryHandler { return next }
 			}
 			srv := NewServer(Middleware(middlewares...))
 			ctx := &wrapper{
@@ -198,9 +198,9 @@ func BenchmarkMiddlewareDispatch(b *testing.B) {
 			}
 		})
 		b.Run(fmt.Sprintf("precomposed/%d", count), func(b *testing.B) {
-			middlewares := make([]middleware.Middleware, count)
+			middlewares := make([]middleware.UnaryMiddleware, count)
 			for i := range middlewares {
-				middlewares[i] = func(next middleware.Handler) middleware.Handler { return next }
+				middlewares[i] = func(next middleware.UnaryHandler) middleware.UnaryHandler { return next }
 			}
 			srv := NewServer(Middleware(middlewares...))
 			handler := srv.WrapMiddleware(operation, terminal)

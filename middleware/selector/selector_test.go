@@ -100,7 +100,7 @@ func TestMatch(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			applied := false
-			markApplied := func(handler middleware.Handler) middleware.Handler {
+			markApplied := func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 				return func(ctx context.Context, req any) (any, error) {
 					applied = true
 					return handler(ctx, req)
@@ -154,7 +154,7 @@ func TestMatchClient(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			applied := false
-			markApplied := func(handler middleware.Handler) middleware.Handler {
+			markApplied := func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 				return func(ctx context.Context, req any) (any, error) {
 					applied = true
 					return handler(ctx, req)
@@ -288,7 +288,7 @@ func TestHeaderFunc(t *testing.T) {
 	}
 }
 
-func testMiddleware(handler middleware.Handler) middleware.Handler {
+func testMiddleware(handler middleware.UnaryHandler) middleware.UnaryHandler {
 	return func(ctx context.Context, req any) (reply any, err error) {
 		reply, err = handler(ctx, req)
 		return
@@ -354,7 +354,7 @@ func Test_RegexMatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var middlewareApplied bool
-			markMiddleware := func(handler middleware.Handler) middleware.Handler {
+			markMiddleware := func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 				return func(ctx context.Context, req any) (any, error) {
 					middlewareApplied = true
 					return handler(ctx, req)

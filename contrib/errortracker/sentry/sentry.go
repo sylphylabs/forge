@@ -63,7 +63,7 @@ func WithContextTags(fn func(context.Context) map[string]string) Option {
 }
 
 // Server returns a new server middleware for Sentry.
-func Server(opts ...Option) middleware.Middleware {
+func Server(opts ...Option) middleware.UnaryMiddleware {
 	conf := options{repanic: true}
 	for _, o := range opts {
 		o(&conf)
@@ -71,7 +71,7 @@ func Server(opts ...Option) middleware.Middleware {
 	if conf.timeout == 0 {
 		conf.timeout = 2 * time.Second
 	}
-	return func(handler middleware.Handler) middleware.Handler {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
 			hub := GetHubFromContext(ctx)
 			scope := hub.Scope()

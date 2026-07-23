@@ -127,7 +127,7 @@ func TestServerSentEventStreamUsesClientMiddleware(t *testing.T) {
 		context.Background(),
 		WithEndpoint(ts.URL),
 		WithTimeout(time.Second),
-		WithMiddleware(func(handler middleware.Handler) middleware.Handler {
+		WithMiddleware(func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 			return func(ctx context.Context, req any) (any, error) {
 				tr, ok := transportpkg.FromClientContext(ctx)
 				if !ok {
@@ -418,7 +418,7 @@ func TestWebSocketStreamUsesClientMiddleware(t *testing.T) {
 		context.Background(),
 		WithEndpoint(ts.URL),
 		WithTimeout(time.Second),
-		WithMiddleware(func(handler middleware.Handler) middleware.Handler {
+		WithMiddleware(func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 			return func(ctx context.Context, req any) (any, error) {
 				tr, ok := transportpkg.FromClientContext(ctx)
 				if !ok {

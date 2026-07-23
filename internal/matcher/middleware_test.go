@@ -7,15 +7,15 @@ import (
 	"github.com/openkratos/kratos/middleware"
 )
 
-func logging(module string) middleware.Middleware {
-	return func(middleware.Handler) middleware.Handler {
+func logging(module string) middleware.UnaryMiddleware {
+	return func(middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(context.Context, any) (reply any, err error) {
 			return module, nil
 		}
 	}
 }
 
-func equal(ms []middleware.Middleware, modules ...string) bool {
+func equal(ms []middleware.UnaryMiddleware, modules ...string) bool {
 	if len(ms) == 0 {
 		return false
 	}

@@ -36,14 +36,14 @@ type options struct {
 }
 
 // Server ratelimiter middleware
-func Server(opts ...Option) middleware.Middleware {
+func Server(opts ...Option) middleware.UnaryMiddleware {
 	options := &options{
 		limiter: internalratelimit.NewLimiter(),
 	}
 	for _, o := range opts {
 		o(options)
 	}
-	return func(handler middleware.Handler) middleware.Handler {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
 			done, e := options.limiter.Allow()
 			if e != nil {

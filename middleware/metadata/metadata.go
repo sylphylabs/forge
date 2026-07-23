@@ -42,14 +42,14 @@ func WithPropagatedPrefix(prefix ...string) Option {
 }
 
 // Server is middleware server-side metadata.
-func Server(opts ...Option) middleware.Middleware {
+func Server(opts ...Option) middleware.UnaryMiddleware {
 	options := &options{
 		prefix: []string{"x-md-"}, // x-md-global-, x-md-local
 	}
 	for _, o := range opts {
 		o(options)
 	}
-	return func(handler middleware.Handler) middleware.Handler {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
 			tr, ok := transport.FromServerContext(ctx)
 			if !ok {
@@ -72,14 +72,14 @@ func Server(opts ...Option) middleware.Middleware {
 }
 
 // Client is middleware client-side metadata.
-func Client(opts ...Option) middleware.Middleware {
+func Client(opts ...Option) middleware.UnaryMiddleware {
 	options := &options{
 		prefix: []string{"x-md-global-"},
 	}
 	for _, o := range opts {
 		o(options)
 	}
-	return func(handler middleware.Handler) middleware.Handler {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
 			tr, ok := transport.FromClientContext(ctx)
 			if !ok {

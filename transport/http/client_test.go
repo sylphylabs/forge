@@ -118,8 +118,8 @@ func TestWithUserAgent(t *testing.T) {
 
 func TestWithMiddleware(t *testing.T) {
 	o := &clientOptions{}
-	v := []middleware.Middleware{
-		func(middleware.Handler) middleware.Handler { return nil },
+	v := []middleware.UnaryMiddleware{
+		func(middleware.UnaryHandler) middleware.UnaryHandler { return nil },
 	}
 	WithMiddleware(v...)(o)
 	if !reflect.DeepEqual(o.middleware, v) {
@@ -453,7 +453,7 @@ func TestNewClient(t *testing.T) {
 		context.Background(),
 		WithDiscovery(&mockDiscovery{}),
 		WithEndpoint("discovery:///go-kratos"),
-		WithMiddleware(func(handler middleware.Handler) middleware.Handler {
+		WithMiddleware(func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 			t.Logf("handle in middleware")
 			return func(ctx context.Context, req any) (any, error) {
 				return handler(ctx, req)

@@ -9,29 +9,29 @@ import (
 
 // Matcher is a middleware matcher.
 type Matcher interface {
-	Use(ms ...middleware.Middleware)
-	Add(selector string, ms ...middleware.Middleware)
-	Match(operation string) []middleware.Middleware
+	Use(ms ...middleware.UnaryMiddleware)
+	Add(selector string, ms ...middleware.UnaryMiddleware)
+	Match(operation string) []middleware.UnaryMiddleware
 }
 
 // New new a middleware matcher.
 func New() Matcher {
 	return &matcher{
-		matches: make(map[string][]middleware.Middleware),
+		matches: make(map[string][]middleware.UnaryMiddleware),
 	}
 }
 
 type matcher struct {
 	prefix   []string
-	defaults []middleware.Middleware
-	matches  map[string][]middleware.Middleware
+	defaults []middleware.UnaryMiddleware
+	matches  map[string][]middleware.UnaryMiddleware
 }
 
-func (m *matcher) Use(ms ...middleware.Middleware) {
+func (m *matcher) Use(ms ...middleware.UnaryMiddleware) {
 	m.defaults = ms
 }
 
-func (m *matcher) Add(selector string, ms ...middleware.Middleware) {
+func (m *matcher) Add(selector string, ms ...middleware.UnaryMiddleware) {
 	if strings.HasSuffix(selector, "*") {
 		selector = strings.TrimSuffix(selector, "*")
 		m.prefix = append(m.prefix, selector)
@@ -45,8 +45,8 @@ func (m *matcher) Add(selector string, ms ...middleware.Middleware) {
 	m.matches[selector] = ms
 }
 
-func (m *matcher) Match(operation string) []middleware.Middleware {
-	ms := make([]middleware.Middleware, 0, len(m.defaults))
+func (m *matcher) Match(operation string) []middleware.UnaryMiddleware {
+	ms := make([]middleware.UnaryMiddleware, 0, len(m.defaults))
 	if len(m.defaults) > 0 {
 		ms = append(ms, m.defaults...)
 	}

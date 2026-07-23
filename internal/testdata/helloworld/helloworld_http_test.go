@@ -28,7 +28,7 @@ func (g middlewareGreeter) SayHello(ctx context.Context, req *HelloRequest) (*He
 func TestGeneratedUnaryMiddlewareIsPrecomposed(t *testing.T) {
 	var compositions atomic.Int32
 	var calls atomic.Int32
-	m := func(next middleware.Handler) middleware.Handler {
+	m := func(next middleware.UnaryHandler) middleware.UnaryHandler {
 		compositions.Add(1)
 		return func(ctx context.Context, req any) (any, error) {
 			calls.Add(1)

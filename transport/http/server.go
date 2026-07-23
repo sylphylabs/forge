@@ -57,7 +57,7 @@ func Timeout(timeout time.Duration) ServerOption {
 }
 
 // Middleware with service middleware option.
-func Middleware(m ...middleware.Middleware) ServerOption {
+func Middleware(m ...middleware.UnaryMiddleware) ServerOption {
 	return func(o *Server) {
 		o.setMiddleware(m...)
 	}
@@ -193,7 +193,7 @@ func NewServer(opts ...ServerOption) *Server {
 //   - '/helloworld.v1.Greeter/SayHello'
 //
 // Use panics after the first call to Start or ServeHTTP.
-func (s *Server) Use(selector string, m ...middleware.Middleware) {
+func (s *Server) Use(selector string, m ...middleware.UnaryMiddleware) {
 	s.middlewareMu.Lock()
 	defer s.middlewareMu.Unlock()
 	if s.middlewareFrozen.Load() {
@@ -202,7 +202,7 @@ func (s *Server) Use(selector string, m ...middleware.Middleware) {
 	s.middleware.Add(selector, m...)
 }
 
-func (s *Server) setMiddleware(m ...middleware.Middleware) {
+func (s *Server) setMiddleware(m ...middleware.UnaryMiddleware) {
 	s.middlewareMu.Lock()
 	defer s.middlewareMu.Unlock()
 	if s.middlewareFrozen.Load() {
@@ -213,13 +213,13 @@ func (s *Server) setMiddleware(m ...middleware.Middleware) {
 
 // WrapMiddleware binds the middleware selected for operation to h. Selection
 // and handler composition happen once, on the first invocation.
-func (s *Server) WrapMiddleware(operation string, h middleware.Handler) middleware.Handler {
+func (s *Server) WrapMiddleware(operation string, h middleware.UnaryHandler) middleware.UnaryHandler {
 	var once sync.Once
-	var wrapped middleware.Handler
+	var wrapped middleware.UnaryHandler
 	return func(ctx context.Context, req any) (any, error) {
 		s.freezeMiddleware()
 		once.Do(func() {
-			wrapped = middleware.Chain(s.middleware.Match(operation)...)(h)
+			wrapped = middleware.ChainUnary(s.middleware.Match(operation)...)(h)
 		})
 		return wrapped(ctx, req)
 	}

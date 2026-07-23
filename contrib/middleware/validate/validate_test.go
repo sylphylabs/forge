@@ -30,7 +30,7 @@ type mixedRequest struct {
 func (r *mixedRequest) Validate() error { return r.err }
 
 func TestTable(t *testing.T) {
-	var mock middleware.Handler = func(context.Context, any) (any, error) { return nil, nil }
+	var mock middleware.UnaryHandler = func(context.Context, any) (any, error) { return nil, nil }
 
 	tests := []testcase{
 		{

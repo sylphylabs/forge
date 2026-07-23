@@ -24,7 +24,7 @@ type Context interface {
 	Header() http.Header
 	Request() *http.Request
 	Response() http.ResponseWriter
-	Middleware(middleware.Handler) middleware.Handler
+	Middleware(middleware.UnaryHandler) middleware.UnaryHandler
 	Bind(any) error
 	BindVars(any) error
 	BindQuery(any) error
@@ -83,12 +83,12 @@ func (c *wrapper) Query() url.Values {
 }
 func (c *wrapper) Request() *http.Request        { return c.req }
 func (c *wrapper) Response() http.ResponseWriter { return c.res }
-func (c *wrapper) Middleware(h middleware.Handler) middleware.Handler {
+func (c *wrapper) Middleware(h middleware.UnaryHandler) middleware.UnaryHandler {
 	c.router.srv.freezeMiddleware()
 	if tr, ok := transport.FromServerContext(c.req.Context()); ok {
-		return middleware.Chain(c.router.srv.middleware.Match(tr.Operation())...)(h)
+		return middleware.ChainUnary(c.router.srv.middleware.Match(tr.Operation())...)(h)
 	}
-	return middleware.Chain(c.router.srv.middleware.Match(c.req.URL.Path)...)(h)
+	return middleware.ChainUnary(c.router.srv.middleware.Match(c.req.URL.Path)...)(h)
 }
 func (c *wrapper) Bind(v any) error      { return c.router.srv.decBody(c.req, v) }
 func (c *wrapper) BindVars(v any) error  { return c.router.srv.decVars(c.req, v) }

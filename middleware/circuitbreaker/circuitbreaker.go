@@ -35,7 +35,7 @@ type options struct {
 
 // Client circuitbreaker middleware will return errBreakerTriggered when the circuit
 // breaker is triggered and the request is rejected directly.
-func Client(opts ...Option) middleware.Middleware {
+func Client(opts ...Option) middleware.UnaryMiddleware {
 	opt := &options{
 		group: group.NewGroup(func() CircuitBreaker {
 			return internalbreaker.NewBreaker()
@@ -44,7 +44,7 @@ func Client(opts ...Option) middleware.Middleware {
 	for _, o := range opts {
 		o(opt)
 	}
-	return func(handler middleware.Handler) middleware.Handler {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (any, error) {
 			info, _ := transport.FromClientContext(ctx)
 			breaker := opt.group.Get(info.Operation())

@@ -19,8 +19,8 @@ var (
 )
 
 // Ratelimit Request rate limit middleware
-func Ratelimit(l Limiter) middleware.Middleware {
-	return func(handler middleware.Handler) middleware.Handler {
+func Ratelimit(l Limiter) middleware.UnaryMiddleware {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
 			if tr, ok := transport.FromServerContext(ctx); ok {
 				var args []model.Argument

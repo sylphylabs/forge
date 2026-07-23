@@ -45,7 +45,7 @@ func TestHTTP(t *testing.T) {
 
 	tests := []struct {
 		name string
-		kind func(*slog.Logger) middleware.Middleware
+		kind func(*slog.Logger) middleware.UnaryMiddleware
 		err  error
 		ctx  context.Context
 		want slog.Level

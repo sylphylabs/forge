@@ -345,7 +345,7 @@ func TestServerWrapMiddlewareComposesOnce(t *testing.T) {
 	const operation = "/test.Service/Call"
 	var compositions atomic.Int32
 	var calls atomic.Int32
-	m := func(next middleware.Handler) middleware.Handler {
+	m := func(next middleware.UnaryHandler) middleware.UnaryHandler {
 		compositions.Add(1)
 		return func(ctx context.Context, req any) (any, error) {
 			calls.Add(1)
@@ -376,7 +376,7 @@ func TestServerWrapMiddlewareComposesOnce(t *testing.T) {
 }
 
 func TestServerMiddlewareConfigurationPanicsAfterServeHTTP(t *testing.T) {
-	m := func(next middleware.Handler) middleware.Handler { return next }
+	m := func(next middleware.UnaryHandler) middleware.UnaryHandler { return next }
 	tests := map[string]func(*Server){
 		"Use":    func(srv *Server) { srv.Use("/*", m) },
 		"option": func(srv *Server) { Middleware(m)(srv) },

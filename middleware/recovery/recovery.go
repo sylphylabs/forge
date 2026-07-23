@@ -43,7 +43,7 @@ func WithLogger(logger *slog.Logger) Option {
 }
 
 // Recovery is a server middleware that recovers from any panics.
-func Recovery(opts ...Option) middleware.Middleware {
+func Recovery(opts ...Option) middleware.UnaryMiddleware {
 	op := options{
 		handler: func(context.Context, any, any) error {
 			return ErrUnknownRequest
@@ -56,7 +56,7 @@ func Recovery(opts ...Option) middleware.Middleware {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return func(handler middleware.Handler) middleware.Handler {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
 			startTime := time.Now()
 			defer func() {

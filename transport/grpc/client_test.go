@@ -33,8 +33,8 @@ func TestWithTimeout(t *testing.T) {
 
 func TestWithMiddleware(t *testing.T) {
 	o := &clientOptions{}
-	v := []middleware.Middleware{
-		func(middleware.Handler) middleware.Handler { return nil },
+	v := []middleware.UnaryMiddleware{
+		func(middleware.UnaryHandler) middleware.UnaryHandler { return nil },
 	}
 	WithMiddleware(v...)(o)
 	if !reflect.DeepEqual(v, o.middleware) {
@@ -44,8 +44,8 @@ func TestWithMiddleware(t *testing.T) {
 
 func TestWithStreamMiddleware(t *testing.T) {
 	o := &clientOptions{}
-	v := []middleware.Middleware{
-		func(middleware.Handler) middleware.Handler { return nil },
+	v := []middleware.UnaryMiddleware{
+		func(middleware.UnaryHandler) middleware.UnaryHandler { return nil },
 	}
 	WithStreamMiddleware(v...)(o)
 	if !reflect.DeepEqual(v, o.streamMiddleware) {
@@ -81,8 +81,8 @@ func TestWithTLSConfig(t *testing.T) {
 	}
 }
 
-func EmptyMiddleware() middleware.Middleware {
-	return func(handler middleware.Handler) middleware.Handler {
+func EmptyMiddleware() middleware.UnaryMiddleware {
+	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
 			return handler(ctx, req)
 		}
@@ -90,7 +90,7 @@ func EmptyMiddleware() middleware.Middleware {
 }
 
 func TestUnaryClientInterceptor(t *testing.T) {
-	f := unaryClientInterceptor([]middleware.Middleware{EmptyMiddleware()}, time.Duration(100), nil)
+	f := unaryClientInterceptor([]middleware.UnaryMiddleware{EmptyMiddleware()}, time.Duration(100), nil)
 	req := &struct{}{}
 	resp := &struct{}{}
 

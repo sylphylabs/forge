@@ -51,7 +51,7 @@ type clientOptions struct {
 	transport    http.RoundTripper
 	nodeFilters  []selector.NodeFilter
 	discovery    registry.Discovery
-	middleware   []middleware.Middleware
+	middleware   []middleware.UnaryMiddleware
 	block        bool
 	subsetSize   int
 }
@@ -86,7 +86,7 @@ func WithUserAgent(ua string) ClientOption {
 }
 
 // WithMiddleware with client middleware.
-func WithMiddleware(m ...middleware.Middleware) ClientOption {
+func WithMiddleware(m ...middleware.UnaryMiddleware) ClientOption {
 	return func(o *clientOptions) {
 		o.middleware = m
 	}
@@ -280,7 +280,7 @@ func (client *Client) invoke(ctx context.Context, req *http.Request, args any, r
 	var p selector.Peer
 	ctx = selector.NewPeerContext(ctx, &p)
 	if len(client.opts.middleware) > 0 {
-		h = middleware.Chain(client.opts.middleware...)(h)
+		h = middleware.ChainUnary(client.opts.middleware...)(h)
 	}
 	_, err := h(ctx, args)
 	return err

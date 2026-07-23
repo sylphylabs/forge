@@ -59,13 +59,13 @@ func Timeout(timeout time.Duration) ServerOption {
 }
 
 // Middleware with server middleware.
-func Middleware(m ...middleware.Middleware) ServerOption {
+func Middleware(m ...middleware.UnaryMiddleware) ServerOption {
 	return func(s *Server) {
 		s.middleware.Use(m...)
 	}
 }
 
-func StreamMiddleware(m ...middleware.Middleware) ServerOption {
+func StreamMiddleware(m ...middleware.UnaryMiddleware) ServerOption {
 	return func(s *Server) {
 		s.streamMiddleware.Use(m...)
 	}
@@ -197,7 +197,7 @@ func NewServer(opts ...ServerOption) *Server {
 //   - '/*'
 //   - '/helloworld.v1.Greeter/*'
 //   - '/helloworld.v1.Greeter/SayHello'
-func (s *Server) Use(selector string, m ...middleware.Middleware) {
+func (s *Server) Use(selector string, m ...middleware.UnaryMiddleware) {
 	s.middleware.Add(selector, m...)
 }
 
