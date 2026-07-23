@@ -105,6 +105,8 @@ OpenKratos already differs materially from its Kratos v3 baseline:
 - Config reloads publish a complete resolved snapshot atomically.
 - Logging is based on `log/slog`, and transport telemetry uses current
   OpenTelemetry semantic conventions.
+- Unary and stream middleware have separate runtime contracts, generated
+  service plans, and registration-time HTTP/gRPC composition.
 - Selector and codec hot paths have controlled before-and-after benchmark
   evidence.
 
@@ -117,7 +119,6 @@ remaining inherited runtime boundaries rather than reopening validated work.
 | --- | --- | --- |
 | Codec ownership | `encoding.RegisterCodec` mutates a package map populated by import-time registration. | Immutable or explicitly owned registries passed to consumers. |
 | Logger ownership | Constructing an `App` with a logger changes `slog.Default` for the process. | App-scoped logging; migration tooling rewrites legacy global-helper usage. |
-| Middleware ABI | One `func(context.Context, any) (any, error)` shape is used ambiguously for unary and parts of streaming. Generated bindings still cross an untyped boundary. | Separate unary and stream middleware contracts plus generated Go service plans and registration-time composition, without Proto hook names or a core selector adapter. |
 | Application lifecycle | `App.Run` installs process signals and combines host policy with service lifecycle. | Context-first application control; signal handling is an opt-in host concern. |
 | Readiness | Server goroutine start is used as the registration barrier. It does not prove that every server is ready to accept traffic. | Explicit readiness state and registration only after all required servers are ready. |
 | HTTP protection | The constructed `http.Server` sets a handler and TLS config but no header, idle, or header-size limits. | Documented secure defaults, explicit opt-outs, and streaming-aware request budgets. |
@@ -133,19 +134,19 @@ avoidable repeated discovery, parsing, lookup, locking, and allocation.
 
 ## Workstream 0: Release Baseline
 
-The first releaseable root, API, and unified generator versions are a
-prerequisite for breaking runtime work. Existing Google HTTP transcoding and
-error generation must be available through the unified generator without
-repository-relative replacements before new generated contracts are
-introduced.
+The local atomic generator cutover may proceed before public release. Publishing
+the first supported root and API versions plus the atomic Buf plugins remains a
+prerequisite for claiming a releaseable external toolchain. Existing Google HTTP
+transcoding and error generation must be available through pinned published
+plugins without repository-relative replacements before public release.
 
 Required outcomes:
 
 - Publish a machine-readable inventory of every module, owner, support tier,
   dependency order, and tag prefix.
 - Remove local `replace` directives from published artifacts.
-- Prove `go install` for `protoc-gen-go-openkratos` from a versioned module
-  outside the repository.
+- Publish and consume pinned `buf.build/openkratos/go-errors`, `go-http`, and
+  `go-middleware` plugin revisions outside the repository.
 - Build and test a minimal external consumer using only published versions.
 - Record the root, generator, and supported contrib version relationship.
 
@@ -425,7 +426,7 @@ Acceptance gates:
 
 Workstreams are intentionally independent. The expected order is:
 
-1. Complete the release baseline and versioned unified-generator installation.
+1. Complete the release baseline and atomic Buf plugin publication.
 2. Introduce explicit runtime dependencies without changing operation binding.
 3. Redesign application lifecycle and config lifecycle as separate changes.
 4. Land the shared generated operation contract, generated Go middleware plans,

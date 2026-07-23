@@ -1,13 +1,19 @@
-# OpenKratos Protobuf Generation
+# Atomic Protobuf Generation
 
-Status: approved implementation contract
+Status: approved target contract; implementation pending
 
 Last reviewed: July 23, 2026
 
 ## Purpose
 
-This document defines the ownership, executable topology, output boundaries,
-release model, and migration rules for OpenKratos Protobuf generation.
+This document defines the target ownership, packaging, diagnostics, release,
+and compatibility contract for OpenKratos-owned Go Protobuf generators.
+
+The current checkout still ships the transitional
+`protoc-gen-go-openkratos` executable. It remains the documented current
+behavior until the atomic plugins pass their acceptance gates and the cutover
+lands. This contract defines that cutover; it does not claim that the new Buf
+plugins are already published.
 
 The public annotation schemas are defined by
 [`public-protobuf-api-module.md`](public-protobuf-api-module.md). Generated
@@ -18,198 +24,330 @@ behavior is defined by
 
 ## Decision
 
-OpenKratos owns one Go code-generation plugin:
+OpenKratos publishes three independently selectable Buf plugins:
+
+| Buf plugin | Executable | Protoc flag | Responsibility |
+| --- | --- | --- | --- |
+| `buf.build/openkratos/go-errors` | `protoc-gen-go-errors` | `--go-errors_out` | Business error helpers |
+| `buf.build/openkratos/go-http` | `protoc-gen-go-http` | `--go-http_out` | HTTP bindings and Google HTTP transcoding |
+| `buf.build/openkratos/go-middleware` | `protoc-gen-go-middleware` | `--go-middleware_out` | Service middleware plans and HTTP/gRPC wrappers |
+
+The executable names deliberately omit `openkratos`. The Buf owner namespace
+already supplies project identity, and repeating it in every plugin and binary
+adds no disambiguating information.
+
+The upstream generators remain independent:
+
+- `protoc-gen-go` owns protobuf messages and descriptors;
+- `protoc-gen-go-grpc` owns gRPC clients, servers, stream interfaces, handlers,
+  and `grpc.ServiceDesc`.
+
+OpenKratos does not wrap, fork, or republish those upstream generators.
+
+## Why Atomic Plugins
+
+Buf owns plugin distribution, execution, and version pinning for the supported
+workflow. Installation convenience is therefore not a reason to couple
+unrelated generation responsibilities into one executable.
+
+Atomic plugins provide:
+
+- one responsibility and option namespace per executable;
+- independent release and rollback of errors, HTTP, and middleware generation;
+- accurate generated-file headers and compatibility requirements;
+- focused fixtures, diagnostics, and compatibility matrices;
+- no requirement to run HTTP generation for an errors-only schema;
+- no requirement to release HTTP code after an errors-only change;
+- explicit selection of the generated surfaces an application consumes.
+
+The split is packaging and ownership, not source duplication. Shared descriptor,
+naming, diagnostic, and test infrastructure remains ordinary Go code reused by
+the three commands.
+
+## Source Topology
+
+The target repository layout is:
 
 ```text
-github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
+cmd/
+  go.mod
+  internal/generator/
+    diagnostics/
+    naming/
+    testutil/
+  protoc-gen-go-errors/
+  protoc-gen-go-http/
+  protoc-gen-go-middleware/
 ```
 
-The executable name is `protoc-gen-go-openkratos`, and its `protoc` flag is
-`--go-openkratos_out`.
+The three commands share one generator-focused Go module so generator-only
+dependencies do not enter the runtime module. A shared package is added only
+for behavior used by at least two plugins; pass-specific analysis and rendering
+stay beside the command that owns them. No `common`, `utils`, pass registry, or
+generic plugin framework is introduced.
 
-This plugin replaces the separate OpenKratos-owned HTTP and error generators.
-It also owns generated middleware plans, shared operation facts, and
-OpenKratos transport wrappers as those contracts are implemented.
-
-The consolidation boundary is ownership, not all Protobuf generation:
-
-| Plugin | Owner | Responsibility |
-| --- | --- | --- |
-| `protoc-gen-go` | Google Protobuf | Go messages, enums, descriptors, and extensions |
-| `protoc-gen-go-grpc` | grpc-go | Standard gRPC clients, servers, stream interfaces, and service descriptors |
-| Validation or documentation plugins | Their upstream projects | Independent generated contracts selected by an application |
-| `protoc-gen-go-openkratos` | OpenKratos | Error helpers, middleware plans, operation facts, HTTP bindings, and OpenKratos transport wrappers |
-
-OpenKratos must not copy `protoc-gen-go` or `protoc-gen-go-grpc` merely to offer
-one command. Buf or `protoc` remains the orchestrator for independently owned
-plugins.
-
-## One Executable, Separate Passes
-
-The plugin is one release artifact and receives one
-`CodeGeneratorRequest`. Its implementation remains split into focused passes:
+The source module identity is fixed as:
 
 ```text
-cmd/protoc-gen-go-openkratos/
-|-- main.go
-`-- internal/generator/
-    |-- errors/
-    |-- middleware/
-    |-- operation/
-    |-- http/
-    `-- grpcadapter/
+module github.com/openkratos/kratos/cmd
+tag prefix: cmd
 ```
 
-The exact package layout may stay flatter while a pass is small. The required
-boundary is that errors, operation analysis, middleware wiring, HTTP wire
-generation, and gRPC adaptation do not become one template or one mutable
-cross-transport model. Shared descriptor analysis has one owner, and output
-passes consume its validated result.
+`modules.json` records that single Go module. The three Buf plugins remain
+independent published artifacts; their BSR revisions are not Go module tags.
 
-One executable does not imply one generated source file. Outputs stay separate
-so ownership, diffs, and compile failures remain local:
+Each executable has its own `main` package, flags, and fixtures. Each published
+Buf plugin has its own version and release artifact even though the command
+sources share one Go module. A plugin must not invoke another plugin, parse
+another plugin's generated Go source, or rely on execution order for descriptor
+analysis.
 
-| Output | Contents | Emission condition |
-| --- | --- | --- |
-| `<prefix>_errors.pb.go` | `ErrorXxx` and `IsXxx` helpers | At least one enum value has a valid OpenKratos error annotation |
-| `<prefix>_http.pb.go` | OpenKratos HTTP client and server bindings | The file has an applicable HTTP binding under the configured HTTP rules |
-| `<prefix>_openkratos.pb.go` | Service middleware plans and enabled HTTP or gRPC wrappers | The file contains a service requiring generated OpenKratos wiring |
-| `<prefix>_operation.pb.go` | Shared compile-time operation facts | The approved operation contract requires a separate transport-neutral artifact |
+## Output Ownership
 
-The operation output is reserved for the focused operation-contract workstream.
-It must not be emitted as an empty placeholder before that contract is frozen.
-Generated files may refer to types produced by `protoc-gen-go` and
-`protoc-gen-go-grpc`; they must not reproduce those upstream definitions.
+For `service.proto`, applicable plugins emit separate deterministic files:
 
-## Selection and Options
+```text
+service_errors.pb.go
+service_http.pb.go
+service_middleware.pb.go
+```
 
-Error and HTTP output is descriptor-driven, and each pass skips files to which
-it does not apply. Middleware plans are derived from service methods, not from
-middleware names stored in Protobuf. Transport-wrapper options state which
-upstream transport outputs an application generates; a wrapper for a disabled
-or absent transport is not emitted.
+Applicability is descriptor-driven:
 
-Standard `protogen` path options remain available. Options owned by one pass
-must use a pass-specific prefix such as `http_`; an HTTP option must not change
-error or middleware output. The cutover implementation must document exact
-replacements for the inherited `omitempty` and `omitempty_prefix` options
-without changing their route semantics implicitly.
+- `go-errors` emits output only when the file declares supported error enum
+  annotations;
+- `go-http` emits output only when the selected HTTP policy produces bindings;
+- `go-middleware` emits plans for every service in a generated file and only the
+  transport wrappers explicitly enabled by its options.
 
-There is no general `features=errors,http,middleware` switch. A declared error
-annotation or an enabled transport must not silently lose required generated
-code because a second feature list drifted from the source and transport
-configuration.
+No empty placeholder file is emitted. Generated headers name the exact plugin
+and version that produced the file.
+
+The plugins do not share ownership:
+
+- `go-errors` does not emit services or transport code;
+- `go-http` does not emit error helpers or middleware plans;
+- `go-middleware` does not parse HTTP paths, generate codecs, copy gRPC
+  registration, or emit transport clients.
+
+## Options
+
+Standard `protogen` path options remain available to every plugin.
+
+`go-http` owns the inherited HTTP options without a cross-pass prefix:
+
+```text
+omitempty
+omitempty_prefix
+```
+
+`omitempty` defaults to `true`; `omitempty_prefix` defaults to the empty string.
+With `omitempty=true`, only RPCs with inline `(google.api.http)` annotations are
+included. With `omitempty=false`, unannotated unary RPCs also receive generated
+default POST bindings. Streaming RPCs never receive implicit default bindings.
+
+`go-errors` has no feature selector. Supported annotations in the descriptor
+determine whether it emits output.
+
+`go-middleware` accepts transport-wrapper options:
+
+```text
+http=annotated
+http=all
+grpc=true
+```
+
+The `http` option is omitted by default and accepts exactly one method-set mode:
+
+- `http=annotated` matches `go-http omitempty=true`;
+- `http=all` matches `go-http omitempty=false`.
+
+`grpc` defaults to `false`. These options assert that the corresponding
+generated service interfaces are part of the application's generation pipeline.
+They do not cause `go-middleware` to generate HTTP or gRPC wire bindings. An
+omitted or disabled wrapper is not emitted. Unknown HTTP modes and invalid
+boolean values are generation errors.
+
+The duplicated HTTP policy is deliberate and compile-time checked: a
+`go-middleware` HTTP mode that does not match the `go-http` `omitempty` setting
+produces incompatible generated interfaces and fails compilation instead of
+silently allowing a route to bypass its service plan. External Service Config
+is not supported, so inline annotations and the optional default-binding policy
+are the complete HTTP method-set inputs.
+
+There is no general `features=errors,http,middleware` option. Buf plugin entries
+already select responsibilities, and duplicating that selection inside a second
+feature list creates drift.
+
+## Buf Configuration
+
+The intended published configuration is:
+
+```yaml
+plugins:
+  - remote: buf.build/protocolbuffers/go:v1.36.11
+    out: gen/go
+    opt: paths=source_relative
+
+  - remote: buf.build/grpc/go:v1.6.1
+    out: gen/go
+    opt: paths=source_relative
+
+  - remote: buf.build/openkratos/go-errors:<version>
+    out: gen/go
+    opt: paths=source_relative
+
+  - remote: buf.build/openkratos/go-http:<version>
+    out: gen/go
+    opt: paths=source_relative,omitempty=true
+
+  - remote: buf.build/openkratos/go-middleware:<version>
+    out: gen/go
+    opt: paths=source_relative,http=annotated,grpc=true
+```
+
+Applications omit plugin entries for surfaces they do not use. Every remote
+plugin revision is pinned directly in the repository's reviewed `buf.gen.yaml`;
+examples must not use floating development revisions. `buf.lock` continues to
+lock schema module dependencies and is not treated as the plugin-version lock.
 
 ## Analysis and Diagnostics
 
-The plugin follows an analyze-then-emit pipeline:
+Each plugin independently follows an analyze-then-emit pipeline:
 
-1. Read all files selected for generation and resolve public OpenKratos and
-   upstream extension descriptors.
-2. Build immutable per-file and per-service facts shared by relevant passes.
-3. Validate identifiers, annotations, HTTP bindings, output collisions, and
-   required upstream generated contracts.
-4. Emit separate deterministic files only after analysis succeeds.
+1. Read every file selected for that plugin invocation.
+2. Resolve the public OpenKratos and upstream descriptors it owns.
+3. Build immutable per-file and per-service facts.
+4. Validate annotations, identifiers, output collisions, and required generated
+   contracts.
+5. Emit deterministic files only after that plugin's analysis succeeds.
 
-Invalid input returns a generation error. Generator code must not panic for a
-user-authored invalid annotation, silently skip a malformed declaration, or
-return a successful partial response. Diagnostics identify the proto file and,
-where applicable, the service, method, enum, field, option, and offending
-value.
+Invalid user-authored input returns a generation error rather than panicking,
+logging and continuing, or silently omitting output. Diagnostics identify the
+proto file and, where applicable, service, method, enum, field, option, and
+offending value.
 
-The plugin advertises only Protobuf features and Editions that every applicable
-pass handles correctly. Consolidation therefore requires the error,
-middleware, and adapter passes to meet the same Open/Opaque and Editions
-validation bar as the HTTP pass before the old executables are removed.
+Shared diagnostic helpers may standardize source qualification and formatting.
+They must not turn the plugins into runtime-loaded passes or erase plugin-specific
+error ownership.
 
-## Runtime and Release Contract
+## Cross-Plugin Contracts
 
-All OpenKratos-generated files carry the same generator version in their
-header. Each output also uses the narrowest compile-time runtime compatibility
-assertion for the package it consumes. A single generator version does not
-replace transport-specific compatibility checks.
+Splitting executables does not remove generated API dependencies. It makes them
+explicit:
 
-The unified generator is one Go module and one independently installable
-release artifact. Its release records:
+- generated error helpers consume the published OpenKratos error descriptor and
+  runtime errors API;
+- generated HTTP bindings consume the documented `transport/http` support
+  version;
+- HTTP middleware wrappers compile against the interface emitted by `go-http`;
+- gRPC middleware wrappers compile against interfaces emitted by
+  `protoc-gen-go-grpc`;
+- every middleware wrapper consumes the public OpenKratos middleware ABI.
 
-- the generator version and source commit;
-- the minimum compatible OpenKratos runtime version;
-- the compatible `github.com/openkratos/api` version and descriptor identity;
-- the supported Go, Protobuf, and Editions range;
-- clean external-consumer generation and compilation evidence.
+Each generated file carries the narrowest compile-time support assertion for
+the runtime package it consumes. The compatibility matrix records plugin,
+OpenKratos API, runtime, `protoc-gen-go`, and `protoc-gen-go-grpc` versions.
 
-The published module must not contain a repository-relative `replace`. A
-release is incomplete until this succeeds outside the OpenKratos checkout:
+A missing companion plugin or incompatible generated interface must fail at
+generation or Go compilation with an actionable diagnostic. No runtime
+reflection fallback, generated-source parser, or request-time adapter hides a
+version mismatch.
 
-```shell
-GOWORK=off go install github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos@<version>
-```
+## Release Contract
 
-Consolidation reduces installation, versioning, descriptor analysis, and
-diagnostic complexity. It makes no request-path performance claim by itself;
-runtime improvements must be demonstrated by generated code and focused
-benchmarks for the affected transport.
+The three Buf plugins are independent release artifacts and may be pinned or
+rolled back independently. They may initially be published from the same Git
+repository, source commit, and release train; that operational choice does not
+merge their compatibility identities.
 
-## Migration
+Every plugin release records:
 
-The generator cutover is intentionally breaking. OpenKratos does not retain
-wrapper binaries at the old command paths.
+- plugin identity, version, and source commit;
+- supported Protobuf Editions and API levels;
+- compatible OpenKratos API and runtime versions;
+- compatible upstream Go and gRPC generator versions where applicable;
+- deterministic generation and external-consumer evidence.
 
-An application migration performs these steps in one generated-code change:
+Buf publication replaces versioned `go install` as the distribution acceptance
+gate. Local command builds remain development and CI checks, not the public
+installation contract.
 
-1. Remove `protoc-gen-go-http` and `protoc-gen-go-errors` from tool dependencies
-   and Buf or `protoc` configuration.
-2. Add and pin `protoc-gen-go-openkratos`.
-3. Translate documented generator options to their namespaced replacements.
-4. Delete files produced by the old generators and regenerate from `.proto`
-   source.
-5. Review the generated diff by output responsibility rather than editing
-   generated files.
-6. Run compilation and transport/error behavior tests against the paired
-   runtime version.
+## Local Cutover
 
-The migration guide must include a concrete Buf before/after example and an
-option mapping before the old modules are removed. Expected filename and header
-changes are generated churn; route availability, error codes, middleware order,
-and RPC behavior are semantic changes and require separate documentation and
-tests.
+The cutover is intentionally breaking. OpenKratos does not retain a forwarding
+`protoc-gen-go-openkratos` binary after the local atomic commands pass their
+acceptance gates.
 
-Current-behavior documentation continues to name the two old generators until
-the unified executable is implemented and validated. The implementation change
-updates current behavior and both language versions of the Kratos migration
-guide in the same commit.
+Implementation proceeds in this order:
 
-## Implementation Sequence
+1. Extract shared source helpers without changing current generated behavior.
+2. Add the three command entry points and plugin-specific tests.
+3. Prove output equivalence for existing fixtures except documented filenames,
+   headers, and option names.
+4. Add combined Buf fixtures for errors-only, HTTP-only, middleware-only,
+   gRPC-only, and all-enabled generation.
+5. Switch repository generation and examples to the local atomic commands.
+6. Update current-behavior, compatibility, and migration documentation.
+7. Remove the unified command, module path, options, and generated filenames.
+8. Prove the repository and local external-consumer fixtures with `GOWORK=off`;
+   local `replace` directives remain explicitly pre-publication only.
 
-1. Move reusable analysis and rendering code behind internal pass boundaries
-   without changing generated behavior.
-2. Add the unified entry point and prove equivalent error and HTTP output for
-   existing fixtures, except for generator headers and documented filenames.
-3. Modernize error diagnostics and Editions support required by the common
-   feature declaration.
-4. Add middleware plans and transport wrappers from their approved contract.
-5. Add external-consumer fixtures using `protoc-gen-go`,
-   `protoc-gen-go-grpc`, and `protoc-gen-go-openkratos` together.
-6. Update migration and current-behavior documentation, then remove the old
-   generator modules and commands.
-7. Publish and verify the unified generator before releasing generated code
-   that requires it.
+The implementation must not rewrite committed generated files until the new
+commands produce complete deterministic replacements. A failed cutover is
+reverted by restoring the previous Buf plugin entries and generated files in
+one change, not by shipping both command families indefinitely.
 
-## Acceptance Gates
+## Publication Gate
 
-The consolidation is complete only when:
+Remote publication is a later acceptance gate and does not block the local
+breaking cutover. Publication requires:
 
-- one invocation generates every applicable OpenKratos artifact;
-- files without relevant declarations produce no empty OpenKratos output;
-- error-only, HTTP-only, gRPC-only, and combined fixtures compile;
-- middleware plans affect HTTP and OpenKratos gRPC wrappers consistently;
-- invalid input produces deterministic, source-qualified errors and no partial
-  generated response;
-- Open and Opaque Protobuf API fixtures pass for every output pass;
-- output is deterministic across repeated generation;
-- focused generator tests, root runtime tests, `go vet`, and relevant race tests
-  pass;
-- a clean external consumer installs released plugins and builds without
-  `go.work`, local paths, or `replace` directives;
-- migration documentation contains exact command, option, file, and generated
-  API rewrites.
+1. release candidates for all three Buf plugins;
+2. released API and runtime Go modules with no repository-relative replacement;
+3. a clean external consumer using pinned published BSR artifacts;
+4. recorded plugin revisions, source commits, compatibility versions, and
+   deterministic-generation evidence.
+
+The public release is incomplete until those checks pass, even when the local
+source cutover is complete.
+
+## Validation Contract
+
+Required evidence includes:
+
+- plugin-specific unit and golden tests;
+- Open and Opaque Protobuf API fixtures for every plugin;
+- deterministic repeated generation;
+- source-qualified diagnostics with no successful partial response;
+- compile tests for every supported plugin combination;
+- compile-time mismatch tests for missing or incompatible companions;
+- `GOWORK=off go test ./...` and `go vet ./...` in the generator module;
+- clean Buf generation with no committed diff;
+- a local external-consumer fixture that invokes the three commands explicitly;
+- for publication, a second external consumer using pinned published plugins
+  and no local executable, `go.work`, repository-relative path, or `replace`
+  directive.
+
+Runtime tests remain owned by the runtime packages affected by each generated
+surface. Generator consolidation or splitting makes no request-path performance
+claim by itself.
+
+## Definition of Done
+
+The local atomic generation cutover is complete only when:
+
+- each executable owns exactly one documented responsibility;
+- current fixtures generate and compile through the atomic plugins;
+- errors, HTTP, and middleware output can be selected independently;
+- shared source code does not create a runtime pass registry or output coupling;
+- generated compatibility failures are explicit and actionable;
+- no active configuration invokes `protoc-gen-go-openkratos` or
+  `--go-openkratos_out`;
+- current-behavior and migration documentation names the atomic plugins.
+
+Public release acceptance additionally requires:
+
+- all three intended `buf.build/openkratos/*` plugins are published and pinned;
+- external generation and compilation pass using published Buf artifacts and
+  released Go modules, with no local repository dependency.

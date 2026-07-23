@@ -249,8 +249,11 @@ additional-binding fixtures support them, but a generated primary client returns
 
 ### Descriptor Validation
 
-`protoc-gen-go-openkratos` validates every rule before rendering source. An error
-includes the fully qualified RPC name, rule path, and offending field path.
+The current `protoc-gen-go-openkratos` executable validates every rule before
+rendering source. The atomic generator cutover moves this responsibility
+unchanged to `protoc-gen-go-http`; no second HTTP validator is introduced. An
+error includes the fully qualified RPC name, rule path, and offending field
+path.
 
 Generation fails when:
 
@@ -439,6 +442,10 @@ cd cmd/protoc-gen-go-openkratos
 go test ./...
 go vet ./...
 ```
+
+After the atomic generator cutover, the equivalent plugin-specific gate runs
+the `protoc-gen-go-http` package from the shared `cmd` generator module. Until
+that cutover lands, the commands above remain the current-checkout validation.
 
 The repository-wide multi-module compile check documented in `DEVELOPMENT.md`
 must also pass. External services are not required for these conformance tests.

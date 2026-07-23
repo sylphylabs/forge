@@ -1,6 +1,6 @@
 # Generated Middleware Wiring
 
-Status: implemented locally; published release validation pending
+Status: runtime implemented locally; atomic generator packaging pending
 
 Last reviewed: July 23, 2026
 
@@ -15,7 +15,7 @@ from Kratos selectors.
 The public Protobuf module is defined in
 [`public-protobuf-api-module.md`](public-protobuf-api-module.md). The wider
 runtime plan is defined in
-[`runtime-modernization.md`](runtime-modernization.md). The unified generator
+[`runtime-modernization.md`](runtime-modernization.md). The atomic generator
 topology is defined in
 [`protobuf-generation.md`](protobuf-generation.md).
 
@@ -224,22 +224,33 @@ both transports.
 
 ## Generator Ownership
 
-The unified `protoc-gen-go-openkratos` plugin owns the service plan and wrapper
-constructors. It emits one `_openkratos.pb.go` file for each applicable business
-Proto file and may generate only the transport wrappers enabled by generator
-options. The same executable also coordinates the independent error and HTTP
-output passes defined by the generator topology contract.
+The target `protoc-gen-go-middleware` plugin exclusively owns the service plan
+and wrapper constructors. It emits one `_middleware.pb.go` file for each
+business Proto file that declares services and only the transport wrappers
+enabled by its options. Plans are generated even when both transport wrappers
+are disabled. The current unified executable is transitional and is removed
+after the atomic plugin cutover.
+
+The HTTP wrapper option names the interface method set rather than a boolean:
+
+- `http=annotated` wraps the interface emitted by `go-http omitempty=true`;
+- `http=all` wraps the interface emitted by `go-http omitempty=false`;
+- omitting `http` emits no HTTP wrapper.
+
+`grpc=true` emits the gRPC wrapper and defaults to false. A mismatched HTTP
+method-set configuration fails Go compilation; the generator never guesses or
+discovers another plugin's options at runtime.
 
 Wire behavior remains owned by the established generators:
 
 - `protoc-gen-go` owns protobuf messages and descriptors;
 - `protoc-gen-go-grpc` owns gRPC clients, server interfaces, stream interfaces,
   handlers, and `grpc.ServiceDesc`;
-- the HTTP pass in `protoc-gen-go-openkratos` owns HTTP routes, transcoding,
-  clients, and HTTP stream adapters;
-- the middleware pass in `protoc-gen-go-openkratos` owns plans and wrappers
-  around generated service interfaces;
-- the error pass in `protoc-gen-go-openkratos` owns business error helpers.
+- `protoc-gen-go-http` owns HTTP routes, transcoding, clients, and HTTP stream
+  adapters;
+- `protoc-gen-go-middleware` owns plans and wrappers around generated service
+  interfaces;
+- `protoc-gen-go-errors` owns business error helpers.
 
 The middleware pass must not copy HTTP path parsing, gRPC registration, codecs,
 or transport dispatch from their owning passes or upstream generators. A wrapper
@@ -432,7 +443,8 @@ and gRPC per-message semantics.
 
 - [x] Generate zero-value usable service plans with service-default and method
   fields.
-- [x] Add `protoc-gen-go-openkratos` as the single owner of plans and wrappers.
+- [ ] Move the implemented plan and wrapper pass to
+  `protoc-gen-go-middleware` as its sole owner.
 - [x] Generate HTTP and gRPC wrappers consuming the same plan type without copying
   their wire bindings.
 - [x] Snapshot and compose every operation during wrapper construction.

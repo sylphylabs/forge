@@ -20,7 +20,7 @@ Generated middleware wiring is defined separately in
 public Protobuf schema. Runtime modernization and the typed operation path are
 defined in
 [`runtime-modernization.md`](runtime-modernization.md). Generator ownership and
-consolidation are defined in
+atomic packaging are defined in
 [`protobuf-generation.md`](protobuf-generation.md).
 
 ## Decisions
@@ -34,8 +34,8 @@ The following decisions are fixed for implementation planning:
 4. Public Protobuf packages and file paths are versioned from their first
    OpenKratos release.
 5. Every public contract has exactly one hand-maintained `.proto` source.
-6. The OpenKratos runtime and unified generator consume the same generated Go API
-   package. They do not generate private copies of public descriptors.
+6. The OpenKratos runtime and atomic generators consume the same generated Go
+   API package. They do not generate private copies of public descriptors.
 7. The three inherited `errors.proto` sources are removed after consumers move
    to the OpenKratos API module.
 8. Compatibility code, source rewriting, and transition advice live in a
@@ -44,9 +44,9 @@ The following decisions are fixed for implementation planning:
    not copied into or republished from the OpenKratos API module.
 10. Middleware wiring and deployment policy are generated or configured in Go;
     neither is published as an OpenKratos Protobuf contract.
-11. OpenKratos-owned Go generation is released through one
-    `protoc-gen-go-openkratos` plugin; upstream Go and gRPC generators remain
-    independently owned plugins.
+11. OpenKratos-owned Go generation is released as the independently selectable
+    `go-errors`, `go-http`, and `go-middleware` Buf plugins; upstream Go and
+    gRPC generators remain independently owned plugins.
 
 These decisions deliberately replace the inherited module topology. They do
 not promise that `errors/errors.proto`, `package errors`, extension numbers
@@ -83,7 +83,9 @@ OpenKratos annotations without importing the complete framework runtime.
 | Go module | `github.com/openkratos/api` | Versioned generated Go packages consumed by runtime, generators, and business code |
 | BSR module | `buf.build/openkratos/api` | Versioned Protobuf source and descriptor distribution |
 | Runtime module | `github.com/openkratos/kratos` | Error behavior, transports, middleware compilation, application runtime |
-| OpenKratos generator | `github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos` | Reads OpenKratos and upstream descriptors and emits independently scoped OpenKratos Go artifacts |
+| Error generator | `buf.build/openkratos/go-errors` | Emits business error helpers |
+| HTTP generator | `buf.build/openkratos/go-http` | Emits HTTP bindings and transcoding code |
+| Middleware generator | `buf.build/openkratos/go-middleware` | Emits service plans and transport wrappers |
 
 The Git repository, Go module, and BSR module are separate release artifacts
 even though the first two share a repository. Release evidence must identify
@@ -233,9 +235,9 @@ Changing those semantics is a separate versioned error-contract decision.
 ### Local prototype evidence
 
 The contract currently exists in the sibling local repository
-`../OpenKratos-api` at commit `86742bf`. It has not been published to GitHub or
-the Buf Schema Registry. The prototype uses these intended public identities so
-that local generation exercises the future import boundary:
+`../OpenKratos-api` at commit `025d772`. It has not been published to GitHub or
+the Buf Schema Registry. The local implementation uses these intended public
+identities so generation exercises the future import boundary:
 
 - Go module: `github.com/openkratos/api`;
 - Buf module: `buf.build/openkratos/api`.
@@ -291,16 +293,15 @@ github.com/openkratos/api
         ^
         |
         +-- github.com/openkratos/kratos
-        `-- github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
+        `-- protoc-gen-go-errors
 ```
 
 The API module must never import the runtime or generator modules.
 
 ### Generator ownership
 
-The error pass in `protoc-gen-go-openkratos` imports
-`github.com/openkratos/api/errors/v1` to read the registered extension
-descriptors. It must not contain:
+`protoc-gen-go-errors` imports `github.com/openkratos/api/errors/v1` to read the
+registered extension descriptors. It must not contain:
 
 - a private hand-maintained `errors.proto`;
 - a private generated binding for the same public file;
@@ -312,9 +313,9 @@ and the API package for descriptors. The generator must report unsupported or
 missing annotations as explicit generation errors rather than silently
 producing incomplete helpers.
 
-## Removal of Inherited Sources
+## Removed Inherited Sources
 
-The OpenKratos repository currently contains three inherited sources:
+The OpenKratos repository previously contained three inherited sources:
 
 ```text
 errors/errors.proto
@@ -322,11 +323,11 @@ cmd/protoc-gen-go-errors/errors/errors.proto
 third_party/errors/errors.proto
 ```
 
-The target state contains none of them. After the new API module is published
-and the runtime and generator compile against it:
+The current checkout contains none of them, and release checks reject their
+return. The runtime and generator already compile against the sibling API module
+through an explicitly local pre-publication replacement. The remaining release
+work is to:
 
-- remove all three `.proto` files;
-- remove their duplicate generated bindings;
 - remove the inherited named Buf modules
   `buf.build/kratos/apis` and
   `buf.build/go-kratos/protoc-gen-go-errors` from active configuration;
@@ -348,7 +349,7 @@ Every API release records:
 - BSR immutable module commit and digest;
 - Buf and Protobuf generator versions;
 - generated-source clean-tree proof;
-- minimum compatible OpenKratos runtime and generator versions.
+- minimum compatible OpenKratos runtime and plugin versions.
 
 The Go module and BSR module are generated from the same Git commit. Their
 descriptors must be equivalent. A convenient BSR label may mirror the Go tag,
@@ -358,14 +359,17 @@ but consumers and release evidence use immutable identities.
 
 The required order is:
 
-1. Merge and tag the API repository source.
-2. Generate, test, and publish `github.com/openkratos/api`.
-3. Publish `buf.build/openkratos/api` from the same commit.
-4. export the published BSR descriptor and compare it with the release build;
-5. release OpenKratos runtime modules that depend on that API version;
-6. release the unified generator module against the published runtime/API
-   versions;
-7. verify a clean external consumer without `go.work` or `replace` directives.
+1. Generate committed sources and run lint, build, tests, vet, descriptor, clean
+   tree, and local consumer checks.
+2. Merge and tag the exact validated API repository commit.
+3. Publish `github.com/openkratos/api` from that commit.
+4. Publish `buf.build/openkratos/api` from the same commit.
+5. Export the published BSR descriptor and compare it with the release build.
+6. Release OpenKratos runtime modules that depend on that API version.
+7. Publish compatible `go-errors`, `go-http`, and `go-middleware` Buf plugin
+   revisions.
+8. Verify a clean external consumer using only published modules and pinned Buf
+   plugins, without `go.work` or `replace` directives.
 
 A runtime or generator release must not reference an unpublished pseudo-version
 or a repository-relative replacement.
@@ -433,11 +437,11 @@ local repository state.
 
 ### Phase 3: Generator adoption
 
-- Change the unified generator's error pass to read extensions from the API
-  module.
+- Change `protoc-gen-go-errors` to read extensions from the API module.
 - Remove its local schema and generated binding.
-- Verify Open and Opaque Protobuf APIs across every implemented pass.
-- Verify versioned `go install` and external generation with `GOWORK=off`.
+- Verify Open and Opaque Protobuf APIs in the error generator.
+- Verify the published `buf.build/openkratos/go-errors` plugin from an external
+  consumer.
 
 ### Phase 4: Repository cleanup
 
@@ -480,10 +484,10 @@ go test -race ./errors ./transport/http ./transport/grpc
 go vet ./errors ./transport/http ./transport/grpc
 ```
 
-### OpenKratos generator
+### OpenKratos generators
 
 ```bash
-cd cmd/protoc-gen-go-openkratos
+cd cmd
 GOWORK=off go test ./...
 GOWORK=off go vet ./...
 ```
@@ -492,7 +496,7 @@ GOWORK=off go vet ./...
 
 The acceptance consumer must:
 
-- use released API, runtime, and generator versions;
+- use released API and runtime versions plus pinned published plugin revisions;
 - use the published BSR module by immutable commit or lockfile;
 - contain no `replace`, vendored OpenKratos schema, or repository-relative path;
 - import the versioned error schema;
@@ -521,7 +525,7 @@ This work is complete only when:
 - both artifacts are reproducible from the same reviewed Git commit;
 - error contracts use the versioned OpenKratos namespace;
 - exactly one hand-maintained OpenKratos error schema exists;
-- the runtime and unified generator consume the same generated API package;
+- the runtime and `go-errors` plugin consume the same generated API package;
 - the three inherited local schemas and two inherited Buf module names are gone
   from active configuration;
 - external generation and runtime tests pass without local replacements;
