@@ -9,6 +9,10 @@
 
 ## Design and Evidence
 
+- [Runtime modernization](design/runtime-modernization.md)
+- [HTTP request-path optimization plan](design/http-request-path-optimization.md)
+- [Public Protobuf API module](design/public-protobuf-api-module.md)
+- [Proto-declared operation policy](design/operation-policy.md)
 - [Performance modernization](design/performance.md)
 - [Google HTTP transcoding conformance](design/google-http-transcoding.md)
 - [Selector benchmark: July 22, 2026](benchmarks/selectors-2026-07-22.md)
