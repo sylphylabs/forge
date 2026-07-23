@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/openkratos/kratos/encoding"
+	"github.com/openkratos/kratos/encoding/form"
 	"github.com/openkratos/kratos/errors"
 	"github.com/openkratos/kratos/internal/httputil"
 )
@@ -49,6 +50,16 @@ type EncodeErrorFunc func(http.ResponseWriter, *http.Request, error)
 
 // DefaultRequestVars decodes the request vars to object.
 func DefaultRequestVars(r *http.Request, v any) error {
+	if msg, ok := v.(proto.Message); ok && msg != nil {
+		if route, ok := r.Context().Value(routeContextKey{}).(*compiledRoute); ok {
+			for _, variable := range route.vars {
+				if err := form.DecodeValue(msg, variable.name, r.PathValue(variable.name)); err != nil {
+					return errors.BadRequest("CODEC", err.Error())
+				}
+			}
+			return nil
+		}
+	}
 	return bindQuery(requestVars(r), v)
 }
 

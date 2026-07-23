@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 type benchmarkResponseWriter struct {
@@ -52,6 +54,30 @@ func BenchmarkRouteMux(b *testing.B) {
 			for i := range routes {
 				router.handle(http.MethodGet, fmt.Sprintf("/resource/%d/{id}", i), http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 					w.(*benchmarkResponseWriter).value = requestVars(req).Get("id")
+				}), false)
+			}
+			benchmarkRouter(b, router, fmt.Sprintf("/resource/%d/42", routes-1), false)
+		})
+		b.Run(fmt.Sprintf("parameter-proto/%d", routes), func(b *testing.B) {
+			router := newRouteMux()
+			for i := range routes {
+				router.handle(http.MethodGet, fmt.Sprintf("/resource/%d/{value}", i), http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
+					var target wrapperspb.StringValue
+					if err := DefaultRequestVars(req, &target); err != nil {
+						b.Fatal(err)
+					}
+				}), false)
+			}
+			benchmarkRouter(b, router, fmt.Sprintf("/resource/%d/42", routes-1), false)
+		})
+		b.Run(fmt.Sprintf("parameter-proto-values/%d", routes), func(b *testing.B) {
+			router := newRouteMux()
+			for i := range routes {
+				router.handle(http.MethodGet, fmt.Sprintf("/resource/%d/{value}", i), http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
+					var target wrapperspb.StringValue
+					if err := bindQuery(requestVars(req), &target); err != nil {
+						b.Fatal(err)
+					}
 				}), false)
 			}
 			benchmarkRouter(b, router, fmt.Sprintf("/resource/%d/42", routes-1), false)

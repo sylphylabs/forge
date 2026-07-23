@@ -170,6 +170,13 @@ func TestUnmarshal(t *testing.T) {
 	if protoGot.GetName() != "kratos" {
 		t.Fatalf("Unmarshal() protobuf name = %q, want kratos", protoGot.GetName())
 	}
+
+	if err := DecodeValue(protoGot, "sub.naming", "go"); err != nil {
+		t.Fatal(err)
+	}
+	if protoGot.GetSub().GetName() != "go" {
+		t.Fatalf("DecodeValue() protobuf sub.name = %q, want go", protoGot.GetSub().GetName())
+	}
 }
 
 //nolint:staticcheck

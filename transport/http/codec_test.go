@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -44,6 +45,23 @@ func TestDefaultRequestDecoder(t *testing.T) {
 	}
 	if bodyStr != string(data) {
 		t.Errorf("expected %v, got %v", bodyStr, string(data))
+	}
+}
+
+func TestDefaultRequestVarsProto(t *testing.T) {
+	srv := NewServer(Timeout(0))
+	srv.Route("").GET("/hello/{name}", func(ctx Context) error {
+		var request binding.HelloRequest
+		if err := ctx.BindVars(&request); err != nil {
+			return err
+		}
+		return ctx.String(http.StatusOK, request.GetName())
+	})
+
+	response := httptest.NewRecorder()
+	srv.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/hello/kratos", nil))
+	if response.Code != http.StatusOK || response.Body.String() != "kratos" {
+		t.Fatalf("status = %d, body = %q", response.Code, response.Body.String())
 	}
 }
 

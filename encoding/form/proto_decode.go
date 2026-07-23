@@ -34,6 +34,14 @@ func DecodeValues(msg proto.Message, values url.Values) error {
 	return nil
 }
 
+// DecodeValue decodes one URL value into a protobuf field path.
+func DecodeValue(msg proto.Message, key, value string) error {
+	if !strings.ContainsRune(key, '.') {
+		return populateFieldValues(msg.ProtoReflect(), []string{key}, []string{value})
+	}
+	return populateFieldValues(msg.ProtoReflect(), strings.Split(key, "."), []string{value})
+}
+
 func populateFieldValues(v protoreflect.Message, fieldPath []string, values []string) error {
 	if len(fieldPath) < 1 {
 		return errors.New("no field path")
