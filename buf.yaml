@@ -4,9 +4,16 @@ modules:
     excludes:
       - cmd/protoc-gen-go-errors
       - third_party
+deps:
+  - buf.build/bufbuild/protovalidate
+  - buf.build/googleapis/googleapis
 lint:
   use:
-    - DEFAULT
+    - STANDARD
+  ignore:
+    - cmd/protoc-gen-go-http/testdata
+    - contrib/middleware/validate/internal/testdata
+    - internal/testdata
 breaking:
   use:
     - FILE

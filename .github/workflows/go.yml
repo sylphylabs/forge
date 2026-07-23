@@ -68,6 +68,11 @@ jobs:
         env:
           GOTOOLCHAIN: auto
 
+      - name: Protobuf
+        run: make proto-check
+        env:
+          GOTOOLCHAIN: auto
+
       - name: Test
         run: make test-coverage
         env:

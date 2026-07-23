@@ -22,7 +22,12 @@ OpenKratos contains 27 Go modules. The root `go test ./...` command does not cov
 ./hack/tools.sh tidy
 ./hack/tools.sh test
 make lint
+make proto-check
 ```
+
+`make proto-check` runs the pinned Buf CLI against locked Google APIs and
+Protovalidate dependencies. Test fixtures remain part of `buf build` so imports
+and descriptors are verified, but are excluded from public API style linting.
 
 [`modules.json`](modules.json) is the release inventory for every module. It
 records ownership, support tier, tag prefix, and internal release dependencies.

@@ -25,6 +25,8 @@ BIN		:= ""
 TOOLS_SHELL="./hack/tools.sh"
 # golangci-lint
 LINTER := bin/golangci-lint
+BUF_VERSION := v1.72.0
+BUF := go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
 
 # check GOBIN
 ifneq ($(GOBIN),)
@@ -90,3 +92,9 @@ test-coverage:
 lint: $(LINTER)
 	@${TOOLS_SHELL} lint
 	@echo "lint check finished"
+
+.PHONY: proto-check
+proto-check:
+	@$(BUF) lint
+	@$(BUF) build
+	@echo "protobuf check finished"
