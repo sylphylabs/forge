@@ -85,6 +85,29 @@ Update `.proto` imports and enum annotations when the OpenKratos API module is
 published; do not retain or vendor one of the inherited `errors/errors.proto`
 copies.
 
+The schema rewrite is:
+
+```proto
+// Before
+import "errors/errors.proto";
+enum ErrorReason {
+  option (errors.default_code) = 500;
+  ERROR_REASON_UNSPECIFIED = 0;
+}
+
+// OpenKratos
+import "openkratos/errors/v1/errors.proto";
+enum ErrorReason {
+  option (openkratos.errors.v1.default_code) = 500;
+  ERROR_REASON_UNSPECIFIED = 0;
+}
+```
+
+Enum-value overrides similarly change from `(errors.code)` to
+`(openkratos.errors.v1.code)`. Regenerate helpers after changing the source;
+the generator no longer carries a private fallback descriptor for the old
+annotations.
+
 Change generator module paths and pin the selected revision in the project's
 Buf configuration or tool dependencies:
 

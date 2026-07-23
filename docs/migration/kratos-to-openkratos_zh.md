@@ -82,6 +82,28 @@ runtime 的 `errors.Error` 会嵌入 `errorsv1.Status`，因此 `err.Code`、
 module 发布后，还需更新 `.proto` import 与 enum annotation；不应继续保留或
 vendor 继承自 Kratos 的任一份 `errors/errors.proto`。
 
+schema 的具体改写如下：
+
+```proto
+// 修改前
+import "errors/errors.proto";
+enum ErrorReason {
+  option (errors.default_code) = 500;
+  ERROR_REASON_UNSPECIFIED = 0;
+}
+
+// OpenKratos
+import "openkratos/errors/v1/errors.proto";
+enum ErrorReason {
+  option (openkratos.errors.v1.default_code) = 500;
+  ERROR_REASON_UNSPECIFIED = 0;
+}
+```
+
+enum value override 同样需要从 `(errors.code)` 改为
+`(openkratos.errors.v1.code)`。修改源文件后应重新生成 helper；generator 不再携带
+旧 annotation 的私有 fallback descriptor。
+
 在 Buf 配置或工具依赖中固定 OpenKratos 生成器版本：
 
 ```text

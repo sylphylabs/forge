@@ -2,6 +2,7 @@ package releasecheck
 
 import (
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -61,6 +62,61 @@ func TestModuleManifest(t *testing.T) {
 
 	discovered := discoverModules(t, root)
 	validateManifest(t, root, inventory.Modules, discovered)
+}
+
+func TestLegacyErrorSchemasRemoved(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, name := range []string{
+		"errors/errors.proto",
+		"cmd/protoc-gen-go-errors/errors/errors.proto",
+		"third_party/errors/errors.proto",
+	} {
+		_, err := os.Stat(filepath.Join(root, name))
+		if err == nil {
+			t.Errorf("legacy public error schema still exists: %s", name)
+			continue
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("stat %s: %v", name, err)
+		}
+	}
+
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() && path != root {
+			switch entry.Name() {
+			case ".git", "output", "vendor":
+				return filepath.SkipDir
+			}
+		}
+		if entry.IsDir() || filepath.Ext(path) != ".proto" {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		source := string(data)
+		for _, legacy := range []string{
+			`"errors/errors.proto"`,
+			"(errors.default_code)",
+			"(errors.code)",
+		} {
+			if strings.Contains(source, legacy) {
+				rel, relErr := filepath.Rel(root, path)
+				if relErr != nil {
+					return relErr
+				}
+				t.Errorf("%s contains legacy error contract reference %q", filepath.ToSlash(rel), legacy)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func repositoryRoot(t *testing.T) string {
