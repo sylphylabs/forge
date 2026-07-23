@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package middleware.collision.v1;
+
+option go_package = "middleware.collision/api;api";
+
+service Collision {
+  rpc Call(CollisionRequest) returns (CollisionReply);
+}
+
+message CollisionMiddleware {}
+message CollisionRequest {}
+message CollisionReply {}

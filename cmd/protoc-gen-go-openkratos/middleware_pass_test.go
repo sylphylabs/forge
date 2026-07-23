@@ -115,3 +115,38 @@ replace github.com/openkratos/kratos => %s
 	}
 	runCommand(t, out, "go", "test", "-mod=mod", "./...")
 }
+
+func TestGeneratedMiddlewareRejectsIdentifierCollision(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping protoc integration test in short mode")
+	}
+	if _, err := exec.LookPath("protoc"); err != nil {
+		t.Skipf("protoc is not installed: %v", err)
+	}
+
+	tmp := t.TempDir()
+	plugin := filepath.Join(tmp, "protoc-gen-go-openkratos")
+	runCommand(t, ".", "go", "build", "-o", plugin, ".")
+	cmd := exec.Command(
+		"protoc",
+		"-I", "testdata",
+		"--plugin=protoc-gen-go-openkratos="+plugin,
+		"--go-openkratos_out="+tmp,
+		"--go-openkratos_opt=grpc=true",
+		"middleware/collision.proto",
+	)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("protoc unexpectedly succeeded:\n%s", output)
+	}
+	for _, want := range []string{
+		`proto "middleware/collision.proto"`,
+		`service middleware.collision.v1.Collision`,
+		`identifier "CollisionMiddleware"`,
+		`message middleware.collision.v1.CollisionMiddleware`,
+	} {
+		if !bytes.Contains(output, []byte(want)) {
+			t.Fatalf("protoc error missing %q:\n%s", want, output)
+		}
+	}
+}
