@@ -14,9 +14,15 @@ func TestCompileRoute(t *testing.T) {
 	tests := []struct {
 		template string
 		pattern  string
+		direct   bool
 	}{
 		{template: "/", pattern: "/{$}"},
-		{template: "/users/{id}", pattern: "/users/{__openkratos0}"},
+		{template: "/users/{id}", pattern: "/users/{__openkratos0}", direct: true},
+		{
+			template: "/v1/{parent}/{id}",
+			pattern:  "/v1/{__openkratos0}/{__openkratos1}",
+			direct:   true,
+		},
 		{
 			template: "/v1/{message.name=publishers/*/books/*}",
 			pattern:  "/v1/publishers/{__openkratos0}/books/{__openkratos1}",
@@ -34,6 +40,9 @@ func TestCompileRoute(t *testing.T) {
 			}
 			if got.pattern != tt.pattern {
 				t.Fatalf("pattern = %q, want %q", got.pattern, tt.pattern)
+			}
+			if got.directPathValues != tt.direct {
+				t.Fatalf("directPathValues = %t, want %t", got.directPathValues, tt.direct)
 			}
 		})
 	}

@@ -21,11 +21,6 @@ const internalPathValuePrefix = "__openkratos"
 
 type routeContextKey struct{}
 
-type matchedRoute struct {
-	route  *compiledRoute
-	values map[string]string
-}
-
 type routePart struct {
 	literal    string
 	pathValue  string
@@ -39,14 +34,18 @@ type routeVariable struct {
 }
 
 type compiledRoute struct {
-	pattern  string
-	template string
-	vars     []routeVariable
-	httpRule *httprule.Template
+	pattern          string
+	template         string
+	vars             []routeVariable
+	httpRule         *httprule.Template
+	directPathValues bool
 }
 
 func (r *compiledRoute) match(req *http.Request) (map[string]string, bool, error) {
 	if r.httpRule != nil {
+		if r.directPathValues {
+			return nil, true, nil
+		}
 		values, err := r.httpRule.Extract(req.URL.EscapedPath())
 		if stderrors.Is(err, httprule.ErrPathMismatch) {
 			return nil, false, nil
@@ -68,18 +67,21 @@ func (r *compiledRoute) match(req *http.Request) (map[string]string, bool, error
 }
 
 func (r *compiledRoute) setPathValues(req *http.Request, values map[string]string) {
+	if r.directPathValues {
+		for _, variable := range r.vars {
+			req.SetPathValue(variable.name, req.PathValue(variable.parts[0].pathValue))
+		}
+		return
+	}
 	for name, value := range values {
 		req.SetPathValue(name, value)
 	}
 }
 
-func (r *compiledRoute) values(raw map[string]string) url.Values {
+func (r *compiledRoute) values(req *http.Request) url.Values {
 	values := make(url.Values, len(r.vars))
 	for _, variable := range r.vars {
-		value, ok := raw[variable.name]
-		if ok {
-			values[variable.name] = []string{value}
-		}
+		values[variable.name] = []string{req.PathValue(variable.name)}
 	}
 	return values
 }
@@ -160,8 +162,7 @@ func (b *routeBucket) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if !ok {
 			continue
 		}
-		match := &matchedRoute{route: &candidate.route, values: values}
-		ctx := context.WithValue(req.Context(), routeContextKey{}, match)
+		ctx := context.WithValue(req.Context(), routeContextKey{}, &candidate.route)
 		matchedReq := req.WithContext(ctx)
 		candidate.route.setPathValues(matchedReq, values)
 		candidate.handler.ServeHTTP(w, matchedReq)
@@ -345,8 +346,8 @@ func (r *routeMux) serveRouteError(w http.ResponseWriter, req *http.Request, err
 }
 
 func routeTemplate(req *http.Request) string {
-	if route, ok := req.Context().Value(routeContextKey{}).(*matchedRoute); ok {
-		return route.route.template
+	if route, ok := req.Context().Value(routeContextKey{}).(*compiledRoute); ok {
+		return route.template
 	}
 	if req.Pattern != "" {
 		if _, pattern, ok := strings.Cut(req.Pattern, " "); ok {
@@ -358,11 +359,11 @@ func routeTemplate(req *http.Request) string {
 }
 
 func requestVars(req *http.Request) url.Values {
-	route, ok := req.Context().Value(routeContextKey{}).(*matchedRoute)
-	if !ok || len(route.route.vars) == 0 {
+	route, ok := req.Context().Value(routeContextKey{}).(*compiledRoute)
+	if !ok || len(route.vars) == 0 {
 		return url.Values{}
 	}
-	return route.route.values(route.values)
+	return route.values(req)
 }
 
 func compileRoute(template string) (compiledRoute, error) {
@@ -378,8 +379,14 @@ func compileRoute(template string) (compiledRoute, error) {
 			vars:     make([]routeVariable, len(variables)),
 			httpRule: rule,
 		}
+		compiled.directPathValues = len(variables) > 0 && !rule.HasUnboundWildcard() && !rule.HasCustomVerb()
 		for i, variable := range variables {
 			compiled.vars[i].name = variable.FieldPath
+			if variable.Template != "*" || variable.Multi {
+				compiled.directPathValues = false
+				continue
+			}
+			compiled.vars[i].parts = []routePart{{pathValue: fmt.Sprintf("%s%d", internalPathValuePrefix, i)}}
 		}
 		return compiled, nil
 	}

@@ -82,6 +82,9 @@ func (t *Template) HasUnboundWildcard() bool {
 	return false
 }
 
+// HasCustomVerb reports whether the template ends with a custom verb.
+func (t *Template) HasCustomVerb() bool { return t.verbRaw != "" }
+
 // Variables returns a copy of the variables referenced by the template.
 func (t *Template) Variables() []Variable { return slices.Clone(t.variables) }
 
