@@ -180,6 +180,9 @@ streaming and hand-written calls to `Context.Middleware` retain dynamic handler
 composition because their terminal handler can be request-specific, but they
 observe the same frozen configuration.
 
+The isolated before-and-after measurements are recorded in
+[`docs/benchmarks/http-middleware-2026-07-23.md`](docs/benchmarks/http-middleware-2026-07-23.md).
+
 ## Contrib Provider Dependencies
 
 OpenKratos contrib modules use the current stable Apollo v5, Consul API v2, and

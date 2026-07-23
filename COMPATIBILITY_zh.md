@@ -157,6 +157,9 @@ middleware 都必须在开始处理请求前配置完成。
 message 与 context。Server streaming 与手写的 `Context.Middleware` 因 terminal
 handler 可能属于单次请求，仍采用动态 handler 组合，但同样只能读取已冻结配置。
 
+隔离的前后性能数据记录在
+[`docs/benchmarks/http-middleware-2026-07-23.md`](docs/benchmarks/http-middleware-2026-07-23.md)。
+
 ## Contrib Provider 依赖
 
 OpenKratos contrib module 使用当前稳定的 Apollo v5、Consul API v2 与 Nacos SDK
