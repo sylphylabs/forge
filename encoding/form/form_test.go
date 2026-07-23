@@ -2,6 +2,7 @@ package form
 
 import (
 	"encoding/base64"
+	"net/url"
 	"reflect"
 	"testing"
 	"time"
@@ -145,6 +146,29 @@ func TestFormCodecUnmarshal(t *testing.T) {
 	}
 	if !reflect.DeepEqual("kratos_pwd", bindReq.Password) {
 		t.Errorf("expect %v, got %v", "kratos_pwd", bindReq.Password)
+	}
+}
+
+func TestUnmarshal(t *testing.T) {
+	values := url.Values{
+		"username": {"kratos"},
+		"password": {"kratos_pwd"},
+	}
+	var got *LoginRequest
+	if err := Unmarshal(values, &got); err != nil {
+		t.Fatal(err)
+	}
+	want := &LoginRequest{Username: "kratos", Password: "kratos_pwd"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Unmarshal() = %#v, want %#v", got, want)
+	}
+
+	protoGot := new(bdtest.HelloRequest)
+	if err := Unmarshal(url.Values{"name": {"kratos"}}, protoGot); err != nil {
+		t.Fatal(err)
+	}
+	if protoGot.GetName() != "kratos" {
+		t.Fatalf("Unmarshal() protobuf name = %q, want kratos", protoGot.GetName())
 	}
 }
 

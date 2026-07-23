@@ -54,6 +54,9 @@ func DefaultRequestVars(r *http.Request, v any) error {
 
 // DefaultRequestQuery decodes the request vars to object.
 func DefaultRequestQuery(r *http.Request, v any) error {
+	if r.URL.RawQuery == "" {
+		return nil
+	}
 	return bindQuery(r.URL.Query(), v)
 }
 

@@ -312,6 +312,32 @@ func TestTimeout(t *testing.T) {
 	}
 }
 
+func TestServerWithoutTimeoutPreservesRequestContext(t *testing.T) {
+	type contextKey struct{}
+	parent, cancel := context.WithCancel(context.WithValue(context.Background(), contextKey{}, "value"))
+	defer cancel()
+
+	srv := NewServer(Timeout(0))
+	srv.Route("").GET("/context", func(ctx Context) error {
+		if _, ok := ctx.Deadline(); ok {
+			t.Fatal("unexpected deadline")
+		}
+		if got := ctx.Value(contextKey{}); got != "value" {
+			t.Fatalf("context value = %v, want value", got)
+		}
+		cancel()
+		select {
+		case <-ctx.Done():
+		default:
+			t.Fatal("request cancellation did not propagate")
+		}
+		return nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/context", nil).WithContext(parent)
+	srv.ServeHTTP(httptest.NewRecorder(), req)
+}
+
 func TestRequestDecoder(t *testing.T) {
 	o := &Server{}
 	v := func(*http.Request, any) error { return nil }

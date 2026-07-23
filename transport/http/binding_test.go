@@ -22,6 +22,8 @@ type (
 	}
 )
 
+var benchmarkBindTarget testBind
+
 func TestBindQuery(t *testing.T) {
 	type args struct {
 		vars   url.Values
@@ -71,6 +73,43 @@ func TestBindQuery(t *testing.T) {
 				t.Errorf("bindQuery() target = %v, want %v", tt.args.target, tt.want)
 			}
 		})
+	}
+}
+
+func TestDefaultRequestQueryEmpty(t *testing.T) {
+	target := &testBind{Name: "unchanged"}
+	req := &http.Request{URL: &url.URL{}}
+	if err := DefaultRequestQuery(req, target); err != nil {
+		t.Fatal(err)
+	}
+	if target.Name != "unchanged" {
+		t.Fatalf("DefaultRequestQuery() changed target to %#v", target)
+	}
+}
+
+func BenchmarkBindQuery(b *testing.B) {
+	values := url.Values{
+		"name": {"kratos"},
+		"url":  {"https://go-kratos.dev/"},
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		var target testBind
+		if err := bindQuery(values, &target); err != nil {
+			b.Fatal(err)
+		}
+		benchmarkBindTarget = target
+	}
+}
+
+func BenchmarkDefaultRequestQueryEmpty(b *testing.B) {
+	req := &http.Request{URL: &url.URL{}}
+	var target testBind
+	b.ReportAllocs()
+	for b.Loop() {
+		if err := DefaultRequestQuery(req, &target); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

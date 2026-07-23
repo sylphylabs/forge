@@ -247,16 +247,12 @@ func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 func (s *Server) filter() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			var (
-				ctx    context.Context
-				cancel context.CancelFunc
-			)
+			ctx := req.Context()
 			if s.timeout > 0 {
-				ctx, cancel = context.WithTimeout(req.Context(), s.timeout)
-			} else {
-				ctx, cancel = context.WithCancel(req.Context())
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, s.timeout)
+				defer cancel()
 			}
-			defer cancel()
 
 			pathTemplate := routeTemplate(req)
 

@@ -64,7 +64,11 @@ func (c codec) Unmarshal(data []byte, v any) error {
 	if err != nil {
 		return err
 	}
+	return Unmarshal(vs, v)
+}
 
+// Unmarshal decodes URL values directly into v.
+func Unmarshal(vs url.Values, v any) error {
 	rv := reflect.ValueOf(v)
 	for rv.Kind() == reflect.Pointer {
 		if rv.IsNil() {
@@ -79,7 +83,7 @@ func (c codec) Unmarshal(data []byte, v any) error {
 		return DecodeValues(m, vs)
 	}
 
-	return c.decoder.Decode(v, vs)
+	return decoder.Decode(v, vs)
 }
 
 func (codec) Name() string {
