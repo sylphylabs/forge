@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/openkratos/kratos/internal/endpoint"
@@ -57,7 +59,7 @@ func Timeout(timeout time.Duration) ServerOption {
 // Middleware with service middleware option.
 func Middleware(m ...middleware.Middleware) ServerOption {
 	return func(o *Server) {
-		o.middleware.Use(m...)
+		o.setMiddleware(m...)
 	}
 }
 
@@ -147,23 +149,25 @@ func MethodNotAllowedHandler(handler http.Handler) ServerOption {
 // Server is an HTTP server wrapper.
 type Server struct {
 	*http.Server
-	lis         net.Listener
-	tlsConf     *tls.Config
-	endpoint    *url.URL
-	err         error
-	network     string
-	address     string
-	timeout     time.Duration
-	filters     []FilterFunc
-	middleware  matcher.Matcher
-	decVars     DecodeRequestFunc
-	decQuery    DecodeRequestFunc
-	decBody     DecodeRequestFunc
-	enc         EncodeResponseFunc
-	ene         EncodeErrorFunc
-	strictSlash bool
-	pathPrefix  string
-	router      *routeMux
+	lis              net.Listener
+	tlsConf          *tls.Config
+	endpoint         *url.URL
+	err              error
+	network          string
+	address          string
+	timeout          time.Duration
+	filters          []FilterFunc
+	middleware       matcher.Matcher
+	middlewareMu     sync.Mutex
+	middlewareFrozen atomic.Bool
+	decVars          DecodeRequestFunc
+	decQuery         DecodeRequestFunc
+	decBody          DecodeRequestFunc
+	enc              EncodeResponseFunc
+	ene              EncodeErrorFunc
+	strictSlash      bool
+	pathPrefix       string
+	router           *routeMux
 }
 
 // NewServer creates an HTTP server by options.
@@ -197,8 +201,47 @@ func NewServer(opts ...ServerOption) *Server {
 //   - '/*'
 //   - '/helloworld.v1.Greeter/*'
 //   - '/helloworld.v1.Greeter/SayHello'
+//
+// Use panics after the first call to Start or ServeHTTP.
 func (s *Server) Use(selector string, m ...middleware.Middleware) {
+	s.middlewareMu.Lock()
+	defer s.middlewareMu.Unlock()
+	if s.middlewareFrozen.Load() {
+		panic("http: middleware configuration is frozen")
+	}
 	s.middleware.Add(selector, m...)
+}
+
+func (s *Server) setMiddleware(m ...middleware.Middleware) {
+	s.middlewareMu.Lock()
+	defer s.middlewareMu.Unlock()
+	if s.middlewareFrozen.Load() {
+		panic("http: middleware configuration is frozen")
+	}
+	s.middleware.Use(m...)
+}
+
+// WrapMiddleware binds the middleware selected for operation to h. Selection
+// and handler composition happen once, on the first invocation.
+func (s *Server) WrapMiddleware(operation string, h middleware.Handler) middleware.Handler {
+	var once sync.Once
+	var wrapped middleware.Handler
+	return func(ctx context.Context, req any) (any, error) {
+		s.freezeMiddleware()
+		once.Do(func() {
+			wrapped = middleware.Chain(s.middleware.Match(operation)...)(h)
+		})
+		return wrapped(ctx, req)
+	}
+}
+
+func (s *Server) freezeMiddleware() {
+	if s.middlewareFrozen.Load() {
+		return
+	}
+	s.middlewareMu.Lock()
+	s.middlewareFrozen.Store(true)
+	s.middlewareMu.Unlock()
 }
 
 // WalkRoute walks the router and all its sub-routers, calling walkFn for each route in the tree.
@@ -241,6 +284,7 @@ func (s *Server) HandleHeader(key, val string, h http.HandlerFunc) {
 
 // ServeHTTP should write reply headers and data to the ResponseWriter and then return.
 func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
+	s.freezeMiddleware()
 	s.Handler.ServeHTTP(res, req)
 }
 
@@ -320,6 +364,7 @@ func (s *Server) Endpoint() (*url.URL, error) {
 
 // Start start the HTTP server.
 func (s *Server) Start(ctx context.Context) error {
+	s.freezeMiddleware()
 	if err := s.listenAndEndpoint(); err != nil {
 		return err
 	}

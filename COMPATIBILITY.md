@@ -45,6 +45,7 @@ upstream revision explicitly.
 | Google HTTP transcoding | Partial, independently parsed route/body/query behavior | Shared path grammar, strict generation, ProtoJSON projection, and additional bindings | API and wire behavior breaking |
 | HTTP router | Gorilla mux | Standard-library `http.ServeMux` tree | Behavior breaking |
 | HTTP client paths | Endpoint base paths and escaped variables could be lost | Base paths and AIP-aware escaping are retained; generated clients reuse compiled path plans | Correctness, generated-code, and performance change |
+| HTTP middleware setup | Middleware could be changed while requests were being served | Configuration freezes at first `Start` or `ServeHTTP`; generated unary handlers precompose their chain | Behavior and generated-code change |
 | Unknown HTTP routes | Could fall through to `http.DefaultServeMux` | Explicit 404/405 handling | Behavior and security change |
 | HTTP streams | Server request timeout could cancel SSE/WebSocket streams | Request timeout is detached; explicit stream deadlines remain | Behavior change |
 | WRR selector | Scans a node set during steady-state cleanup | Detects stale entries in O(1) before cleanup | Performance only |
@@ -142,11 +143,13 @@ or conflicting bindings, and ambiguous custom declarations fail generation
 without emitting a partial file. Omit `response_body` to encode the whole
 response.
 
-Generated clients require `transport/http.SupportPackageIsVersion4` and keep a
-concurrency-safe `CompiledPath` for each fixed binding. Template parsing and
-descriptor validation are therefore removed from the steady-state request
-path. Existing generated files continue to compile through the version 3
-sentinel, but must be regenerated to receive compiled path plans.
+Generated HTTP files require `transport/http.SupportPackageIsVersion5`.
+Version 4 introduced a concurrency-safe `CompiledPath` for each fixed client
+binding; version 5 additionally precomposes unary server middleware. Template
+parsing, descriptor validation, middleware matching, and middleware handler
+composition are therefore removed from their respective steady-state request
+paths. Older generated files continue to compile through the version 3 and 4
+sentinels, but must be regenerated to receive both optimizations.
 
 `transport/http.BuildPath` returns `(string, error)` and remains the convenience
 API for genuinely dynamic templates. Hand-written code that repeatedly uses a
@@ -161,6 +164,21 @@ External `google.api.Service` configuration and
 `fully_decode_reserved_expansion` are not implemented; they remain the
 separate Phase 2 described in
 [`docs/design/google-http-transcoding.md`](docs/design/google-http-transcoding.md).
+
+## HTTP Middleware Configuration
+
+HTTP middleware configuration freezes on the first call to `Server.Start` or
+`Server.ServeHTTP`, whichever occurs first. Calling `Server.Use`, or applying
+the `Middleware` server option manually, after that boundary panics with
+`http: middleware configuration is frozen`. Configure default and
+selector-specific middleware before serving requests.
+
+Generated unary handlers use `Server.WrapMiddleware` to select and compose the
+operation's middleware once. The middleware still runs for every request, in
+the same order, with the same request message and context propagation. Server
+streaming and hand-written calls to `Context.Middleware` retain dynamic handler
+composition because their terminal handler can be request-specific, but they
+observe the same frozen configuration.
 
 ## Contrib Provider Dependencies
 

@@ -20,6 +20,7 @@ import (
 const (
 	SupportPackageIsVersion3 = true
 	SupportPackageIsVersion4 = true
+	SupportPackageIsVersion5 = true
 )
 
 const defaultHTTPBodyContentType = "application/octet-stream"

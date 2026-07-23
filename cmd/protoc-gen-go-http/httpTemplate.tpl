@@ -30,9 +30,9 @@ func Register{{.ServiceType}}HTTPServer(s *http.Server, srv {{.ServiceType}}HTTP
 	r := s.Route("/")
 	{{- range .Methods}}
 	{{- if .ClientStreaming}}
-	r.Handle("GET", "{{.Path}}", _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Handler(srv))
+	r.Handle("GET", "{{.Path}}", _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Handler(s, srv))
 	{{- else}}
-	r.Handle("{{.Method}}", "{{.Path}}", _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Handler(srv))
+	r.Handle("{{.Method}}", "{{.Path}}", _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Handler(s, srv))
 	{{- end}}
 	{{- end}}
 }
@@ -68,7 +68,12 @@ func (x *{{$svrType}}_{{.Name}}HTTPServer) SendAndClose(m *{{.Reply}}) error {
 {{end}}
 
 {{range .Methods}}
-func _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Handler(srv {{$svrType}}HTTPServer) func(ctx http.Context) error {
+func _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Handler(s *http.Server, srv {{$svrType}}HTTPServer) func(ctx http.Context) error {
+	{{- if and (not .ClientStreaming) (not .ServerStreaming)}}
+	h := s.WrapMiddleware(Operation{{$svrType}}{{.OriginalName}}, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.{{.Name}}(ctx, req.(*{{.Request}}))
+	})
+	{{- end}}
 	return func(ctx http.Context) error {
 		{{- if .ClientStreaming}}
 		stream, err := http.NewWebSocketServerStream(ctx{{if .BodyMessage}}, http.WithStreamBodyField("{{.BodyField}}"){{end}})
@@ -157,9 +162,6 @@ func _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Handler(srv {{$svrType}}HTTPServer) fu
 		}
 		{{- end}}
 		http.SetOperation(ctx,Operation{{$svrType}}{{.OriginalName}})
-		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
-			return srv.{{.Name}}(ctx, req.(*{{.Request}}))
-		})
 		out, err := h(ctx, &in)
 		if err != nil {
 			return err

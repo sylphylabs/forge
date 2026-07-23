@@ -82,10 +82,12 @@ go mod tidy
 不要通过全局文本替换修改 `.pb.go`。应修改 `.proto` 源文件和生成配置，然后重新
 生成代码。
 
-当前生成的 HTTP 文件会断言 `transport/http.SupportPackageIsVersion4`，从而在
-编译期发现“新 generator 搭配旧 runtime”的错误组合。仍断言 version 3 的旧生成
-文件可以继续编译，但会在每次请求中解析固定路径模板。必须重新生成 client 与
-server 才能使用预编译路径实现；只升级 runtime module 不会改写已有生成代码。
+当前生成的 HTTP 文件会断言 `transport/http.SupportPackageIsVersion5`，从而在
+编译期发现“新 generator 搭配旧 runtime”的错误组合。仍断言 version 3 或 4 的旧
+生成文件可以继续编译，但 version 3 client 会在每次请求中解析固定路径模板，
+version 5 之前的 unary server handler 会在每次请求中组合 middleware。必须重新
+生成 client 与 server 才能同时获得两项优化；只升级 runtime module 不会改写已有
+生成代码。
 
 ## 4. 替换 Kratos CLI 工作流
 
@@ -119,6 +121,27 @@ OpenKratos 使用标准库 `http.ServeMux` 的优先级规则，不再依赖 Gor
 跨多段路径的 Gorilla 正则应改写为 Google AIP 模板。`StrictSlash` 不再改变
 行为。如果服务有意使用 `http.DefaultServeMux` 兜底，需要通过
 `NotFoundHandler` 显式传入。
+
+所有 HTTP middleware 都必须在首次调用 `Start` 或 `ServeHTTP` 前完成配置。不再
+支持 serving 期间修改配置：
+
+```go
+// 迁移前：这里可能与请求并发，生成 handler 也会反复构造 chain。
+srv.ServeHTTP(w, r)
+srv.Use("/example.Greeter/*", authMiddleware)
+```
+
+应将配置移到 serving 之前：
+
+```go
+srv := http.NewServer(http.Middleware(defaultMiddleware))
+srv.Use("/example.Greeter/*", authMiddleware)
+pb.RegisterGreeterHTTPServer(srv, service)
+// 配置完成后再调用 Start 或 ServeHTTP。
+```
+
+冻结后调用 `Use` 会显式 panic。重新生成的 unary handler 会使用
+`Server.WrapMiddleware`，业务应用无需直接调用它。
 
 ## 6. 检查 Google HTTP Transcoding
 
@@ -216,9 +239,10 @@ go vet ./...
 - [ ] 替换直接使用的 Google/gofrs UUID import，并检查 application ID version 变化。
 - [ ] 固定 OpenKratos generator 版本。
 - [ ] 从源文件重新生成所有 Go 代码。
-- [ ] 确认生成的 HTTP 文件断言 `SupportPackageIsVersion4`。
+- [ ] 确认生成的 HTTP 文件断言 `SupportPackageIsVersion5`。
 - [ ] 使用 Go 与 Buf 命令替代 `kratos` CLI。
 - [ ] 检查路由优先级、冲突、prefix、斜杠、404 与 405。
+- [ ] 将所有 HTTP middleware 注册移动到 `Start` 或 `ServeHTTP` 之前。
 - [ ] 重新生成并测试每个 inline `google.api.HttpRule` binding。
 - [ ] 动态模板继续使用 `BuildPath`；重复使用的固定模板只编译一次。
 - [ ] 检查 body/query 分类、ProtoJSON wire value 和 `%2F` 路径。

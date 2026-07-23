@@ -43,6 +43,7 @@ OpenKratos 也不会仅为了兼容 Kratos 而保留 API。如果已有更清晰
 | Google HTTP transcoding | 路由、body、query 分别解析且仅部分支持 | 共享路径语法、严格生成校验、ProtoJSON 投影和 additional bindings | API 与 wire 行为不兼容 |
 | HTTP router | Gorilla mux | 标准库 `http.ServeMux` 路由树 | 行为不兼容 |
 | HTTP client 路径 | endpoint base path 和转义变量可能丢失 | 保留 base path、按 AIP 规则转义，生成 client 复用已编译路径计划 | 正确性、生成代码与性能变化 |
+| HTTP middleware 配置 | serving 期间仍可修改 middleware | 首次 `Start` 或 `ServeHTTP` 时冻结；生成 unary handler 预组合 middleware chain | 行为与生成代码变化 |
 | 未匹配 HTTP 路由 | 可能落入 `http.DefaultServeMux` | 显式处理 404/405 | 行为与安全变化 |
 | HTTP stream | 请求 timeout 可能取消 SSE/WebSocket | 分离请求 timeout，保留显式 stream deadline | 行为变化 |
 | WRR selector | 稳态清理会扫描节点集合 | 先以 O(1) 判断是否存在过期项 | 仅性能变化 |
@@ -127,10 +128,11 @@ query、path 顺序绑定，因此 URL path 始终具有最终优先级。
 含糊的 custom 声明都会让生成失败，且不会留下部分生成文件。若要编码整条响应，
 应省略 `response_body`。
 
-生成 client 要求 `transport/http.SupportPackageIsVersion4`，并为每个固定 binding
-保存一个并发安全的 `CompiledPath`。因此模板解析与 descriptor 校验不再发生在
-稳态请求路径中。旧生成文件仍可通过 version 3 sentinel 编译，但必须重新生成后
-才能使用已编译路径计划。
+生成的 HTTP 文件要求 `transport/http.SupportPackageIsVersion5`。Version 4 为每个
+固定 client binding 引入并发安全的 `CompiledPath`；version 5 进一步预组合 unary
+server middleware。因此模板解析、descriptor 校验、middleware 匹配与 handler
+组合都不再发生在各自的稳态请求路径中。旧生成文件仍可通过 version 3 和 4
+sentinel 编译，但必须重新生成后才能同时获得这两项优化。
 
 `transport/http.BuildPath` 返回 `(string, error)`，继续作为真正动态模板的便捷
 API。手写代码如果反复使用固定模板，应通过 `CompilePath` 或 `MustCompilePath`
@@ -142,6 +144,18 @@ API。手写代码如果反复使用固定模板，应通过 `CompilePath` 或 `
 外部 `google.api.Service` 配置与 `fully_decode_reserved_expansion` 尚未实现，
 仍属于 [`docs/design/google-http-transcoding.md`](docs/design/google-http-transcoding.md)
 定义的独立 Phase 2。
+
+## HTTP Middleware 配置
+
+HTTP middleware 配置会在首次调用 `Server.Start` 或 `Server.ServeHTTP` 时冻结。
+在此边界后调用 `Server.Use`，或手动再次应用 `Middleware` server option，会以
+`http: middleware configuration is frozen` panic。默认 middleware 与 selector
+middleware 都必须在开始处理请求前配置完成。
+
+生成的 unary handler 通过 `Server.WrapMiddleware` 只选择并组合一次 operation
+对应的 middleware。Middleware 仍按相同顺序在每次请求中执行，并收到相同的请求
+message 与 context。Server streaming 与手写的 `Context.Middleware` 因 terminal
+handler 可能属于单次请求，仍采用动态 handler 组合，但同样只能读取已冻结配置。
 
 ## Contrib Provider 依赖
 

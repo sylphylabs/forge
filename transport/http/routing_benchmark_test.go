@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/openkratos/kratos/internal/testdata/binding"
+	"github.com/openkratos/kratos/middleware"
 )
 
 type benchmarkResponseWriter struct {
@@ -171,6 +173,46 @@ func BenchmarkServerRoute(b *testing.B) {
 		})
 		benchmarkRouter(b, srv, "/v1/publishers/acme/books/42", false)
 	})
+}
+
+func BenchmarkMiddlewareDispatch(b *testing.B) {
+	operation := "/benchmark.Service/Call"
+	terminal := func(context.Context, any) (any, error) { return nil, nil }
+	for _, count := range []int{0, 1, 3} {
+		b.Run(fmt.Sprintf("dynamic/%d", count), func(b *testing.B) {
+			middlewares := make([]middleware.Middleware, count)
+			for i := range middlewares {
+				middlewares[i] = func(next middleware.Handler) middleware.Handler { return next }
+			}
+			srv := NewServer(Middleware(middlewares...))
+			ctx := &wrapper{
+				router: srv.Route("/"),
+				req:    httptest.NewRequest(http.MethodGet, operation, nil),
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for b.Loop() {
+				if _, err := ctx.Middleware(terminal)(ctx, nil); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+		b.Run(fmt.Sprintf("precomposed/%d", count), func(b *testing.B) {
+			middlewares := make([]middleware.Middleware, count)
+			for i := range middlewares {
+				middlewares[i] = func(next middleware.Handler) middleware.Handler { return next }
+			}
+			srv := NewServer(Middleware(middlewares...))
+			handler := srv.WrapMiddleware(operation, terminal)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for b.Loop() {
+				if _, err := handler(context.Background(), nil); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
 }
 
 func benchmarkRouterWithHeader(b *testing.B, handler http.Handler, path, key, value string) {

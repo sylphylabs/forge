@@ -15,7 +15,7 @@ import (
 // is compatible with the kratos package it is being compiled against.
 var _ = new(context.Context)
 
-const _ = http.SupportPackageIsVersion4
+const _ = http.SupportPackageIsVersion5
 
 const OperationGreeterSayHello = "/helloworld.Greeter/SayHello"
 
@@ -28,10 +28,13 @@ type GreeterHTTPServer interface {
 
 func RegisterGreeterHTTPServer(s *http.Server, srv GreeterHTTPServer) {
 	r := s.Route("/")
-	r.Handle("GET", "/helloworld/{name}", _Greeter_SayHello0_HTTP_Handler(srv))
+	r.Handle("GET", "/helloworld/{name}", _Greeter_SayHello0_HTTP_Handler(s, srv))
 }
 
-func _Greeter_SayHello0_HTTP_Handler(srv GreeterHTTPServer) func(ctx http.Context) error {
+func _Greeter_SayHello0_HTTP_Handler(s *http.Server, srv GreeterHTTPServer) func(ctx http.Context) error {
+	h := s.WrapMiddleware(OperationGreeterSayHello, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.SayHello(ctx, req.(*HelloRequest))
+	})
 	return func(ctx http.Context) error {
 		var in HelloRequest
 		if err := ctx.BindQuery(&in); err != nil {
@@ -41,9 +44,6 @@ func _Greeter_SayHello0_HTTP_Handler(srv GreeterHTTPServer) func(ctx http.Contex
 			return err
 		}
 		http.SetOperation(ctx, OperationGreeterSayHello)
-		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
-			return srv.SayHello(ctx, req.(*HelloRequest))
-		})
 		out, err := h(ctx, &in)
 		if err != nil {
 			return err

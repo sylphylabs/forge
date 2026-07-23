@@ -84,6 +84,7 @@ func (c *wrapper) Query() url.Values {
 func (c *wrapper) Request() *http.Request        { return c.req }
 func (c *wrapper) Response() http.ResponseWriter { return c.res }
 func (c *wrapper) Middleware(h middleware.Handler) middleware.Handler {
+	c.router.srv.freezeMiddleware()
 	if tr, ok := transport.FromServerContext(c.req.Context()); ok {
 		return middleware.Chain(c.router.srv.middleware.Match(tr.Operation())...)(h)
 	}
