@@ -135,7 +135,7 @@ plugins:
 plugins:
   - local: protoc-gen-go-openkratos
     out: gen/go
-    opt: paths=source_relative,http_omitempty=true
+    opt: paths=source_relative,http_omitempty=true,grpc=true
 ```
 
 Generator option names change as follows:
@@ -146,7 +146,9 @@ Generator option names change as follows:
 | `omitempty_prefix` | `http_omitempty_prefix` |
 
 There is no feature list for errors or HTTP. The unified generator emits each
-artifact only when the input descriptor requires it.
+artifact only when the input descriptor requires it. Set `grpc=true` when the
+same invocation also runs `protoc-gen-go-grpc`; this emits gRPC middleware
+wrappers that compile against the generated gRPC server interfaces.
 
 ```shell
 buf generate

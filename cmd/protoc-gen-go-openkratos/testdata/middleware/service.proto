@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package middleware.test.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "middleware.test/api;api";
+
+service DocumentService {
+  rpc GetDocument(GetDocumentRequest) returns (DocumentReply) {
+    option (google.api.http) = {get: "/v1/documents/{name}"};
+  }
+
+  rpc WatchDocuments(WatchDocumentsRequest) returns (stream DocumentReply) {
+    option (google.api.http) = {get: "/v1/documents:watch"};
+  }
+
+  rpc UploadDocuments(stream UploadDocumentRequest) returns (UploadDocumentsReply) {
+    option (google.api.http) = {
+      post: "/v1/documents:upload"
+      body: "*"
+    };
+  }
+
+  rpc ChatDocuments(stream ChatDocumentRequest) returns (stream DocumentReply) {
+    option (google.api.http) = {
+      post: "/v1/documents:chat"
+      body: "*"
+    };
+  }
+}
+
+message GetDocumentRequest {
+  string name = 1;
+}
+
+message WatchDocumentsRequest {
+  string parent = 1;
+}
+
+message UploadDocumentRequest {
+  bytes data = 1;
+}
+
+message ChatDocumentRequest {
+  string text = 1;
+}
+
+message DocumentReply {
+  string name = 1;
+}
+
+message UploadDocumentsReply {
+  int32 count = 1;
+}

@@ -130,7 +130,7 @@ plugins:
 plugins:
   - local: protoc-gen-go-openkratos
     out: gen/go
-    opt: paths=source_relative,http_omitempty=true
+    opt: paths=source_relative,http_omitempty=true,grpc=true
 ```
 
 generator option 名称映射如下：
@@ -141,7 +141,8 @@ generator option 名称映射如下：
 | `omitempty_prefix` | `http_omitempty_prefix` |
 
 errors 与 HTTP 不再需要额外 feature list。统一生成器只在输入 descriptor 确实需要
-对应产物时才生成文件。
+对应产物时才生成文件。同一次生成也运行 `protoc-gen-go-grpc` 时应设置
+`grpc=true`，从而生成依赖 gRPC server interface 的 middleware wrapper。
 
 ```shell
 buf generate

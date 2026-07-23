@@ -1,0 +1,232 @@
+package api
+
+import (
+	"context"
+	"io"
+	"strings"
+	"testing"
+	"time"
+
+	"google.golang.org/grpc/metadata"
+
+	"github.com/openkratos/kratos/middleware"
+)
+
+type testContextKey struct{}
+
+type documentHTTPService struct {
+	events *[]string
+}
+
+func (s documentHTTPService) GetDocument(_ context.Context, request *GetDocumentRequest) (*DocumentReply, error) {
+	*s.events = append(*s.events, "http:business:"+request.GetName())
+	return &DocumentReply{Name: request.GetName()}, nil
+}
+
+func (documentHTTPService) WatchDocuments(_ *WatchDocumentsRequest, stream DocumentService_WatchDocumentsHTTPServer) error {
+	if stream.Context().Value(testContextKey{}) != "decorated" {
+		return context.Canceled
+	}
+	return stream.Send(&DocumentReply{Name: "http"})
+}
+
+func (documentHTTPService) UploadDocuments(DocumentService_UploadDocumentsHTTPServer) error {
+	return nil
+}
+
+func (documentHTTPService) ChatDocuments(DocumentService_ChatDocumentsHTTPServer) error {
+	return nil
+}
+
+type documentGRPCService struct {
+	UnimplementedDocumentServiceServer
+	events *[]string
+}
+
+func (s documentGRPCService) GetDocument(_ context.Context, request *GetDocumentRequest) (*DocumentReply, error) {
+	*s.events = append(*s.events, "grpc:business:"+request.GetName())
+	return &DocumentReply{Name: request.GetName()}, nil
+}
+
+func (documentGRPCService) WatchDocuments(_ *WatchDocumentsRequest, stream DocumentService_WatchDocumentsServer) error {
+	if stream.Context().Value(testContextKey{}) != "decorated" {
+		return context.Canceled
+	}
+	return stream.Send(&DocumentReply{Name: "grpc"})
+}
+
+func (documentGRPCService) UploadDocuments(DocumentService_UploadDocumentsServer) error {
+	return nil
+}
+
+func (documentGRPCService) ChatDocuments(DocumentService_ChatDocumentsServer) error {
+	return nil
+}
+
+func TestGeneratedUnaryMiddleware(t *testing.T) {
+	events := make([]string, 0, 6)
+	mark := func(name string) middleware.UnaryMiddleware {
+		return func(next middleware.UnaryHandler) middleware.UnaryHandler {
+			return func(ctx context.Context, request any) (any, error) {
+				events = append(events, name)
+				return next(ctx, request)
+			}
+		}
+	}
+	plan := DocumentServiceMiddleware{
+		Unary: []middleware.UnaryMiddleware{mark("service")},
+		Methods: DocumentServiceMethodMiddleware{
+			GetDocument: []middleware.UnaryMiddleware{mark("method")},
+		},
+	}
+	httpServer, err := WrapDocumentServiceHTTPServer(documentHTTPService{events: &events}, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	grpcServer, err := WrapDocumentServiceGRPCServer(documentGRPCService{events: &events}, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Mutating the caller's plan after construction must not affect either wrapper.
+	plan.Unary[0] = nil
+	plan.Methods.GetDocument = nil
+	if _, err := httpServer.GetDocument(t.Context(), &GetDocumentRequest{Name: "http"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := grpcServer.GetDocument(t.Context(), &GetDocumentRequest{Name: "grpc"}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"service", "method", "http:business:http", "service", "method", "grpc:business:grpc"}
+	if !equalEvents(events, want) {
+		t.Fatalf("events = %v, want %v", events, want)
+	}
+}
+
+func TestGeneratedWrapperRejectsNilMiddleware(t *testing.T) {
+	plan := DocumentServiceMiddleware{Methods: DocumentServiceMethodMiddleware{
+		GetDocument: []middleware.UnaryMiddleware{nil},
+	}}
+	_, err := WrapDocumentServiceHTTPServer(documentHTTPService{events: new([]string)}, plan)
+	if err == nil || !strings.Contains(err.Error(), "DocumentService/GetDocument HTTP") || !strings.Contains(err.Error(), "nil unary middleware") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestGeneratedStreamMiddleware(t *testing.T) {
+	var events []string
+	sends := 0
+	decorate := func(name string) middleware.StreamMiddleware {
+		return func(next middleware.StreamHandler) middleware.StreamHandler {
+			return func(request any, stream middleware.ServerStream) error {
+				events = append(events, name)
+				return next(request, &decoratedStream{
+					ServerStream: stream,
+					ctx:          context.WithValue(stream.Context(), testContextKey{}, "decorated"),
+					sends:        &sends,
+				})
+			}
+		}
+	}
+	plan := DocumentServiceMiddleware{
+		Stream: []middleware.StreamMiddleware{decorate("service")},
+		Methods: DocumentServiceMethodMiddleware{
+			WatchDocuments: []middleware.StreamMiddleware{decorate("method")},
+		},
+	}
+	httpServer, err := WrapDocumentServiceHTTPServer(documentHTTPService{events: new([]string)}, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	grpcServer, err := WrapDocumentServiceGRPCServer(documentGRPCService{events: new([]string)}, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := httpServer.WatchDocuments(&WatchDocumentsRequest{}, newHTTPWatchStream(t.Context())); err != nil {
+		t.Fatal(err)
+	}
+	if err := grpcServer.WatchDocuments(&WatchDocumentsRequest{}, newGRPCWatchStream(t.Context())); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"service", "method", "service", "method"}
+	if !equalEvents(events, want) {
+		t.Fatalf("events = %v, want %v", events, want)
+	}
+	if sends != 4 {
+		t.Fatalf("decorated sends = %d, want 4", sends)
+	}
+}
+
+func TestGeneratedStreamRejectsReplacementRequest(t *testing.T) {
+	plan := DocumentServiceMiddleware{Methods: DocumentServiceMethodMiddleware{
+		WatchDocuments: []middleware.StreamMiddleware{func(next middleware.StreamHandler) middleware.StreamHandler {
+			return func(_ any, stream middleware.ServerStream) error {
+				return next("wrong", stream)
+			}
+		}},
+	}}
+	server, err := WrapDocumentServiceGRPCServer(documentGRPCService{events: new([]string)}, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = server.WatchDocuments(&WatchDocumentsRequest{}, newGRPCWatchStream(t.Context()))
+	if err == nil || !strings.Contains(err.Error(), "WatchDocuments gRPC request type string") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+type decoratedStream struct {
+	middleware.ServerStream
+	ctx   context.Context
+	sends *int
+}
+
+func (s *decoratedStream) Context() context.Context { return s.ctx }
+func (s *decoratedStream) SendMsg(message any) error {
+	*s.sends++
+	return s.ServerStream.SendMsg(message)
+}
+
+type nativeStream struct {
+	ctx context.Context
+}
+
+func (s *nativeStream) SetHeader(metadata.MD) error      { return nil }
+func (s *nativeStream) SendHeader(metadata.MD) error     { return nil }
+func (s *nativeStream) SetTrailer(metadata.MD)           {}
+func (s *nativeStream) Context() context.Context         { return s.ctx }
+func (s *nativeStream) SendMsg(any) error                { return nil }
+func (s *nativeStream) RecvMsg(any) error                { return io.EOF }
+func (s *nativeStream) Close(error) error                { return nil }
+func (s *nativeStream) SetContext(ctx context.Context)   { s.ctx = ctx }
+func (s *nativeStream) SetReadDeadline(time.Time) error  { return nil }
+func (s *nativeStream) SetWriteDeadline(time.Time) error { return nil }
+
+type httpWatchStream struct{ *nativeStream }
+
+func newHTTPWatchStream(ctx context.Context) *httpWatchStream {
+	return &httpWatchStream{nativeStream: &nativeStream{ctx: ctx}}
+}
+
+func (s *httpWatchStream) Send(message *DocumentReply) error { return s.SendMsg(message) }
+
+type grpcWatchStream struct{ *nativeStream }
+
+func newGRPCWatchStream(ctx context.Context) *grpcWatchStream {
+	return &grpcWatchStream{nativeStream: &nativeStream{ctx: ctx}}
+}
+
+func (s *grpcWatchStream) Send(message *DocumentReply) error { return s.SendMsg(message) }
+
+func equalEvents(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}

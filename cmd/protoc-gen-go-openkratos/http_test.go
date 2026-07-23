@@ -191,10 +191,10 @@ func TestHTTPTemplateStreamsAndHTTPBody(t *testing.T) {
 	}
 	got := sd.execute()
 	for _, want := range []string{
-		`ListHello(*ListHelloRequest, Greeter_ListHelloServer) error`,
+		`ListHello(*ListHelloRequest, Greeter_ListHelloHTTPServer) error`,
 		`stream := http.NewServerSentEventServerStream(ctx)`,
 		`stream, err := c.cc.ServerSentEvent(ctx, "GET", path, nil, opts...)`,
-		`ChatHello(Greeter_ChatHelloServer) error`,
+		`ChatHello(Greeter_ChatHelloHTTPServer) error`,
 		`stream, err := http.NewWebSocketServerStream(ctx)`,
 		`func (x *Greeter_ChatHelloHTTPClient) open(m *HelloRequest) error`,
 		`path *http.CompiledPath`,

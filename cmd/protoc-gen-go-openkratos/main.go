@@ -13,6 +13,7 @@ var (
 	showVersion     = flag.Bool("version", false, "print the version and exit")
 	omitempty       = flag.Bool("http_omitempty", true, "omit HTTP output if google.api is empty")
 	omitemptyPrefix = flag.String("http_omitempty_prefix", "", "prefix for generated default HTTP routes")
+	generateGRPC    = flag.Bool("grpc", false, "generate middleware wrappers for protoc-gen-go-grpc services")
 )
 
 func main() {
@@ -32,7 +33,11 @@ func main() {
 				continue
 			}
 			generateErrorFile(gen, f)
-			if _, err := generateHTTPFile(gen, f, *omitempty, *omitemptyPrefix); err != nil {
+			httpFile, err := generateHTTPFile(gen, f, *omitempty, *omitemptyPrefix)
+			if err != nil {
+				return err
+			}
+			if _, err := generateMiddlewareFile(gen, f, httpFile != nil, *generateGRPC, *omitempty); err != nil {
 				return err
 			}
 		}

@@ -9,7 +9,11 @@ require (
 	google.golang.org/protobuf v1.36.11
 )
 
+require google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.1 // indirect
+
 replace github.com/openkratos/kratos => ../..
 
 // Local-only until github.com/openkratos/api has its first public release.
 replace github.com/openkratos/api => ../../../OpenKratos-api
+
+tool google.golang.org/grpc/cmd/protoc-gen-go-grpc

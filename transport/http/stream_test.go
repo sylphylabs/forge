@@ -44,7 +44,7 @@ func TestServerSentEventStream(t *testing.T) {
 	ctx.Reset(w, req)
 
 	stream := NewServerSentEventServerStream(ctx)
-	if err := stream.Send(&binding.HelloRequest{Name: "kratos"}); err != nil {
+	if err := stream.SendMsg(&binding.HelloRequest{Name: "kratos"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := stream.Close(nil); err != nil {
@@ -75,7 +75,7 @@ func TestServerSentEventStreamUsesAcceptCodec(t *testing.T) {
 	srv := NewServer()
 	srv.Route("/").GET("/events", func(ctx Context) error {
 		stream := NewServerSentEventServerStream(ctx)
-		if err := stream.Send(&binding.HelloRequest{Name: "ignored"}); err != nil {
+		if err := stream.SendMsg(&binding.HelloRequest{Name: "ignored"}); err != nil {
 			return err
 		}
 		return stream.Close(nil)
@@ -115,7 +115,7 @@ func TestServerSentEventStreamUsesClientMiddleware(t *testing.T) {
 			return fmt.Errorf("expected middleware header, got %q", got)
 		}
 		stream := NewServerSentEventServerStream(ctx)
-		if err := stream.Send(&binding.HelloRequest{Name: "kratos"}); err != nil {
+		if err := stream.SendMsg(&binding.HelloRequest{Name: "kratos"}); err != nil {
 			return err
 		}
 		return stream.Close(nil)
@@ -185,7 +185,7 @@ func TestWebSocketStreamBindsPathQueryAndExchangesMessages(t *testing.T) {
 		}
 
 		in := new(binding.HelloRequest)
-		if err := stream.Recv(in); err != nil {
+		if err := stream.RecvMsg(in); err != nil {
 			return stream.Close(err)
 		}
 		if in.GetName() != "kratos" {
@@ -194,7 +194,7 @@ func TestWebSocketStreamBindsPathQueryAndExchangesMessages(t *testing.T) {
 		if in.GetSub().GetName() != "go" {
 			return stream.Close(fmt.Errorf("expected query sub go, got %s", in.GetSub().GetName()))
 		}
-		if err := stream.Send(&binding.HelloRequest{Name: in.GetName(), Sub: in.GetSub()}); err != nil {
+		if err := stream.SendMsg(&binding.HelloRequest{Name: in.GetName(), Sub: in.GetSub()}); err != nil {
 			return stream.Close(err)
 		}
 		return stream.Close(nil)
@@ -239,7 +239,7 @@ func TestWebSocketStreamBindsNamedBodyField(t *testing.T) {
 		}
 
 		in := new(binding.HelloRequest)
-		if err := stream.Recv(in); err != nil {
+		if err := stream.RecvMsg(in); err != nil {
 			return stream.Close(err)
 		}
 		// name comes from the path var, the sub message from the streamed frame payload.
@@ -249,7 +249,7 @@ func TestWebSocketStreamBindsNamedBodyField(t *testing.T) {
 		if in.GetSub().GetName() != "go" {
 			return stream.Close(fmt.Errorf("expected body sub go, got %s", in.GetSub().GetName()))
 		}
-		if err := stream.Send(&binding.HelloRequest{Name: in.GetName(), Sub: in.GetSub()}); err != nil {
+		if err := stream.SendMsg(&binding.HelloRequest{Name: in.GetName(), Sub: in.GetSub()}); err != nil {
 			return stream.Close(err)
 		}
 		return stream.Close(nil)
@@ -320,13 +320,13 @@ func TestWebSocketStreamUsesContentTypeCodec(t *testing.T) {
 			return err
 		}
 		in := new(binding.HelloRequest)
-		if err := stream.Recv(in); err != nil {
+		if err := stream.RecvMsg(in); err != nil {
 			return stream.Close(err)
 		}
 		if in.GetName() != "stream-test-codec" {
 			return stream.Close(fmt.Errorf("expected custom codec, got %q", in.GetName()))
 		}
-		if err := stream.Send(&binding.HelloRequest{Name: "ignored"}); err != nil {
+		if err := stream.SendMsg(&binding.HelloRequest{Name: "ignored"}); err != nil {
 			return stream.Close(err)
 		}
 		return stream.Close(nil)
@@ -367,7 +367,7 @@ func TestWebSocketStreamCloseSendPreventsSend(t *testing.T) {
 			return err
 		}
 		in := new(binding.HelloRequest)
-		if err := stream.Recv(in); !errors.Is(err, io.EOF) {
+		if err := stream.RecvMsg(in); !errors.Is(err, io.EOF) {
 			return stream.Close(err)
 		}
 		return stream.Close(nil)
@@ -450,7 +450,7 @@ func TestWebSocketStreamNormalEOFReportsSelectorSuccess(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if err := stream.Send(&binding.HelloRequest{Name: "kratos"}); err != nil {
+		if err := stream.SendMsg(&binding.HelloRequest{Name: "kratos"}); err != nil {
 			return stream.Close(err)
 		}
 		return stream.Close(nil)
@@ -510,7 +510,7 @@ func TestWebSocketStreamSetReadDeadline(t *testing.T) {
 			return stream.Close(err)
 		}
 		var in binding.HelloRequest
-		err = stream.Recv(&in)
+		err = stream.RecvMsg(&in)
 		recvErr <- err
 		return stream.Close(err)
 	})
@@ -546,7 +546,7 @@ func TestWebSocketStreamSetWriteDeadline(t *testing.T) {
 		if err := stream.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
 			return stream.Close(err)
 		}
-		if err := stream.Send(&binding.HelloRequest{Name: "kratos"}); err != nil {
+		if err := stream.SendMsg(&binding.HelloRequest{Name: "kratos"}); err != nil {
 			return stream.Close(err)
 		}
 		return stream.Close(nil)
@@ -585,7 +585,7 @@ func TestServerSentEventStreamSetDeadlines(t *testing.T) {
 		if err := stream.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
 			setErr = err
 		}
-		if err := stream.Send(&binding.HelloRequest{Name: "kratos"}); err != nil {
+		if err := stream.SendMsg(&binding.HelloRequest{Name: "kratos"}); err != nil {
 			return stream.Close(err)
 		}
 		return stream.Close(nil)

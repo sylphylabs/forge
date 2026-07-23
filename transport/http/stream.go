@@ -44,9 +44,6 @@ const (
 // ServerStream adapts HTTP streaming transports to grpc generated stream interfaces.
 type ServerStream interface {
 	grpc.ServerStream
-	Send(any) error
-	Recv(any) error
-	SendAndClose(any) error
 	Close(error) error
 	SetContext(context.Context)
 	SetReadDeadline(t time.Time) error
@@ -211,33 +208,17 @@ func (s *serverStream) Context() context.Context {
 	return s.ctx
 }
 
-func (s *serverStream) Send(m any) error {
-	return s.SendMsg(m)
-}
-
-func (s *serverStream) Recv(m any) error {
-	if err := s.recvMessage(m); err != nil {
-		return err
-	}
-	if s.req != nil {
-		if err := DefaultRequestQuery(s.req, m); err != nil {
-			return err
-		}
-		if err := DefaultRequestVars(s.req, m); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // recvMessage decodes the next frame. When a named body field is declared the frame
 // carries only that field's payload, so it is decoded into a freshly allocated sub-message
 // and assigned back onto m; otherwise the frame is decoded into m directly. The generator
 // only declares a body field for a singular message-kind field, so a mismatch here is a
 // programming error and is reported rather than silently ignored.
 func (s *serverStream) recvMessage(m any) error {
+	if s.mode != streamModeWebSocket {
+		return io.EOF
+	}
 	if s.bodyField == "" {
-		return s.RecvMsg(m)
+		return readWebSocketMessage(s.conn, m, s.decoder)
 	}
 	pm, ok := m.(proto.Message)
 	if !ok {
@@ -248,15 +229,11 @@ func (s *serverStream) recvMessage(m any) error {
 		return fmt.Errorf("http: stream body field %q is not a singular message field", s.bodyField)
 	}
 	sub := pm.ProtoReflect().NewField(fd)
-	if err := s.RecvMsg(sub.Message().Interface()); err != nil {
+	if err := readWebSocketMessage(s.conn, sub.Message().Interface(), s.decoder); err != nil {
 		return err
 	}
 	pm.ProtoReflect().Set(fd, sub)
 	return nil
-}
-
-func (s *serverStream) SendAndClose(m any) error {
-	return s.SendMsg(m)
 }
 
 func (s *serverStream) SendMsg(m any) error {
@@ -271,10 +248,18 @@ func (s *serverStream) SendMsg(m any) error {
 }
 
 func (s *serverStream) RecvMsg(m any) error {
-	if s.mode != streamModeWebSocket {
-		return io.EOF
+	if err := s.recvMessage(m); err != nil {
+		return err
 	}
-	return readWebSocketMessage(s.conn, m, s.decoder)
+	if s.req != nil {
+		if err := DefaultRequestQuery(s.req, m); err != nil {
+			return err
+		}
+		if err := DefaultRequestVars(s.req, m); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *serverStream) Close(err error) error {

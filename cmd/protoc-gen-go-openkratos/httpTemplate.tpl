@@ -17,9 +17,9 @@ type {{.ServiceType}}HTTPServer interface {
 	{{.Comment}}
 	{{- end}}
 	{{- if .ClientStreaming}}
-	{{.Name}}({{$svrType}}_{{.Name}}Server) error
+	{{.Name}}({{$svrType}}_{{.Name}}HTTPServer) error
 	{{- else if .ServerStreaming}}
-	{{.Name}}(*{{.Request}}, {{$svrType}}_{{.Name}}Server) error
+	{{.Name}}(*{{.Request}}, {{$svrType}}_{{.Name}}HTTPServer) error
 	{{- else}}
 	{{.Name}}(context.Context, *{{.Request}}) (*{{.Reply}}, error)
 	{{- end}}
@@ -39,20 +39,33 @@ func Register{{.ServiceType}}HTTPServer(s *http.Server, srv {{.ServiceType}}HTTP
 
 {{range .ClientMethods}}
 {{- if or .ClientStreaming .ServerStreaming}}
-type {{$svrType}}_{{.Name}}HTTPServer struct {
+type {{$svrType}}_{{.Name}}HTTPServer interface {
+	{{- if .ServerStreaming}}
+	Send(*{{.Reply}}) error
+	{{- end}}
+	{{- if .ClientStreaming}}
+	Recv() (*{{.Request}}, error)
+	{{- end}}
+	{{- if and .ClientStreaming (not .ServerStreaming)}}
+	SendAndClose(*{{.Reply}}) error
+	{{- end}}
+	http.ServerStream
+}
+
+type _{{$svrType}}_{{.Name}}HTTPServer struct {
 	http.ServerStream
 }
 
 {{- if .ServerStreaming}}
-func (x *{{$svrType}}_{{.Name}}HTTPServer) Send(m *{{.Reply}}) error {
-	return x.ServerStream.Send(m)
+func (x *_{{$svrType}}_{{.Name}}HTTPServer) Send(m *{{.Reply}}) error {
+	return x.ServerStream.SendMsg(m)
 }
 {{- end}}
 
 {{- if .ClientStreaming}}
-func (x *{{$svrType}}_{{.Name}}HTTPServer) Recv() (*{{.Request}}, error) {
+func (x *_{{$svrType}}_{{.Name}}HTTPServer) Recv() (*{{.Request}}, error) {
 	m := new({{.Request}})
-	if err := x.ServerStream.Recv(m); err != nil {
+	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
@@ -60,8 +73,8 @@ func (x *{{$svrType}}_{{.Name}}HTTPServer) Recv() (*{{.Request}}, error) {
 {{- end}}
 
 {{- if and .ClientStreaming (not .ServerStreaming)}}
-func (x *{{$svrType}}_{{.Name}}HTTPServer) SendAndClose(m *{{.Reply}}) error {
-	return x.ServerStream.SendAndClose(m)
+func (x *_{{$svrType}}_{{.Name}}HTTPServer) SendAndClose(m *{{.Reply}}) error {
+	return x.ServerStream.SendMsg(m)
 }
 {{- end}}
 {{- end}}
@@ -83,7 +96,7 @@ func _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Handler(s *http.Server, srv {{$svrType
 		http.SetOperation(ctx,Operation{{$svrType}}{{.OriginalName}})
 		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
 			stream.SetContext(ctx)
-			return nil, srv.{{.Name}}(&{{$svrType}}_{{.Name}}HTTPServer{ServerStream: stream})
+			return nil, srv.{{.Name}}(&_{{$svrType}}_{{.Name}}HTTPServer{ServerStream: stream})
 		})
 		_, err = h(ctx, nil)
 		return stream.Close(err)
@@ -124,7 +137,7 @@ func _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Handler(s *http.Server, srv {{$svrType
 		http.SetOperation(ctx,Operation{{$svrType}}{{.OriginalName}})
 		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
 			stream.SetContext(ctx)
-			return nil, srv.{{.Name}}(req.(*{{.Request}}), &{{$svrType}}_{{.Name}}HTTPServer{ServerStream: stream})
+			return nil, srv.{{.Name}}(req.(*{{.Request}}), &_{{$svrType}}_{{.Name}}HTTPServer{ServerStream: stream})
 		})
 		_, err := h(ctx, &in)
 		return stream.Close(err)

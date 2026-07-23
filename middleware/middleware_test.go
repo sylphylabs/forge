@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -44,6 +45,27 @@ func TestChainUnaryPreservesError(t *testing.T) {
 	_, got := handler(t.Context(), nil)
 	if !errors.Is(got, want) {
 		t.Fatalf("error = %v, want %v", got, want)
+	}
+}
+
+func TestComposeUnaryRejectsNil(t *testing.T) {
+	tests := []struct {
+		name string
+		next UnaryHandler
+		mw   []UnaryMiddleware
+		want string
+	}{
+		{name: "handler", want: "nil unary handler"},
+		{name: "middleware", next: func(context.Context, any) (any, error) { return nil, nil }, mw: []UnaryMiddleware{nil}, want: "nil unary middleware at index 0"},
+		{name: "returned handler", next: func(context.Context, any) (any, error) { return nil, nil }, mw: []UnaryMiddleware{func(UnaryHandler) UnaryHandler { return nil }}, want: "returned a nil handler"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := ComposeUnary(test.next, test.mw...)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("ComposeUnary() error = %v, want containing %q", err, test.want)
+			}
+		})
 	}
 }
 
@@ -92,6 +114,27 @@ func TestStreamMiddlewareCanDecorateContext(t *testing.T) {
 
 	if err := wrapped(nil, &testStream{ctx: t.Context()}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestComposeStreamRejectsNil(t *testing.T) {
+	tests := []struct {
+		name string
+		next StreamHandler
+		mw   []StreamMiddleware
+		want string
+	}{
+		{name: "handler", want: "nil stream handler"},
+		{name: "middleware", next: func(any, ServerStream) error { return nil }, mw: []StreamMiddleware{nil}, want: "nil stream middleware at index 0"},
+		{name: "returned handler", next: func(any, ServerStream) error { return nil }, mw: []StreamMiddleware{func(StreamHandler) StreamHandler { return nil }}, want: "returned a nil handler"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := ComposeStream(test.next, test.mw...)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("ComposeStream() error = %v, want containing %q", err, test.want)
+			}
+		})
 	}
 }
 
