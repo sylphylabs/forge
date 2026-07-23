@@ -24,8 +24,10 @@ This contract complements the focused
 [performance design](performance.md), the
 [Google HTTP transcoding contract](google-http-transcoding.md), the
 [public Protobuf API contract](public-protobuf-api-module.md), and the
-[operation-policy contract](operation-policy.md). It does not replace those
-documents.
+[generated middleware contract](generated-middleware.md). The owned generator
+topology is defined by
+[`protobuf-generation.md`](protobuf-generation.md). This document does not
+replace those focused contracts.
 
 ## Goals
 
@@ -71,9 +73,11 @@ documents.
 2. **No hidden globals on the primary path.** Migration tooling may explain or
    rewrite legacy global helpers, but OpenKratos core internals use
    instance-scoped dependencies.
-3. **Generate facts, configure policy.** Protobuf descriptors and HTTP rules
-   determine operation shape at build time. Timeouts, limits, telemetry, and
-   deployment policy remain runtime configuration.
+3. **Generate facts and wiring points, configure behavior.** Protobuf descriptors
+   and HTTP rules determine operation shape at build time. Generated Go RPC
+   fields bind application middleware during construction; middleware names do
+   not enter descriptors. Implementations, timeouts, limits, telemetry, and
+   deployment policy remain application configuration.
 4. **Standard library first.** Use current Go primitives when they provide the
    required semantics. Add an abstraction only when OpenKratos must express a
    cross-transport contract or isolate an optional dependency.
@@ -113,7 +117,7 @@ remaining inherited runtime boundaries rather than reopening validated work.
 | --- | --- | --- |
 | Codec ownership | `encoding.RegisterCodec` mutates a package map populated by import-time registration. | Immutable or explicitly owned registries passed to consumers. |
 | Logger ownership | Constructing an `App` with a logger changes `slog.Default` for the process. | App-scoped logging; migration tooling rewrites legacy global-helper usage. |
-| Middleware ABI | The common handler is `func(context.Context, any) (any, error)`. Generated bindings still cross an untyped boundary. | Typed generated operation entry points and registration-time policy compilation without a core selector adapter. |
+| Middleware ABI | One `func(context.Context, any) (any, error)` shape is used ambiguously for unary and parts of streaming. Generated bindings still cross an untyped boundary. | Separate unary and stream middleware contracts plus generated Go service plans and registration-time composition, without Proto hook names or a core selector adapter. |
 | Application lifecycle | `App.Run` installs process signals and combines host policy with service lifecycle. | Context-first application control; signal handling is an opt-in host concern. |
 | Readiness | Server goroutine start is used as the registration barrier. It does not prove that every server is ready to accept traffic. | Explicit readiness state and registration only after all required servers are ready. |
 | HTTP protection | The constructed `http.Server` sets a handler and TLS config but no header, idle, or header-size limits. | Documented secure defaults, explicit opt-outs, and streaming-aware request budgets. |
@@ -129,18 +133,19 @@ avoidable repeated discovery, parsing, lookup, locking, and allocation.
 
 ## Workstream 0: Release Baseline
 
-The first releaseable root and generator versions are a prerequisite for
-breaking runtime work. The existing Google HTTP transcoding implementation must
-be installable without repository-relative replacements before new generated
-contracts are introduced.
+The first releaseable root, API, and unified generator versions are a
+prerequisite for breaking runtime work. Existing Google HTTP transcoding and
+error generation must be available through the unified generator without
+repository-relative replacements before new generated contracts are
+introduced.
 
 Required outcomes:
 
 - Publish a machine-readable inventory of every module, owner, support tier,
   dependency order, and tag prefix.
 - Remove local `replace` directives from published artifacts.
-- Prove `go install` for both generators from versioned modules outside the
-  repository.
+- Prove `go install` for `protoc-gen-go-openkratos` from a versioned module
+  outside the repository.
 - Build and test a minimal external consumer using only published versions.
 - Record the root, generator, and supported contrib version relationship.
 
@@ -195,19 +200,21 @@ The shared operation description must include at least:
 - Request and response protobuf descriptors where runtime reflection is
   genuinely required.
 - Streaming shape, idempotency level, and body/query/path projections.
-- Stable hooks for timeout, authorization, and telemetry policy lookup.
+- Stable operation identity for telemetry and generated Go middleware fields.
 
 Implementation constraints:
 
 - Generated service bindings expose a typed internal entry point for each
   method.
 - Migration packages may adapt existing `middleware.Middleware` while users
-  move to explicit application hooks or generated policy. Generated core code
+  move to generated service middleware plans. Generated core code
   does not call that adapter, repeatedly reflect on the service method, or
   rebuild metadata per request.
-- A future typed middleware form may be added for application-owned chains, but
-  transport-neutral middleware must continue to observe one stable operation
-  identity.
+- Middleware names and execution policy do not enter Protobuf descriptors.
+  Generated plans expose RPC fields and generated wrappers compose them before
+  registration without runtime string dispatch.
+- Unary and stream middleware use separate contracts. Stream middleware wraps
+  one lifecycle and decorates the stream for per-message behavior.
 - HTTP, gRPC, documentation generation, and optional adapters consume the same
   operation facts. No adapter maintains a second parser for `HttpRule`.
 - Reflection fallback, if retained for dynamic services, is explicit and
@@ -331,6 +338,11 @@ Candidate boundaries:
 - A Connect adapter may expose Connect, gRPC, or gRPC-Web-compatible handlers
   using an established upstream implementation. OpenKratos must not implement
   those wire protocols from scratch.
+- Asynchronous message adapters implement the small
+  [`transport/message`](../../transport/message) contract. Broker SDKs,
+  acknowledgement semantics, retry policy, and delivery-specific fields stay
+  in nested modules; adapters do not add a second operation parser or global
+  provider registry.
 - OpenAPI 3.1 generation is a build-time artifact derived from protobuf
   descriptors, `google.api.HttpRule`, validation annotations, and the shared
   operation model. It is not runtime reflection over registered handlers.
@@ -414,11 +426,11 @@ Acceptance gates:
 
 Workstreams are intentionally independent. The expected order is:
 
-1. Complete the release baseline and versioned generator installation.
+1. Complete the release baseline and versioned unified-generator installation.
 2. Introduce explicit runtime dependencies without changing operation binding.
 3. Redesign application lifecycle and config lifecycle as separate changes.
-4. Land the shared generated operation contract and registration-time policy
-   compiler.
+4. Land the shared generated operation contract, generated Go middleware plans,
+   and direct registration-time composition.
 5. Add HTTP safety defaults and per-operation budgets using that contract.
 6. Stabilize telemetry on the same operation identity.
 7. Evaluate optional protocol adapters one at a time.
