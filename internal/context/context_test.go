@@ -3,278 +3,218 @@ package context
 import (
 	"context"
 	"errors"
-	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
 
-func TestContext(t *testing.T) {
-	type ctxKey1 struct{}
-	type ctxKey2 struct{}
-	ctx1 := context.WithValue(context.Background(), ctxKey1{}, "https://github.com/go-kratos/")
-	ctx2 := context.WithValue(context.Background(), ctxKey2{}, "https://go-kratos.dev/")
+type contextKey string
 
-	ctx, cancel := Merge(ctx1, ctx2)
+func TestMergeValues(t *testing.T) {
+	parent1 := context.WithValue(context.Background(), contextKey("first"), "parent1")
+	parent1 = context.WithValue(parent1, contextKey("shared"), "parent1")
+	parent2 := context.WithValue(context.Background(), contextKey("second"), "parent2")
+	parent2 = context.WithValue(parent2, contextKey("shared"), "parent2")
+
+	ctx, cancel := Merge(parent1, parent2)
 	defer cancel()
 
-	got := ctx.Value(ctxKey1{})
-	value1, ok := got.(string)
+	for key, want := range map[contextKey]string{
+		"first":  "parent1",
+		"second": "parent2",
+		"shared": "parent1",
+	} {
+		if got := ctx.Value(key); got != want {
+			t.Errorf("Value(%q) = %v, want %q", key, got, want)
+		}
+	}
+}
+
+func TestMergeDeadline(t *testing.T) {
+	now := time.Now()
+	earlier := now.Add(time.Hour)
+	later := now.Add(2 * time.Hour)
+	parent1, cancel1 := context.WithDeadline(context.Background(), later)
+	defer cancel1()
+	parent2, cancel2 := context.WithDeadline(context.Background(), earlier)
+	defer cancel2()
+
+	ctx, cancel := Merge(parent1, parent2)
+	defer cancel()
+	got, ok := ctx.Deadline()
 	if !ok {
-		t.Errorf("expect %v, got %v", true, ok)
+		t.Fatal("Deadline() reported no deadline")
 	}
-	if !reflect.DeepEqual(value1, "https://github.com/go-kratos/") {
-		t.Errorf("expect %v, got %v", "https://github.com/go-kratos/", value1)
-	}
-
-	got2 := ctx.Value(ctxKey2{})
-	value2, ok := got2.(string)
-	if !ok {
-		t.Errorf("expect %v, got %v", true, ok)
-	}
-	if !reflect.DeepEqual("https://go-kratos.dev/", value2) {
-		t.Errorf("expect %v, got %v", "https://go-kratos.dev/", value2)
+	if !got.Equal(earlier) {
+		t.Fatalf("Deadline() = %v, want %v", got, earlier)
 	}
 
-	t.Log(value1)
-	t.Log(value2)
-}
-
-func TestMerge(t *testing.T) {
-	type ctxKey1 struct{}
-	type ctxKey2 struct{}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	ctx1 := context.WithValue(context.Background(), ctxKey1{}, "https://github.com/go-kratos/")
-	ctx2 := context.WithValue(ctx, ctxKey2{}, "https://go-kratos.dev/")
-
-	ctx, cancel = Merge(ctx1, ctx2)
+	ctx, cancel = Merge(context.Background(), parent1)
 	defer cancel()
-
-	got := ctx.Value(ctxKey1{})
-	value1, ok := got.(string)
-	if !ok {
-		t.Errorf("expect %v, got %v", true, ok)
-	}
-	if !reflect.DeepEqual(value1, "https://github.com/go-kratos/") {
-		t.Errorf("expect %v, got %v", "https://github.com/go-kratos/", value1)
+	got, ok = ctx.Deadline()
+	if !ok || !got.Equal(later) {
+		t.Fatalf("Deadline() = (%v, %v), want (%v, true)", got, ok, later)
 	}
 
-	got2 := ctx.Value(ctxKey2{})
-	value2, ok := got2.(string)
-	if !ok {
-		t.Errorf("expect %v, got %v", true, ok)
-	}
-	if !reflect.DeepEqual(value2, "https://go-kratos.dev/") {
-		t.Errorf("expect %v, got %v", " https://go-kratos.dev/", value2)
-	}
-
-	t.Log(ctx)
-}
-
-func TestErr(t *testing.T) {
-	ctx1, cancel := context.WithTimeout(context.Background(), time.Microsecond)
+	ctx, cancel = Merge(context.Background(), context.Background())
 	defer cancel()
-	time.Sleep(time.Millisecond)
-
-	ctx, cancel := Merge(ctx1, context.Background())
-	defer cancel()
-	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		t.Errorf("expect %v, got %v", context.DeadlineExceeded, ctx.Err())
+	if _, ok := ctx.Deadline(); ok {
+		t.Fatal("Deadline() reported a deadline")
 	}
 }
 
-func TestDone(t *testing.T) {
-	ctx1, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	ctx, cancel := Merge(ctx1, context.Background())
-	go func() {
-		time.Sleep(time.Millisecond * 50)
-		cancel()
-	}()
-
-	if <-ctx.Done() != struct{}{} {
-		t.Errorf("expect %v, got %v", struct{}{}, <-ctx.Done())
-	}
-}
-
-func TestFinish(t *testing.T) {
-	mc := &mergeCtx{
-		parent1:  context.Background(),
-		parent2:  context.Background(),
-		done:     make(chan struct{}),
-		cancelCh: make(chan struct{}),
-	}
-	err := mc.finish(context.DeadlineExceeded)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("expect %v, got %v", context.DeadlineExceeded, err)
-	}
-	if done := mc.doneMark.Load(); done != true {
-		t.Errorf("expect %v, got %v", true, done)
-	}
-	if <-mc.done != struct{}{} {
-		t.Errorf("expect %v, got %v", struct{}{}, <-mc.done)
-	}
-}
-
-func TestWait(t *testing.T) {
-	ctx1, cancel := context.WithCancel(context.Background())
-
-	mc := &mergeCtx{
-		parent1:  ctx1,
-		parent2:  context.Background(),
-		done:     make(chan struct{}),
-		cancelCh: make(chan struct{}),
-	}
-	go func() {
-		time.Sleep(time.Millisecond * 50)
-		cancel()
-	}()
-
-	mc.wait()
-	t.Log(mc.doneErr)
-	if !errors.Is(mc.doneErr, context.Canceled) {
-		t.Errorf("expect %v, got %v", context.Canceled, mc.doneErr)
-	}
-
-	ctx2, cancel2 := context.WithCancel(context.Background())
-
-	mc = &mergeCtx{
-		parent1:  ctx2,
-		parent2:  context.Background(),
-		done:     make(chan struct{}),
-		cancelCh: make(chan struct{}),
-	}
-	go func() {
-		time.Sleep(time.Millisecond * 50)
-		cancel2()
-	}()
-
-	mc.wait()
-	t.Log(mc.doneErr)
-	if !errors.Is(mc.doneErr, context.Canceled) {
-		t.Errorf("expect %v, got %v", context.Canceled, mc.doneErr)
-	}
-}
-
-func TestCancel(t *testing.T) {
-	mc := &mergeCtx{
-		parent1:  context.Background(),
-		parent2:  context.Background(),
-		done:     make(chan struct{}),
-		cancelCh: make(chan struct{}),
-	}
-	mc.cancel()
-	if <-mc.cancelCh != struct{}{} {
-		t.Errorf("expect %v, got %v", struct{}{}, <-mc.cancelCh)
-	}
-}
-
-func Test_mergeCtx_Deadline(t *testing.T) {
-	type fields struct {
-		parent1Timeout time.Time
-		parent2Timeout time.Time
-	}
-	tests := []struct {
+func TestMergeCancellation(t *testing.T) {
+	for _, test := range []struct {
 		name   string
-		fields fields
-		want1  bool
+		cancel func(context.CancelFunc, context.CancelFunc, context.CancelFunc)
 	}{
 		{
-			name:   "parent1 not deadline",
-			fields: fields{time.Time{}, time.Now().Add(time.Second * 100)},
-			want1:  true,
+			name: "parent1",
+			cancel: func(cancel1, _, _ context.CancelFunc) {
+				cancel1()
+			},
 		},
 		{
-			name:   "parent2 not deadline",
-			fields: fields{time.Now().Add(time.Second * 100), time.Time{}},
-			want1:  true,
+			name: "parent2",
+			cancel: func(_, cancel2, _ context.CancelFunc) {
+				cancel2()
+			},
 		},
 		{
-			name:   " parent1 parent2 not deadline",
-			fields: fields{time.Time{}, time.Time{}},
-			want1:  false,
+			name: "explicit",
+			cancel: func(_, _, cancel context.CancelFunc) {
+				cancel()
+			},
 		},
-		{
-			name:   " parent1 < parent2",
-			fields: fields{time.Now().Add(time.Second * 100), time.Now().Add(time.Second * 200)},
-			want1:  true,
-		},
-		{
-			name:   " parent1 > parent2",
-			fields: fields{time.Now().Add(time.Second * 100), time.Now().Add(time.Second * 50)},
-			want1:  true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var parent1, parent2 context.Context
-			var cancel1, cancel2 context.CancelFunc
-			if reflect.DeepEqual(tt.fields.parent1Timeout, time.Time{}) {
-				parent1 = context.Background()
-			} else {
-				parent1, cancel1 = context.WithDeadline(context.Background(), tt.fields.parent1Timeout)
-				defer cancel1()
-			}
-			if reflect.DeepEqual(tt.fields.parent2Timeout, time.Time{}) {
-				parent2 = context.Background()
-			} else {
-				parent2, cancel2 = context.WithDeadline(context.Background(), tt.fields.parent2Timeout)
-				defer cancel2()
-			}
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			parent1, cancel1 := context.WithCancel(context.Background())
+			defer cancel1()
+			parent2, cancel2 := context.WithCancel(context.Background())
+			defer cancel2()
+			ctx, cancel := Merge(parent1, parent2)
+			defer cancel()
 
-			mc := &mergeCtx{
-				parent1: parent1,
-				parent2: parent2,
+			test.cancel(cancel1, cancel2, cancel)
+			if !errors.Is(ctx.Err(), context.Canceled) {
+				t.Fatalf("Err() = %v, want %v", ctx.Err(), context.Canceled)
 			}
-			got, got1 := mc.Deadline()
-			t.Log(got)
-			if got1 != tt.want1 {
-				t.Errorf("Deadline() got1 = %v, want %v", got1, tt.want1)
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Second):
+				t.Fatal("Done() was not closed")
 			}
 		})
 	}
 }
 
-func Test_Err2(t *testing.T) {
-	ctx1, cancel := context.WithCancel(context.Background())
+func TestMergeAlreadyCanceled(t *testing.T) {
+	parent, cancelParent := context.WithCancel(context.Background())
+	cancelParent()
+
+	ctx, cancel := Merge(context.Background(), parent)
 	defer cancel()
-	time.Sleep(time.Millisecond)
-
-	ctx, cancel := Merge(ctx1, context.Background())
-	defer cancel()
-
-	if ctx.Err() != nil {
-		t.Errorf("expect %v, got %v", nil, ctx.Err())
-	}
-
-	ctx1, cancel1 := context.WithCancel(context.Background())
-	time.Sleep(time.Millisecond)
-
-	ctx, cancel = Merge(ctx1, context.Background())
-	defer cancel()
-
-	cancel1()
-
 	if !errors.Is(ctx.Err(), context.Canceled) {
-		t.Errorf("expect %v, got %v", context.Canceled, ctx.Err())
+		t.Fatalf("Err() = %v, want %v", ctx.Err(), context.Canceled)
 	}
+	select {
+	case <-ctx.Done():
+	default:
+		t.Fatal("Done() is not closed")
+	}
+}
 
-	ctx1, cancel1 = context.WithCancel(context.Background())
-	time.Sleep(time.Millisecond)
+func TestMergeDeadlineExceeded(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		parents func(context.Context) (context.Context, context.Context)
+	}{
+		{
+			name: "parent1",
+			parents: func(expired context.Context) (context.Context, context.Context) {
+				return expired, context.Background()
+			},
+		},
+		{
+			name: "parent2",
+			parents: func(expired context.Context) (context.Context, context.Context) {
+				return context.Background(), expired
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			expired, cancelExpired := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			defer cancelExpired()
+			parent1, parent2 := test.parents(expired)
+			ctx, cancel := Merge(parent1, parent2)
+			defer cancel()
+			if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				t.Fatalf("Err() = %v, want %v", ctx.Err(), context.DeadlineExceeded)
+			}
+		})
+	}
+}
 
-	ctx, cancel = Merge(context.Background(), ctx1)
+func TestMergePreservesParentCauseLookup(t *testing.T) {
+	want := errors.New("parent2 cause")
+	parent2, cancelParent2 := context.WithCancelCause(context.Background())
+	ctx, cancel := Merge(context.Background(), parent2)
 	defer cancel()
 
-	cancel1()
-
+	cancelParent2(want)
+	<-ctx.Done()
 	if !errors.Is(ctx.Err(), context.Canceled) {
-		t.Errorf("expect %v, got %v", context.Canceled, ctx.Err())
+		t.Fatalf("Err() = %v, want %v", ctx.Err(), context.Canceled)
 	}
+	if !errors.Is(context.Cause(ctx), want) {
+		t.Fatalf("Cause() = %v, want %v", context.Cause(ctx), want)
+	}
+}
 
-	ctx, cancel = Merge(context.Background(), context.Background())
+func TestMergeConcurrentCancellation(t *testing.T) {
+	for range 100 {
+		parent1, cancel1 := context.WithCancel(context.Background())
+		parent2, cancel2 := context.WithCancel(context.Background())
+		ctx, cancel := Merge(parent1, parent2)
+
+		var wg sync.WaitGroup
+		wg.Go(cancel1)
+		wg.Go(cancel2)
+		wg.Go(cancel)
+		wg.Wait()
+		<-ctx.Done()
+		if !errors.Is(ctx.Err(), context.Canceled) {
+			t.Fatalf("Err() = %v, want %v", ctx.Err(), context.Canceled)
+		}
+	}
+}
+
+func TestMergeRemovesCancellationCallbacks(t *testing.T) {
+	parent1, cancel1 := context.WithCancel(context.Background())
+	defer cancel1()
+	parent2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+
+	ctx, cancel := Merge(parent1, parent2)
 	cancel()
-	if !errors.Is(ctx.Err(), context.Canceled) {
-		t.Errorf("expect %v, got %v", context.Canceled, ctx.Err())
+	<-ctx.Done()
+
+	mc := ctx.(*mergeCtx)
+	if mc.stopParent2 != nil && mc.stopParent2() {
+		t.Fatal("parent2 cancellation callback remained registered")
+	}
+}
+
+func BenchmarkMerge(b *testing.B) {
+	parent1, cancel1 := context.WithCancel(context.Background())
+	defer cancel1()
+	parent2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+
+	b.ReportAllocs()
+	for b.Loop() {
+		ctx, cancel := Merge(parent1, parent2)
+		cancel()
+		<-ctx.Done()
 	}
 }
