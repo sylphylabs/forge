@@ -16,8 +16,11 @@ import (
 	"github.com/openkratos/kratos/internal/httputil"
 )
 
-// SupportPackageIsVersion3 These constants should not be referenced from any other code.
-const SupportPackageIsVersion3 = true
+// These constants should not be referenced from any other code.
+const (
+	SupportPackageIsVersion3 = true
+	SupportPackageIsVersion4 = true
+)
 
 const defaultHTTPBodyContentType = "application/octet-stream"
 

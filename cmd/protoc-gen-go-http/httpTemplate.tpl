@@ -5,6 +5,12 @@
 const Operation{{$svrType}}{{.OriginalName}} = "/{{$svrName}}/{{.OriginalName}}"
 {{- end}}
 
+{{- range .ClientMethods}}
+{{- if and (not .UnspecifiedMethod) (not .UnboundPathWildcard)}}
+var _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Path = http.MustCompilePath("{{.PathTemplate}}", new({{.Request}}){{if .HasBody}}{{if and (ne .BodyField "*") (ne .BodyField "")}}, http.WithQueryParams(), http.WithOmitFields("{{.BodyQueryName}}"){{end}}{{else}}, http.WithQueryParams(){{end}})
+{{- end}}
+{{- end}}
+
 type {{.ServiceType}}HTTPServer interface {
 {{- range .ClientMethods}}
 	{{- if ne .Comment ""}}
@@ -200,9 +206,9 @@ type {{$svrType}}_{{.Name}}HTTPClient struct {
 	http.ClientStream
 	{{- if .ClientStreaming}}
 	ctx context.Context
-	cc *http.Client
-	pattern string
-	opts []http.CallOption
+		cc *http.Client
+		path *http.CompiledPath
+		opts []http.CallOption
 	{{- end}}
 }
 
@@ -218,15 +224,7 @@ func (x *{{$svrType}}_{{.Name}}HTTPClient) open(m *{{.Request}}) error {
 	{{- else}}
 	opts := x.opts
 	{{- end}}
-	{{- if .HasBody}}
-		{{- if or (eq .BodyField "*") (eq .BodyField "")}}
-path, err := http.BuildPath(x.pattern, m)
-		{{- else}}
-path, err := http.BuildPath(x.pattern, m, http.WithQueryParams(), http.WithOmitFields("{{.BodyQueryName}}"))
-		{{- end}}
-	{{- else}}
-path, err := http.BuildPath(x.pattern, m, http.WithQueryParams())
-	{{- end}}
+	path, err := x.path.Build(m)
 	if err != nil {
 		return err
 	}
@@ -293,7 +291,7 @@ func (c *{{$svrType}}HTTPClientImpl) {{.Name}}(ctx context.Context, opts ...http
 	return nil, http.ErrUnspecifiedHTTPMethod
 	{{- else if .UnboundPathWildcard}}
 	return nil, http.ErrUnboundPathWildcard
-	{{- end}}
+	{{- else}}
 	pattern := "{{.PathTemplate}}"
 	opts = append([]http.CallOption{
 		http.Accept("application/protojson"),
@@ -303,7 +301,8 @@ func (c *{{$svrType}}HTTPClientImpl) {{.Name}}(ctx context.Context, opts ...http
 		http.Operation(Operation{{$svrType}}{{.OriginalName}}),
 		http.PathTemplate(pattern),
 	}, opts...)
-	return &{{$svrType}}_{{.Name}}HTTPClient{ctx: ctx, cc: c.cc, pattern: pattern, opts: opts}, nil
+	return &{{$svrType}}_{{.Name}}HTTPClient{ctx: ctx, cc: c.cc, path: _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Path, opts: opts}, nil
+	{{- end}}
 }
 {{- else if .ServerStreaming}}
 func (c *{{$svrType}}HTTPClientImpl) {{.Name}}(ctx context.Context, in *{{.Request}}, opts ...http.CallOption) ({{$svrType}}_{{.Name}}Client, error) {
@@ -311,17 +310,13 @@ func (c *{{$svrType}}HTTPClientImpl) {{.Name}}(ctx context.Context, in *{{.Reque
 	return nil, http.ErrUnspecifiedHTTPMethod
 	{{- else if .UnboundPathWildcard}}
 	return nil, http.ErrUnboundPathWildcard
-	{{- end}}
+	{{- else}}
 	pattern := "{{.PathTemplate}}"
-	{{- if .HasBody}}
-		{{- if or (eq .BodyField "*") (eq .BodyField "")}}
-path, err := http.BuildPath(pattern, in)
-		{{- else}}
-path, err := http.BuildPath(pattern, in, http.WithQueryParams(), http.WithOmitFields("{{.BodyQueryName}}"))
-		{{- end}}
+	path, err := _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Path.Build(in)
 	if err != nil {
 		return nil, err
 	}
+	{{- if .HasBody}}
 	opts = append([]http.CallOption{
 		http.Accept("text/event-stream"),
 			{{- if .BodyHTTPBody}}
@@ -336,10 +331,6 @@ path, err := http.BuildPath(pattern, in, http.WithQueryParams(), http.WithOmitFi
 	}, opts...)
 		stream, err := c.cc.ServerSentEvent(ctx, "{{.Method}}", path, in{{.BodyGetter}}, opts...)
 	{{- else}}
-path, err := http.BuildPath(pattern, in, http.WithQueryParams())
-	if err != nil {
-		return nil, err
-	}
 	opts = append([]http.CallOption{
 		http.Accept("text/event-stream"),
 		http.ContentType("application/protojson"),
@@ -352,6 +343,7 @@ path, err := http.BuildPath(pattern, in, http.WithQueryParams())
 		return nil, err
 	}
 	return &{{$svrType}}_{{.Name}}HTTPClient{ClientStream: stream}, nil
+	{{- end}}
 }
 {{- else}}
 func (c *{{$svrType}}HTTPClientImpl) {{.Name}}(ctx context.Context, in *{{.Request}}, opts ...http.CallOption) (*{{.Reply}}, error) {
@@ -359,15 +351,14 @@ func (c *{{$svrType}}HTTPClientImpl) {{.Name}}(ctx context.Context, in *{{.Reque
 	return nil, http.ErrUnspecifiedHTTPMethod
 	{{- else if .UnboundPathWildcard}}
 	return nil, http.ErrUnboundPathWildcard
-	{{- end}}
+	{{- else}}
 	var out {{.Reply}}
 	pattern := "{{.PathTemplate}}"
+	path, err := _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Path.Build(in)
+	if err != nil {
+		return nil, err
+	}
 	{{- if .HasBody}}
-		{{- if or (eq .BodyField "*") (eq .BodyField "")}}
-path, err := http.BuildPath(pattern, in)
-		{{- else}}
-path, err := http.BuildPath(pattern, in, http.WithQueryParams(), http.WithOmitFields("{{.BodyQueryName}}"))
-		{{- end}}
 	opts = append([]http.CallOption{
 			http.Accept("application/json"),
 			{{- if .BodyHTTPBody}}
@@ -379,16 +370,12 @@ path, err := http.BuildPath(pattern, in, http.WithQueryParams(), http.WithOmitFi
 		http.PathTemplate(pattern),
 	}, opts...)
 	{{- else}}
-path, err := http.BuildPath(pattern, in, http.WithQueryParams())
 	opts = append([]http.CallOption{
 			http.Accept("application/json"),
 		http.Operation(Operation{{$svrType}}{{.OriginalName}}),
 		http.PathTemplate(pattern),
 	}, opts...)
 	{{- end}}
-	if err != nil {
-		return nil, err
-	}
 	{{- if .ResponseBodyHTTPBody}}
 	var responseBody {{.ResponseBodyType}}
 	{{- end}}
@@ -410,6 +397,7 @@ path, err := http.BuildPath(pattern, in, http.WithQueryParams())
 	{{.ResponseAssignment}}
 	{{- end}}
 	return &out, nil
+	{{- end}}
 }
 {{- end}}
 {{end}}

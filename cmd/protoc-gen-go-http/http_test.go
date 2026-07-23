@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestHTTPTemplateClientUsesBuildPathAndGoogleJSON(t *testing.T) {
+func TestHTTPTemplateClientUsesCompiledPathAndGoogleJSON(t *testing.T) {
 	sd := &serviceDesc{
 		ServiceType: "Greeter",
 		ServiceName: "helloworld.Greeter",
@@ -41,8 +41,10 @@ func TestHTTPTemplateClientUsesBuildPathAndGoogleJSON(t *testing.T) {
 	}
 	got := sd.execute()
 	for _, want := range []string{
-		`path, err := http.BuildPath(pattern, in, http.WithQueryParams())`,
-		`path, err := http.BuildPath(pattern, in)`,
+		`var _Greeter_SayHello0_HTTP_Path = http.MustCompilePath("/helloworld/{name}", new(HelloRequest), http.WithQueryParams())`,
+		`var _Greeter_CreateHello0_HTTP_Path = http.MustCompilePath("/helloworld", new(CreateHelloRequest))`,
+		`path, err := _Greeter_SayHello0_HTTP_Path.Build(in)`,
+		`path, err := _Greeter_CreateHello0_HTTP_Path.Build(in)`,
 		`if err != nil`,
 		`http.Accept("application/json")`,
 		`http.ContentType("application/json")`,
@@ -194,10 +196,11 @@ func TestHTTPTemplateStreamsAndHTTPBody(t *testing.T) {
 		`ChatHello(Greeter_ChatHelloServer) error`,
 		`stream, err := http.NewWebSocketServerStream(ctx)`,
 		`func (x *Greeter_ChatHelloHTTPClient) open(m *HelloRequest) error`,
-		`path, err := http.BuildPath(x.pattern, m, http.WithQueryParams())`,
+		`path *http.CompiledPath`,
+		`path, err := x.path.Build(m)`,
 		`stream, err := x.cc.WebSocket(x.ctx, path, opts...)`,
 		`http.ContentType("application/protojson")`,
-		`return &Greeter_ChatHelloHTTPClient{ctx: ctx, cc: c.cc, pattern: pattern, opts: opts}, nil`,
+		`return &Greeter_ChatHelloHTTPClient{ctx: ctx, cc: c.cc, path: _Greeter_ChatHello0_HTTP_Path, opts: opts}, nil`,
 		`http.ContentType(http.BodyContentType(in.GetBody()))`,
 		`http.WithOmitFields("body")`,
 		`return ctx.Blob(200, http.BodyContentType(reply.GetBody()), reply.GetBody().GetData())`,

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -31,6 +32,29 @@ type buildPathOptions struct {
 	omitFields  []string
 }
 
+// CompiledPath is an immutable HTTP path template prepared for one protobuf
+// request type. It moves template parsing and descriptor validation out of the
+// request path.
+type CompiledPath struct {
+	template          *httprule.Template
+	staticPath        string
+	descriptor        protoreflect.MessageDescriptor
+	fields            map[string]compiledPathField
+	variables         []httprule.Variable
+	encodedPathFields []string
+	queryParams       bool
+	omitFields        []string
+	prepareOnce       sync.Once
+	prototype         proto.Message
+	prepareOptions    buildPathOptions
+	prepareErr        error
+}
+
+type compiledPathField struct {
+	name   string
+	fields []protoreflect.FieldDescriptor
+}
+
 // WithQueryParams appends request fields that are not bound in the path as query parameters.
 func WithQueryParams() BuildPathOption {
 	return func(o *buildPathOptions) {
@@ -43,6 +67,190 @@ func WithOmitFields(fields ...string) BuildPathOption {
 	return func(o *buildPathOptions) {
 		o.omitFields = append(o.omitFields, fields...)
 	}
+}
+
+// CompilePath parses an HTTP path template and validates it against prototype.
+// The returned path is safe for concurrent use.
+func CompilePath(pathTemplate string, prototype proto.Message, opts ...BuildPathOption) (*CompiledPath, error) {
+	template, err := httprule.Parse(pathTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("compile HTTP path: %w", err)
+	}
+	options := buildPathOptions{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+	return compilePath(template, prototype, options)
+}
+
+func compilePath(template *httprule.Template, prototype proto.Message, options buildPathOptions) (*CompiledPath, error) {
+	variables := template.Variables()
+	if isNilMessage(prototype) {
+		if len(variables) > 0 || options.queryParams {
+			return nil, stderrors.New("compile HTTP path: protobuf message prototype is nil")
+		}
+		path, err := template.Expand(func(string) (string, error) {
+			return "", stderrors.New("unexpected path variable")
+		})
+		if err != nil {
+			return nil, fmt.Errorf("compile HTTP path: %w", err)
+		}
+		return &CompiledPath{template: template, staticPath: path}, nil
+	}
+
+	descriptor := prototype.ProtoReflect().Descriptor()
+	if descriptor == nil {
+		return nil, stderrors.New("compile HTTP path: protobuf message descriptor is not initialized")
+	}
+	compiled := &CompiledPath{
+		template:    template,
+		descriptor:  descriptor,
+		fields:      make(map[string]compiledPathField, len(variables)),
+		variables:   variables,
+		queryParams: options.queryParams,
+		omitFields:  append([]string(nil), options.omitFields...),
+	}
+	if len(variables) == 0 && !template.HasUnboundWildcard() {
+		path, err := template.Expand(func(string) (string, error) {
+			return "", stderrors.New("unexpected path variable")
+		})
+		if err != nil {
+			return nil, fmt.Errorf("compile HTTP path: %w", err)
+		}
+		compiled.staticPath = path
+	}
+	pathFields := make(map[string]struct{}, len(variables))
+	for _, variable := range variables {
+		field, err := compilePathField(descriptor, variable.FieldPath)
+		if err != nil {
+			return nil, fmt.Errorf("compile HTTP path variable %q: %w", variable.FieldPath, err)
+		}
+		compiled.fields[variable.FieldPath] = field
+		pathFields[variable.FieldPath] = struct{}{}
+		compiled.encodedPathFields = append(compiled.encodedPathFields, encodedDescriptorFieldPath(descriptor, variable.FieldPath))
+	}
+	if options.queryParams {
+		if err := validateQueryParameters(descriptor, "", "", pathFields, options.omitFields); err != nil {
+			return nil, fmt.Errorf("compile HTTP query: %w", err)
+		}
+	}
+	return compiled, nil
+}
+
+// MustCompilePath parses pathTemplate and defers descriptor preparation until
+// the first Build call. This allows generated package-level declarations to be
+// created before protobuf descriptors are initialized.
+func MustCompilePath(pathTemplate string, prototype proto.Message, opts ...BuildPathOption) *CompiledPath {
+	template, err := httprule.Parse(pathTemplate)
+	if err != nil {
+		panic(fmt.Errorf("compile HTTP path: %w", err))
+	}
+	options := buildPathOptions{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+	if isNilMessage(prototype) {
+		compiled, err := compilePath(template, prototype, options)
+		if err != nil {
+			panic(err)
+		}
+		return compiled
+	}
+	options.omitFields = append([]string(nil), options.omitFields...)
+	return &CompiledPath{
+		template:       template,
+		prototype:      prototype,
+		prepareOptions: options,
+	}
+}
+
+// Pattern returns the original HTTP path template.
+func (p *CompiledPath) Pattern() string {
+	if p == nil || p.template == nil {
+		return ""
+	}
+	return p.template.Pattern()
+}
+
+// Build expands the compiled template with values from msg.
+func (p *CompiledPath) Build(msg proto.Message) (string, error) {
+	if p == nil || p.template == nil {
+		return "", stderrors.New("build HTTP path: compiled path is nil")
+	}
+	if p.prototype != nil {
+		p.prepareOnce.Do(func() {
+			compiled, err := compilePath(p.template, p.prototype, p.prepareOptions)
+			if err != nil {
+				p.prepareErr = err
+				return
+			}
+			p.staticPath = compiled.staticPath
+			p.descriptor = compiled.descriptor
+			p.fields = compiled.fields
+			p.variables = compiled.variables
+			p.encodedPathFields = compiled.encodedPathFields
+			p.queryParams = compiled.queryParams
+			p.omitFields = compiled.omitFields
+		})
+		if p.prepareErr != nil {
+			return "", p.prepareErr
+		}
+	}
+	if isNilMessage(msg) {
+		if len(p.variables) > 0 {
+			return "", stderrors.New("build HTTP path: request message is nil")
+		}
+		if p.staticPath != "" {
+			return p.staticPath, nil
+		}
+		path, err := p.template.Expand(func(string) (string, error) {
+			return "", stderrors.New("request message is nil")
+		})
+		if err != nil {
+			return "", mapPathError(err)
+		}
+		return path, nil
+	}
+
+	message := msg.ProtoReflect()
+	if p.descriptor != nil && message.Descriptor() != p.descriptor {
+		return "", fmt.Errorf(
+			"build HTTP path: message type %q does not match compiled type %q",
+			message.Descriptor().FullName(),
+			p.descriptor.FullName(),
+		)
+	}
+	path := p.staticPath
+	if path == "" {
+		var err error
+		path, err = p.template.Expand(func(fieldPath string) (string, error) {
+			field, ok := p.fields[fieldPath]
+			if !ok {
+				return "", fmt.Errorf("field %q was not compiled", fieldPath)
+			}
+			return field.text(message)
+		})
+		if err != nil {
+			return "", mapPathError(err)
+		}
+	}
+	if !p.queryParams {
+		return path, nil
+	}
+	queryParams, err := form.EncodeValues(msg)
+	if err != nil {
+		return "", fmt.Errorf("build HTTP query: %w", err)
+	}
+	for _, field := range p.encodedPathFields {
+		delete(queryParams, field)
+	}
+	if len(queryParams) > 0 {
+		omitQueryParams(queryParams, p.omitFields)
+		if query := queryParams.Encode(); query != "" {
+			path += "?" + query
+		}
+	}
+	return path, nil
 }
 
 // BuildPath builds an HTTP request path from a Google HTTP template and request message.
@@ -155,7 +363,11 @@ func isScalarQueryMessage(message protoreflect.MessageDescriptor) bool {
 }
 
 func encodedFieldPath(msg proto.Message, fieldPath string) string {
-	fields := msg.ProtoReflect().Descriptor().Fields()
+	return encodedDescriptorFieldPath(msg.ProtoReflect().Descriptor(), fieldPath)
+}
+
+func encodedDescriptorFieldPath(message protoreflect.MessageDescriptor, fieldPath string) string {
+	fields := message.Fields()
 	parts := strings.Split(fieldPath, ".")
 	encoded := make([]string, 0, len(parts))
 	for i, part := range parts {
@@ -176,6 +388,49 @@ func encodedFieldPath(msg proto.Message, fieldPath string) string {
 		fields = field.Message().Fields()
 	}
 	return strings.Join(encoded, ".")
+}
+
+func compilePathField(message protoreflect.MessageDescriptor, fieldPath string) (compiledPathField, error) {
+	parts := strings.Split(fieldPath, ".")
+	compiled := compiledPathField{name: fieldPath, fields: make([]protoreflect.FieldDescriptor, 0, len(parts))}
+	for i, part := range parts {
+		field := message.Fields().ByName(protoreflect.Name(part))
+		if field == nil {
+			return compiledPathField{}, fmt.Errorf("field %q does not exist", strings.Join(parts[:i+1], "."))
+		}
+		compiled.fields = append(compiled.fields, field)
+		if i < len(parts)-1 {
+			if field.IsList() || field.IsMap() || field.Kind() != protoreflect.MessageKind && field.Kind() != protoreflect.GroupKind {
+				return compiledPathField{}, fmt.Errorf("field %q is not a singular message", strings.Join(parts[:i+1], "."))
+			}
+			message = field.Message()
+			continue
+		}
+		if field.IsList() || field.IsMap() {
+			return compiledPathField{}, fmt.Errorf("field %q is repeated or mapped", fieldPath)
+		}
+		if field.Kind() == protoreflect.MessageKind || field.Kind() == protoreflect.GroupKind {
+			return compiledPathField{}, fmt.Errorf("field %q is a message", fieldPath)
+		}
+	}
+	return compiled, nil
+}
+
+func (p compiledPathField) text(message protoreflect.Message) (string, error) {
+	for i, field := range p.fields {
+		if i < len(p.fields)-1 {
+			if field.HasPresence() && !message.Has(field) {
+				return "", fmt.Errorf("field %q is not set", p.name)
+			}
+			message = message.Get(field).Message()
+			continue
+		}
+		if field.HasPresence() && !message.Has(field) {
+			return "", fmt.Errorf("field %q is not set", p.name)
+		}
+		return formatPathScalar(field, message.Get(field))
+	}
+	return "", fmt.Errorf("field path %q is empty", p.name)
 }
 
 func isNilMessage(msg proto.Message) bool {

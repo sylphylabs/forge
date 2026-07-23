@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-http v3.0.0
 // - protoc             v7.35.1
-// source: internal/testdata/helloworld/helloworld.proto
+// source: helloworld.proto
 
 package helloworld
 
@@ -15,9 +15,11 @@ import (
 // is compatible with the kratos package it is being compiled against.
 var _ = new(context.Context)
 
-const _ = http.SupportPackageIsVersion3
+const _ = http.SupportPackageIsVersion4
 
 const OperationGreeterSayHello = "/helloworld.Greeter/SayHello"
+
+var _Greeter_SayHello0_HTTP_Path = http.MustCompilePath("/helloworld/{name}", new(HelloRequest), http.WithQueryParams())
 
 type GreeterHTTPServer interface {
 	// SayHello Sends a greeting
@@ -47,7 +49,7 @@ func _Greeter_SayHello0_HTTP_Handler(srv GreeterHTTPServer) func(ctx http.Contex
 			return err
 		}
 		reply := out.(*HelloReply)
-		return ctx.Result(200, reply)
+		return ctx.JSON(200, http.NewProtoJSON(reply))
 	}
 }
 
@@ -68,16 +70,16 @@ func NewGreeterHTTPClient(client *http.Client) GreeterHTTPClient {
 func (c *GreeterHTTPClientImpl) SayHello(ctx context.Context, in *HelloRequest, opts ...http.CallOption) (*HelloReply, error) {
 	var out HelloReply
 	pattern := "/helloworld/{name}"
-	path, err := http.BuildPath(pattern, in, http.WithQueryParams())
+	path, err := _Greeter_SayHello0_HTTP_Path.Build(in)
 	if err != nil {
 		return nil, err
 	}
 	opts = append([]http.CallOption{
-		http.Accept("application/protojson"),
+		http.Accept("application/json"),
 		http.Operation(OperationGreeterSayHello),
 		http.PathTemplate(pattern),
 	}, opts...)
-	err = c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	err = c.cc.Invoke(ctx, "GET", path, nil, http.NewProtoJSON(&out), opts...)
 	if err != nil {
 		return nil, err
 	}

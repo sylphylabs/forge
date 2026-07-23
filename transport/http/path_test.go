@@ -2,9 +2,11 @@ package http
 
 import (
 	"errors"
+	"sync"
 	"testing"
 
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/openkratos/kratos/internal/testdata/binding"
 )
@@ -117,6 +119,106 @@ func TestBuildPath(t *testing.T) {
 	}
 }
 
+func TestCompiledPath(t *testing.T) {
+	tests := []struct {
+		name         string
+		pathTemplate string
+		request      *binding.HelloRequest
+		opts         []BuildPathOption
+	}{
+		{
+			name:         "path",
+			pathTemplate: "/helloworld/{name}",
+			request:      &binding.HelloRequest{Name: "open kratos"},
+		},
+		{
+			name:         "nested path and query",
+			pathTemplate: "/helloworld/{name}/sub/{sub.name}",
+			request: &binding.HelloRequest{
+				Name:       "open kratos",
+				Sub:        &binding.Sub{Name: "nested"},
+				UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"name"}},
+			},
+			opts: []BuildPathOption{WithQueryParams()},
+		},
+		{
+			name:         "omit query field",
+			pathTemplate: "/helloworld/{name}",
+			request:      &binding.HelloRequest{Name: "kratos", Sub: &binding.Sub{Name: "go"}},
+			opts:         []BuildPathOption{WithQueryParams(), WithOmitFields("sub")},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			compiled, err := CompilePath(tt.pathTemplate, new(binding.HelloRequest), tt.opts...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := compiled.Build(tt.request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, err := BuildPath(tt.pathTemplate, tt.request, tt.opts...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != want {
+				t.Fatalf("Build() = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestCompiledPathRejectsInvalidUse(t *testing.T) {
+	if _, err := CompilePath("/v1/{name}", (*binding.HelloRequest)(nil)); err == nil {
+		t.Fatal("CompilePath() accepted a nil prototype")
+	}
+	compiled, err := CompilePath("/v1/{name}", new(binding.HelloRequest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := compiled.Build(wrapperspb.String("kratos")); err == nil {
+		t.Fatal("Build() accepted a different message type")
+	}
+	if _, err := (*CompiledPath)(nil).Build(new(binding.HelloRequest)); err == nil {
+		t.Fatal("nil CompiledPath.Build() succeeded")
+	}
+}
+
+func TestMustCompilePathConcurrent(t *testing.T) {
+	compiled := MustCompilePath(
+		"/helloworld/{name}/sub/{sub.name}",
+		new(binding.HelloRequest),
+		WithQueryParams(),
+	)
+	request := &binding.HelloRequest{Name: "kratos", Sub: &binding.Sub{Name: "go"}}
+	const want = "/helloworld/kratos/sub/go"
+
+	var wg sync.WaitGroup
+	for range 32 {
+		wg.Go(func() {
+			got, err := compiled.Build(request)
+			if err != nil {
+				t.Errorf("Build() error = %v", err)
+				return
+			}
+			if got != want {
+				t.Errorf("Build() = %q, want %q", got, want)
+			}
+		})
+	}
+	wg.Wait()
+}
+
+func TestMustCompilePathPanicsOnInvalidTemplate(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("MustCompilePath() did not panic")
+		}
+	}()
+	MustCompilePath("v1/{name}", new(binding.HelloRequest))
+}
+
 func TestBuildPathErrors(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -196,7 +298,7 @@ func BenchmarkBuildPath(b *testing.B) {
 		},
 		{
 			name:         "NoParamsWithQuery",
-			pathTemplate: "http://helloworld.Greeter/helloworld/sub",
+			pathTemplate: "/helloworld/sub",
 			msg: &binding.HelloRequest{
 				Name: "test",
 				Sub:  &binding.Sub{Name: "kratos"},
@@ -208,7 +310,7 @@ func BenchmarkBuildPath(b *testing.B) {
 		},
 		{
 			name:         "WithParams",
-			pathTemplate: "/helloworld/{name}/sub/{sub.naming}",
+			pathTemplate: "/helloworld/{name}/sub/{sub.name}",
 			msg: &binding.HelloRequest{
 				Name: "test",
 				Sub:  &binding.Sub{Name: "kratos"},
@@ -216,7 +318,7 @@ func BenchmarkBuildPath(b *testing.B) {
 		},
 		{
 			name:         "WithParamsAndQuery",
-			pathTemplate: "/helloworld/{name}/sub/{sub.naming}",
+			pathTemplate: "/helloworld/{name}/sub/{sub.name}",
 			msg: &binding.HelloRequest{
 				Name: "test",
 				Sub:  &binding.Sub{Name: "kratos"},
@@ -231,8 +333,58 @@ func BenchmarkBuildPath(b *testing.B) {
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, _ = BuildPath(bm.pathTemplate, bm.msg, bm.opts...)
+			}
+		})
+	}
+}
+
+func BenchmarkCompiledPath(b *testing.B) {
+	benchmarks := []struct {
+		name         string
+		pathTemplate string
+		msg          *binding.HelloRequest
+		opts         []BuildPathOption
+	}{
+		{
+			name:         "NoParams",
+			pathTemplate: "/helloworld/sub",
+			msg:          &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "kratos"}},
+		},
+		{
+			name:         "NoParamsWithQuery",
+			pathTemplate: "/helloworld/sub",
+			msg: &binding.HelloRequest{
+				Name:       "test",
+				Sub:        &binding.Sub{Name: "kratos"},
+				UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"name", "sub.name"}},
+			},
+			opts: []BuildPathOption{WithQueryParams()},
+		},
+		{
+			name:         "WithParams",
+			pathTemplate: "/helloworld/{name}/sub/{sub.name}",
+			msg:          &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "kratos"}},
+		},
+		{
+			name:         "WithParamsAndQuery",
+			pathTemplate: "/helloworld/{name}/sub/{sub.name}",
+			msg: &binding.HelloRequest{
+				Name:       "test",
+				Sub:        &binding.Sub{Name: "kratos"},
+				UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"name", "sub.name"}},
+			},
+			opts: []BuildPathOption{WithQueryParams()},
+		},
+	}
+
+	for _, bm := range benchmarks {
+		compiled := MustCompilePath(bm.pathTemplate, new(binding.HelloRequest), bm.opts...)
+		b.Run(bm.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				_, _ = compiled.Build(bm.msg)
 			}
 		})
 	}
