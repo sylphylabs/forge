@@ -1,0 +1,248 @@
+{
+  "schemaVersion": 1,
+  "modules": [
+    {
+      "path": ".",
+      "module": "github.com/openkratos/kratos",
+      "kind": "core",
+      "support": "core",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "",
+      "dependsOn": []
+    },
+    {
+      "path": "cmd/protoc-gen-go-errors",
+      "module": "github.com/openkratos/kratos/cmd/protoc-gen-go-errors",
+      "kind": "tool",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "cmd/protoc-gen-go-errors",
+      "dependsOn": []
+    },
+    {
+      "path": "cmd/protoc-gen-go-http",
+      "module": "github.com/openkratos/kratos/cmd/protoc-gen-go-http",
+      "kind": "tool",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "cmd/protoc-gen-go-http",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/config/apollo",
+      "module": "github.com/openkratos/kratos/contrib/config/apollo",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/config/apollo",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/config/consul",
+      "module": "github.com/openkratos/kratos/contrib/config/consul",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/config/consul",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/config/etcd",
+      "module": "github.com/openkratos/kratos/contrib/config/etcd",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/config/etcd",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/config/kubernetes",
+      "module": "github.com/openkratos/kratos/contrib/config/kubernetes",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/config/kubernetes",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/config/nacos",
+      "module": "github.com/openkratos/kratos/contrib/config/nacos",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/config/nacos",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/config/polaris",
+      "module": "github.com/openkratos/kratos/contrib/config/polaris",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/config/polaris",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/encoding/json",
+      "module": "github.com/openkratos/kratos/contrib/encoding/json",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/encoding/json",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/encoding/msgpack",
+      "module": "github.com/openkratos/kratos/contrib/encoding/msgpack",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/encoding/msgpack",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/errortracker/sentry",
+      "module": "github.com/openkratos/kratos/contrib/errortracker/sentry",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/errortracker/sentry",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/middleware/jwt",
+      "module": "github.com/openkratos/kratos/contrib/middleware/jwt",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/middleware/jwt",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/middleware/validate",
+      "module": "github.com/openkratos/kratos/contrib/middleware/validate",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/middleware/validate",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/opensergo",
+      "module": "github.com/openkratos/kratos/contrib/opensergo",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/opensergo",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/otel",
+      "module": "github.com/openkratos/kratos/contrib/otel",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/otel",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/polaris",
+      "module": "github.com/openkratos/kratos/contrib/polaris",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/polaris",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/registry/consul",
+      "module": "github.com/openkratos/kratos/contrib/registry/consul",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/registry/consul",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/registry/discovery",
+      "module": "github.com/openkratos/kratos/contrib/registry/discovery",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/registry/discovery",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/registry/etcd",
+      "module": "github.com/openkratos/kratos/contrib/registry/etcd",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/registry/etcd",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/registry/eureka",
+      "module": "github.com/openkratos/kratos/contrib/registry/eureka",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/registry/eureka",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/registry/kubernetes",
+      "module": "github.com/openkratos/kratos/contrib/registry/kubernetes",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/registry/kubernetes",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/registry/nacos",
+      "module": "github.com/openkratos/kratos/contrib/registry/nacos",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/registry/nacos",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/registry/polaris",
+      "module": "github.com/openkratos/kratos/contrib/registry/polaris",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/registry/polaris",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/registry/servicecomb",
+      "module": "github.com/openkratos/kratos/contrib/registry/servicecomb",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/registry/servicecomb",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/registry/zookeeper",
+      "module": "github.com/openkratos/kratos/contrib/registry/zookeeper",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/registry/zookeeper",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/transport/mcp",
+      "module": "github.com/openkratos/kratos/contrib/transport/mcp",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/transport/mcp",
+      "dependsOn": ["github.com/openkratos/kratos"]
+    }
+  ]
+}

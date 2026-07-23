@@ -24,6 +24,12 @@ OpenKratos contains 27 Go modules. The root `go test ./...` command does not cov
 make lint
 ```
 
+[`modules.json`](modules.json) is the release inventory for every module. It
+records ownership, support tier, tag prefix, and internal release dependencies.
+`go test ./internal/releasecheck` verifies the inventory against every `go.mod`
+and rejects missing modules, identity drift, invalid local replacements, and
+dependency cycles.
+
 For a faster, non-race local pass across every module:
 
 ```shell
