@@ -4,7 +4,7 @@ package openkratos.policy.v1;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/openkratos/api/policy/v1;policyv1";
+option go_package = "github.com/openkratos/api/policy/v1;policy";
 option java_multiple_files = true;
 option java_package = "com.github.openkratos.policy.v1";
 
@@ -43,4 +43,3 @@ extend google.protobuf.ServiceOptions {
 extend google.protobuf.MethodOptions {
   OperationPolicy policy = 500202;
 }
-

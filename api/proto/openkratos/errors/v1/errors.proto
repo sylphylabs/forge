@@ -4,7 +4,7 @@ package openkratos.errors.v1;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/openkratos/api/errors/v1;errorsv1";
+option go_package = "github.com/openkratos/api/errors/v1;errors";
 option java_multiple_files = true;
 option java_package = "com.github.openkratos.errors.v1";
 
@@ -25,4 +25,3 @@ extend google.protobuf.EnumOptions {
 extend google.protobuf.EnumValueOptions {
   int32 code = 500102;
 }
-

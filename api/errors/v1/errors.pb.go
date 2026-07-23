@@ -4,7 +4,7 @@
 // 	protoc        (unknown)
 // source: openkratos/errors/v1/errors.proto
 
-package errorsv1
+package errors
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -136,8 +136,8 @@ const file_openkratos_errors_v1_errors_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01:A\n" +
 	"\fdefault_code\x12\x1c.google.protobuf.EnumOptions\x18\x85\xc3\x1e \x01(\x05R\vdefaultCode:7\n" +
-	"\x04code\x12!.google.protobuf.EnumValueOptions\x18\x86\xc3\x1e \x01(\x05R\x04codeBQ\n" +
-	"\x1fcom.github.openkratos.errors.v1P\x01Z,github.com/openkratos/api/errors/v1;errorsv1b\x06proto3"
+	"\x04code\x12!.google.protobuf.EnumValueOptions\x18\x86\xc3\x1e \x01(\x05R\x04codeBO\n" +
+	"\x1fcom.github.openkratos.errors.v1P\x01Z*github.com/openkratos/api/errors/v1;errorsb\x06proto3"
 
 var (
 	file_openkratos_errors_v1_errors_proto_rawDescOnce sync.Once

@@ -4,7 +4,7 @@
 // 	protoc        (unknown)
 // source: openkratos/policy/v1/policy.proto
 
-package policyv1
+package policy
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -284,8 +284,8 @@ const file_openkratos_policy_v1_policy_proto_rawDesc = "" +
 	"\x14ACCESS_AUTHENTICATED\x10\x02\x12\x15\n" +
 	"\x11ACCESS_AUTHORIZED\x10\x03:o\n" +
 	"\x0edefault_policy\x12\x1f.google.protobuf.ServiceOptions\x18\xe9\xc3\x1e \x01(\v2%.openkratos.policy.v1.OperationPolicyR\rdefaultPolicy:_\n" +
-	"\x06policy\x12\x1e.google.protobuf.MethodOptions\x18\xea\xc3\x1e \x01(\v2%.openkratos.policy.v1.OperationPolicyR\x06policyBQ\n" +
-	"\x1fcom.github.openkratos.policy.v1P\x01Z,github.com/openkratos/api/policy/v1;policyv1b\x06proto3"
+	"\x06policy\x12\x1e.google.protobuf.MethodOptions\x18\xea\xc3\x1e \x01(\v2%.openkratos.policy.v1.OperationPolicyR\x06policyBO\n" +
+	"\x1fcom.github.openkratos.policy.v1P\x01Z*github.com/openkratos/api/policy/v1;policyb\x06proto3"
 
 var (
 	file_openkratos_policy_v1_policy_proto_rawDescOnce sync.Once
