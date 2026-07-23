@@ -201,29 +201,68 @@ Remove `http.StrictSlash(...)` from server construction; OpenKratos uses
 intentionally used `http.DefaultServeMux` as a fallback, pass it explicitly
 through `NotFoundHandler`.
 
-Configure all HTTP middleware before the first call to `Start` or `ServeHTTP`.
-Late mutation is no longer supported:
+## 6. Migrate Server Middleware
+
+OpenKratos removes the server-side selector API instead of retaining a runtime
+compatibility path. Apply these mechanical renames first:
+
+| Kratos name | OpenKratos name |
+| --- | --- |
+| `middleware.Handler` | `middleware.UnaryHandler` |
+| `middleware.Middleware` | `middleware.UnaryMiddleware` |
+| `middleware.Chain` | `middleware.ChainUnary` |
+
+Remove `http.Middleware`, `grpc.Middleware`, `grpc.StreamMiddleware`,
+`Server.Use`, `Server.WrapMiddleware`, and `http.Context.Middleware`. Resolve
+each selector to its exact protobuf methods and assign the middleware directly
+to the generated service plan:
 
 ```go
-// Before: this could race with requests and generated handlers rebuilt chains.
-srv.ServeHTTP(w, r)
-srv.Use("/example.Greeter/*", authMiddleware)
+plan := pb.GreeterMiddleware{
+	Unary: []middleware.UnaryMiddleware{
+		recovery.Recovery(),
+		logging.Server(logger),
+	},
+	Methods: pb.GreeterMethodMiddleware{
+		SayHello: []middleware.UnaryMiddleware{authorizeSayHello},
+	},
+}
+
+httpService, err := pb.WrapGreeterHTTPServer(service, plan)
+if err != nil {
+	return err
+}
+pb.RegisterGreeterHTTPServer(httpServer, httpService)
+
+grpcService, err := pb.WrapGreeterGRPCServer(service, plan)
+if err != nil {
+	return err
+}
+pb.RegisterGreeterServer(grpcServer, grpcService)
 ```
 
-Move setup before serving:
+`Unary` and `Stream` apply at service scope; fields under `Methods` append
+method-specific middleware. The first item is outermost. Wrapper construction
+rejects nil middleware or nil returned handlers and snapshots every slice, so
+later plan mutation has no effect.
 
-```go
-srv := http.NewServer(http.Middleware(defaultMiddleware))
-srv.Use("/example.Greeter/*", authMiddleware)
-pb.RegisterGreeterHTTPServer(srv, service)
-// Start or ServeHTTP only after configuration is complete.
-```
+Convert whole-stream behavior to `middleware.StreamMiddleware`. It runs once
+around the stream lifecycle; decorate `middleware.ServerStream` when behavior
+must observe each `SendMsg` or `RecvMsg`. The old gRPC stream middleware path
+constructed a handler chain without invoking it, so migrated lifecycle
+middleware now actually runs. Treat that as a correctness fix when comparing
+behavior.
 
-Calling `Use` after the freeze boundary now panics explicitly. Regenerated
-unary handlers use `Server.WrapMiddleware`; applications do not need to call it
-directly.
+Raw HTTP request/response behavior belongs in `http.Filter`. Native gRPC
+metadata, peer, status, compression, header, or trailer behavior belongs in
+`grpc.UnaryInterceptor`, `grpc.StreamInterceptor`, or `grpc.Options`. These
+transport-native layers run outside generated service middleware.
 
-## 6. Review Google HTTP Transcoding
+`middleware/selector.Server` is removed with the server selector path.
+`middleware/selector.Client` remains available for client-side operation
+selection.
+
+## 7. Review Google HTTP Transcoding
 
 Regenerate every HTTP client and server. OpenKratos validates inline unary
 `google.api.HttpRule` declarations more strictly and may reject schemas that the
@@ -290,13 +329,13 @@ variables fully decode them.
 External `google.api.Service` YAML and `fully_decode_reserved_expansion` are not
 yet supported.
 
-## 7. Review Streaming Timeouts
+## 8. Review Streaming Timeouts
 
 HTTP SSE and WebSocket streams are not terminated by the unary server timeout.
 Add explicit read, write, idle, or application lifetime policies where the
 service requires them.
 
-## 8. Keep Inherited v3 Migrations
+## 9. Keep Inherited v3 Migrations
 
 OpenKratos retains the Kratos v3 `log/slog` logging model, standard-compatible
 errors, and the separate `json` and `protojson` codecs. A service already on
@@ -305,7 +344,7 @@ Kratos v3 should not undo those migrations.
 The HTTP generator supports Edition 2023 Open and Opaque APIs. Regenerate from
 the schema rather than retaining code produced by the upstream generator.
 
-## 9. Validate the Migration
+## 10. Validate the Migration
 
 Run generation before tests so stale imports cannot hide in generated files:
 
@@ -331,7 +370,10 @@ graceful shutdown in integration tests used by the service.
 - [ ] Confirm generated HTTP files assert `SupportPackageIsVersion5`.
 - [ ] Replace `kratos` CLI commands with Go and Buf commands.
 - [ ] Review route precedence, conflicts, prefixes, slashes, 404, and 405.
-- [ ] Move every HTTP middleware registration before `Start` or `ServeHTTP`.
+- [ ] Rename unary middleware types and regenerate service middleware plans.
+- [ ] Replace server selectors with generated method fields and wrappers.
+- [ ] Convert stream lifecycle behavior to `StreamMiddleware` and decorate `ServerStream` for per-message behavior.
+- [ ] Move transport-native behavior to HTTP filters or gRPC interceptors.
 - [ ] Regenerate and test every inline `google.api.HttpRule` binding.
 - [ ] Keep `BuildPath` for dynamic templates; compile repeated fixed templates once.
 - [ ] Review body/query classification, ProtoJSON wire values, and `%2F` paths.

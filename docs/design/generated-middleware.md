@@ -1,6 +1,6 @@
 # Generated Middleware Wiring
 
-Status: approved implementation contract
+Status: implemented locally; published release validation pending
 
 Last reviewed: July 23, 2026
 
@@ -307,10 +307,9 @@ The complete server order is:
 
 ```text
 transport-native middleware or interceptor
-  -> explicit OpenKratos server middleware
-    -> generated service-default middleware
-      -> generated method middleware
-        -> business handler
+  -> generated service-default middleware
+    -> generated method middleware
+      -> business handler
 ```
 
 Examples of transport-native behavior include:
@@ -324,9 +323,9 @@ These layers use `net/http` middleware, HTTP filters, or gRPC interceptors. They
 are not forced through `UnaryMiddleware` or `StreamMiddleware` and are not
 claimed to be portable.
 
-Explicit OpenKratos server middleware is configured in Go and applies at its
-documented server scope. Selector-based server middleware is migration-only and
-does not remain in the generated core path.
+Common OpenKratos server middleware is configured only through the generated
+service plan. Selector-based server middleware and an additional server-wide
+common middleware layer do not remain in the core runtime.
 
 ## Registration and Failure Semantics
 
@@ -407,8 +406,8 @@ must not translate arbitrary regular expressions by textual guesswork. Migration
 evidence compares the exact selected method set, order, context propagation,
 reply, error, panic, and stream lifecycle behavior.
 
-The current gRPC stream implementation requires an explicit correction during
-migration: the stream-handler chain must be invoked, not constructed and
+The inherited Kratos gRPC stream implementation requires an explicit correction
+during migration: the stream-handler chain must be invoked, not constructed and
 discarded, and middleware must not be applied implicitly with different HTTP
 and gRPC per-message semantics.
 
@@ -416,43 +415,45 @@ and gRPC per-message semantics.
 
 ### Phase 0: Remove unpublished schema experiments
 
-- Remove `openkratos/policy/v1` from the local API module, generated bindings,
+- [x] Remove `openkratos/policy/v1` from the local API module, generated bindings,
   tests, and documentation.
-- Do not add `openkratos/middleware/v1`.
-- Re-run the API module's clean generation and external-consumer gates.
+- [x] Do not add `openkratos/middleware/v1`.
+- [x] Re-run the API module's clean generation and local external-consumer gates.
 
 ### Phase 1: Runtime ABI
 
-- Rename the unary handler and middleware types to state their scope.
-- Add the minimal `ServerStream`, `StreamHandler`, and `StreamMiddleware`
+- [x] Rename the unary handler and middleware types to state their scope.
+- [x] Add the minimal `ServerStream`, `StreamHandler`, and `StreamMiddleware`
   contracts.
-- Add composition, ordering, nil, context, error, panic, and stream-decoration
+- [x] Add composition, ordering, nil, context, error, panic, and stream-decoration
   tests.
 
 ### Phase 2: Generated plans and wrappers
 
-- Generate zero-value usable service plans with service-default and method
+- [x] Generate zero-value usable service plans with service-default and method
   fields.
-- Add `protoc-gen-go-openkratos` as the single owner of plans and wrappers.
-- Generate HTTP and gRPC wrappers consuming the same plan type without copying
+- [x] Add `protoc-gen-go-openkratos` as the single owner of plans and wrappers.
+- [x] Generate HTTP and gRPC wrappers consuming the same plan type without copying
   their wire bindings.
-- Snapshot and compose every operation during wrapper construction.
-- Preserve standard HTTP and `protoc-gen-go-grpc` registration entry points.
+- [x] Snapshot and compose every operation during wrapper construction.
+- [x] Preserve standard HTTP and `protoc-gen-go-grpc` registration entry points.
 
 ### Phase 3: Transport adoption
 
-- Route unary HTTP and gRPC calls through their precomposed wrappers.
-- Route all streaming shapes through one lifecycle stream chain.
-- Keep HTTP-native and gRPC-native middleware outside the common plan.
-- Remove selector lookup and dynamic chain construction from generated paths.
+- [x] Route unary HTTP and gRPC calls through their precomposed wrappers.
+- [x] Route all streaming shapes through one lifecycle stream chain.
+- [x] Keep HTTP-native and gRPC-native middleware outside the common plan.
+- [x] Remove selector lookup and dynamic chain construction from generated paths.
 
 ### Phase 4: Migration and evidence
 
-- Add mechanically precise Kratos migration documentation.
-- Add an external consumer using unary, server-streaming, client-streaming, and
+- [x] Add mechanically precise Kratos migration documentation.
+- [x] Add a local external consumer using unary, server-streaming, client-streaming, and
   bidirectional methods over HTTP and gRPC.
-- Record construction cost and steady-state middleware benchmarks.
-- Update compatibility documentation only after the implementation ships.
+- [x] Record steady-state middleware dispatch benchmarks.
+- [x] Update compatibility documentation with the implemented API removal.
+- [ ] After the first release, run the external consumer against published module
+  versions without a repository-relative `replace`.
 
 ## Validation Contract
 

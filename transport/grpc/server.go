@@ -16,9 +16,7 @@ import (
 
 	"github.com/openkratos/kratos/internal/endpoint"
 	"github.com/openkratos/kratos/internal/host"
-	"github.com/openkratos/kratos/internal/matcher"
 	"github.com/openkratos/kratos/log"
-	"github.com/openkratos/kratos/middleware"
 	"github.com/openkratos/kratos/transport"
 )
 
@@ -55,19 +53,6 @@ func Endpoint(endpoint *url.URL) ServerOption {
 func Timeout(timeout time.Duration) ServerOption {
 	return func(s *Server) {
 		s.timeout = timeout
-	}
-}
-
-// Middleware with server middleware.
-func Middleware(m ...middleware.UnaryMiddleware) ServerOption {
-	return func(s *Server) {
-		s.middleware.Use(m...)
-	}
-}
-
-func StreamMiddleware(m ...middleware.UnaryMiddleware) ServerOption {
-	return func(s *Server) {
-		s.streamMiddleware.Use(m...)
 	}
 }
 
@@ -131,8 +116,6 @@ type Server struct {
 	address           string
 	endpoint          *url.URL
 	timeout           time.Duration
-	middleware        matcher.Matcher
-	streamMiddleware  matcher.Matcher
 	unaryInts         []grpc.UnaryServerInterceptor
 	streamInts        []grpc.StreamServerInterceptor
 	grpcOpts          []grpc.ServerOption
@@ -145,13 +128,11 @@ type Server struct {
 // NewServer creates a gRPC server by options.
 func NewServer(opts ...ServerOption) *Server {
 	srv := &Server{
-		baseCtx:          context.Background(),
-		network:          "tcp",
-		address:          ":0",
-		timeout:          1 * time.Second,
-		health:           health.NewServer(),
-		middleware:       matcher.New(),
-		streamMiddleware: matcher.New(),
+		baseCtx: context.Background(),
+		network: "tcp",
+		address: ":0",
+		timeout: 1 * time.Second,
+		health:  health.NewServer(),
 	}
 	for _, o := range opts {
 		o(srv)
@@ -190,15 +171,6 @@ func NewServer(opts ...ServerOption) *Server {
 	// admin register
 	srv.adminClean, _ = admin.Register(srv.Server)
 	return srv
-}
-
-// Use uses a service middleware with selector.
-// selector:
-//   - '/*'
-//   - '/helloworld.v1.Greeter/*'
-//   - '/helloworld.v1.Greeter/SayHello'
-func (s *Server) Use(selector string, m ...middleware.UnaryMiddleware) {
-	s.middleware.Add(selector, m...)
 }
 
 // Endpoint return a real address to registry endpoint.

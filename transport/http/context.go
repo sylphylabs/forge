@@ -8,9 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"time"
-
-	"github.com/openkratos/kratos/middleware"
-	"github.com/openkratos/kratos/transport"
 )
 
 var _ Context = (*wrapper)(nil)
@@ -24,7 +21,6 @@ type Context interface {
 	Header() http.Header
 	Request() *http.Request
 	Response() http.ResponseWriter
-	Middleware(middleware.UnaryHandler) middleware.UnaryHandler
 	Bind(any) error
 	BindVars(any) error
 	BindQuery(any) error
@@ -83,17 +79,10 @@ func (c *wrapper) Query() url.Values {
 }
 func (c *wrapper) Request() *http.Request        { return c.req }
 func (c *wrapper) Response() http.ResponseWriter { return c.res }
-func (c *wrapper) Middleware(h middleware.UnaryHandler) middleware.UnaryHandler {
-	c.router.srv.freezeMiddleware()
-	if tr, ok := transport.FromServerContext(c.req.Context()); ok {
-		return middleware.ChainUnary(c.router.srv.middleware.Match(tr.Operation())...)(h)
-	}
-	return middleware.ChainUnary(c.router.srv.middleware.Match(c.req.URL.Path)...)(h)
-}
-func (c *wrapper) Bind(v any) error      { return c.router.srv.decBody(c.req, v) }
-func (c *wrapper) BindVars(v any) error  { return c.router.srv.decVars(c.req, v) }
-func (c *wrapper) BindQuery(v any) error { return c.router.srv.decQuery(c.req, v) }
-func (c *wrapper) BindForm(v any) error  { return bindForm(c.req, v) }
+func (c *wrapper) Bind(v any) error              { return c.router.srv.decBody(c.req, v) }
+func (c *wrapper) BindVars(v any) error          { return c.router.srv.decVars(c.req, v) }
+func (c *wrapper) BindQuery(v any) error         { return c.router.srv.decQuery(c.req, v) }
+func (c *wrapper) BindForm(v any) error          { return bindForm(c.req, v) }
 func (c *wrapper) Returns(v any, err error) error {
 	if err != nil {
 		return err

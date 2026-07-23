@@ -15,14 +15,12 @@ import (
 	"reflect"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	kratoserrors "github.com/openkratos/kratos/errors"
 	"github.com/openkratos/kratos/internal/host"
 	"github.com/openkratos/kratos/log"
-	"github.com/openkratos/kratos/middleware"
 	"github.com/openkratos/kratos/transport"
 )
 
@@ -339,60 +337,6 @@ func TestServerWithoutTimeoutPreservesRequestContext(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/context", nil).WithContext(parent)
 	srv.ServeHTTP(httptest.NewRecorder(), req)
-}
-
-func TestServerWrapMiddlewareComposesOnce(t *testing.T) {
-	const operation = "/test.Service/Call"
-	var compositions atomic.Int32
-	var calls atomic.Int32
-	m := func(next middleware.UnaryHandler) middleware.UnaryHandler {
-		compositions.Add(1)
-		return func(ctx context.Context, req any) (any, error) {
-			calls.Add(1)
-			return next(ctx, req)
-		}
-	}
-	srv := NewServer()
-	srv.Use(operation, m)
-	h := srv.WrapMiddleware(operation, func(context.Context, any) (any, error) {
-		return "ok", nil
-	})
-
-	for range 2 {
-		got, err := h(t.Context(), nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != "ok" {
-			t.Fatalf("handler result = %v, want ok", got)
-		}
-	}
-	if got := compositions.Load(); got != 1 {
-		t.Fatalf("middleware compositions = %d, want 1", got)
-	}
-	if got := calls.Load(); got != 2 {
-		t.Fatalf("middleware calls = %d, want 2", got)
-	}
-}
-
-func TestServerMiddlewareConfigurationPanicsAfterServeHTTP(t *testing.T) {
-	m := func(next middleware.UnaryHandler) middleware.UnaryHandler { return next }
-	tests := map[string]func(*Server){
-		"Use":    func(srv *Server) { srv.Use("/*", m) },
-		"option": func(srv *Server) { Middleware(m)(srv) },
-	}
-	for name, mutate := range tests {
-		t.Run(name, func(t *testing.T) {
-			srv := NewServer()
-			srv.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/missing", nil))
-			defer func() {
-				if recovered := recover(); recovered != "http: middleware configuration is frozen" {
-					t.Fatalf("middleware mutation panic = %v", recovered)
-				}
-			}()
-			mutate(srv)
-		})
-	}
 }
 
 func TestMatchedRoutePreservesRequestSemantics(t *testing.T) {

@@ -22,9 +22,9 @@ import (
 	"github.com/openkratos/kratos/contrib/otel/tracing"
 )
 
-// for HTTP server, new HTTP server with sentry middleware options
-var opts = []http.ServerOption{
-	http.Middleware(
+// Build one generated service plan for HTTP and gRPC.
+plan := helloworld.GreeterMiddleware{
+	Unary: []middleware.UnaryMiddleware{
 		recovery.Recovery(),
 		tracing.Server(),
 		ksentry.Server(
@@ -34,30 +34,25 @@ var opts = []http.ServerOption{
 			ksentry.WithContextTags(func(ctx context.Context) map[string]string {
 				return map[string]string{"trace_id": tracing.TraceID(ctx)}
 			}),
-		), // must after Recovery middleware, because of the exiting order will be reversed
+		), // place after Recovery so Sentry observes the recovered panic
 		logging.Server(logger),
-	),
+	},
 }
 
-// for gRPC server, new gRPC server with sentry middleware options
-var opts = []grpc.ServerOption{
-	grpc.Middleware(
-		recovery.Recovery(),
-		tracing.Server(),
-		ksentry.Server(
-			ksentry.WithTags(map[string]string{
-				"tag": "some-custom-constant-tag",
-			}),
-			ksentry.WithContextTags(func(ctx context.Context) map[string]string {
-				return map[string]string{"trace_id": tracing.TraceID(ctx)}
-			}),
-		), // must after Recovery middleware, because of the exiting order will be reversed
-		logging.Server(logger),
-	),
+httpService, err := helloworld.WrapGreeterHTTPServer(service, plan)
+if err != nil {
+	return err
 }
+helloworld.RegisterGreeterHTTPServer(httpServer, httpService)
+
+grpcService, err := helloworld.WrapGreeterGRPCServer(service, plan)
+if err != nil {
+	return err
+}
+helloworld.RegisterGreeterServer(grpcServer, grpcService)
 
 // Then, the framework will report events to Sentry when your trigger panics.
-// Or your can push events to Sentry manually
+// Or you can push events to Sentry manually.
 ```
 
 ## Reference

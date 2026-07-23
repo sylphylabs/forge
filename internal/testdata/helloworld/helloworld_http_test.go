@@ -38,8 +38,13 @@ func TestGeneratedUnaryMiddlewareIsPrecomposed(t *testing.T) {
 	}
 
 	srv := kratoshttp.NewServer(kratoshttp.Timeout(0))
-	srv.Use(OperationGreeterSayHello, m)
-	RegisterGreeterHTTPServer(srv, middlewareGreeter{t: t})
+	service, err := WrapGreeterHTTPServer(middlewareGreeter{t: t}, GreeterMiddleware{
+		Methods: GreeterMethodMiddleware{SayHello: []middleware.UnaryMiddleware{m}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	RegisterGreeterHTTPServer(srv, service)
 	for range 2 {
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, "/helloworld/openkratos", nil)

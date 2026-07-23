@@ -2,14 +2,10 @@ package grpc
 
 import (
 	"context"
-	"fmt"
-
 	"google.golang.org/grpc"
 	grpcmd "google.golang.org/grpc/metadata"
 
 	ic "github.com/openkratos/kratos/internal/context"
-	"github.com/openkratos/kratos/internal/matcher"
-	"github.com/openkratos/kratos/middleware"
 	"github.com/openkratos/kratos/transport"
 )
 
@@ -33,13 +29,7 @@ func (s *Server) unaryServerInterceptor() grpc.UnaryServerInterceptor {
 			ctx, cancel = context.WithTimeout(ctx, s.timeout)
 			defer cancel()
 		}
-		h := func(ctx context.Context, req any) (any, error) {
-			return handler(ctx, req)
-		}
-		if next := s.middleware.Match(tr.Operation()); len(next) > 0 {
-			h = middleware.ChainUnary(next...)(h)
-		}
-		reply, err := h(ctx, req)
+		reply, err := handler(ctx, req)
 		if len(replyHeader) > 0 {
 			_ = grpc.SetHeader(ctx, replyHeader)
 		}
@@ -50,15 +40,13 @@ func (s *Server) unaryServerInterceptor() grpc.UnaryServerInterceptor {
 // wrappedStream is rewrite grpc stream's context
 type wrappedStream struct {
 	grpc.ServerStream
-	ctx        context.Context
-	middleware matcher.Matcher
+	ctx context.Context
 }
 
-func NewWrappedStream(ctx context.Context, stream grpc.ServerStream, m matcher.Matcher) grpc.ServerStream {
+func NewWrappedStream(ctx context.Context, stream grpc.ServerStream) grpc.ServerStream {
 	return &wrappedStream{
 		ServerStream: stream,
 		ctx:          ctx,
-		middleware:   m,
 	}
 }
 
@@ -80,19 +68,8 @@ func (s *Server) streamServerInterceptor() grpc.StreamServerInterceptor {
 			replyHeader: headerCarrier(replyHeader),
 		})
 
-		h := func(_ context.Context, _ any) (any, error) {
-			return handler(srv, ss), nil
-		}
-
-		if next := s.streamMiddleware.Match(info.FullMethod); len(next) > 0 {
-			middleware.ChainUnary(next...)(h)
-		}
-
-		ctx = context.WithValue(ctx, stream{
-			ServerStream:     ss,
-			streamMiddleware: s.streamMiddleware,
-		}, ss)
-		ws := NewWrappedStream(ctx, ss, s.streamMiddleware)
+		ctx = context.WithValue(ctx, stream{ServerStream: ss}, ss)
+		ws := NewWrappedStream(ctx, ss)
 
 		err := handler(srv, ws)
 		if len(replyHeader) > 0 {
@@ -104,45 +81,8 @@ func (s *Server) streamServerInterceptor() grpc.StreamServerInterceptor {
 
 type stream struct {
 	grpc.ServerStream
-	streamMiddleware matcher.Matcher
 }
 
 func GetStream(ctx context.Context) grpc.ServerStream {
 	return ctx.Value(stream{}).(grpc.ServerStream)
-}
-
-func (w *wrappedStream) SendMsg(m any) error {
-	h := func(_ context.Context, req any) (any, error) {
-		return req, w.ServerStream.SendMsg(m)
-	}
-
-	info, ok := transport.FromServerContext(w.ctx)
-	if !ok {
-		return fmt.Errorf("transport value stored in ctx returns: %v", ok)
-	}
-
-	if next := w.middleware.Match(info.Operation()); len(next) > 0 {
-		h = middleware.ChainUnary(next...)(h)
-	}
-
-	_, err := h(w.ctx, m)
-	return err
-}
-
-func (w *wrappedStream) RecvMsg(m any) error {
-	h := func(_ context.Context, req any) (any, error) {
-		return req, w.ServerStream.RecvMsg(m)
-	}
-
-	info, ok := transport.FromServerContext(w.ctx)
-	if !ok {
-		return fmt.Errorf("transport value stored in ctx returns: %v", ok)
-	}
-
-	if next := w.middleware.Match(info.Operation()); len(next) > 0 {
-		h = middleware.ChainUnary(next...)(h)
-	}
-
-	_, err := h(w.ctx, m)
-	return err
 }

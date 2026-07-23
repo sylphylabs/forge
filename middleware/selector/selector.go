@@ -15,10 +15,6 @@ type (
 )
 
 var (
-	// serverTransporter is get server transport.Transporter from ctx
-	serverTransporter transporter = func(ctx context.Context) (transport.Transporter, bool) {
-		return transport.FromServerContext(ctx)
-	}
 	// clientTransporter is get client transport.Transporter from ctx
 	clientTransporter transporter = func(ctx context.Context) (transport.Transporter, bool) {
 		return transport.FromClientContext(ctx)
@@ -27,8 +23,6 @@ var (
 
 // Builder is a selector builder
 type Builder struct {
-	client bool
-
 	prefix   []string
 	regex    []string
 	path     []string
@@ -38,14 +32,9 @@ type Builder struct {
 	ms []middleware.UnaryMiddleware
 }
 
-// Server selector middleware
-func Server(ms ...middleware.UnaryMiddleware) *Builder {
-	return &Builder{ms: ms}
-}
-
 // Client selector middleware
 func Client(ms ...middleware.UnaryMiddleware) *Builder {
-	return &Builder{client: true, ms: ms}
+	return &Builder{ms: ms}
 }
 
 // Prefix is with Builder's prefix
@@ -72,21 +61,15 @@ func (b *Builder) Match(fn MatchFunc) *Builder {
 	return b
 }
 
-// Build is Builder's Build, for example: Server().Path(m1,m2).Build()
+// Build creates client middleware that selects by operation.
 func (b *Builder) Build() middleware.UnaryMiddleware {
-	var transporter func(ctx context.Context) (transport.Transporter, bool)
-	if b.client {
-		transporter = clientTransporter
-	} else {
-		transporter = serverTransporter
-	}
 	b.compiled = make([]*regexp.Regexp, 0, len(b.regex))
 	for _, regex := range b.regex {
 		if r, err := regexp.Compile(regex); err == nil {
 			b.compiled = append(b.compiled, r)
 		}
 	}
-	return selector(transporter, b.matches, b.ms...)
+	return selector(clientTransporter, b.matches, b.ms...)
 }
 
 // matches is match operation compliance Builder

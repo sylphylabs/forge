@@ -77,10 +77,7 @@ func TestRoute(t *testing.T) {
 		if err := ctx.Bind(u); err != nil {
 			return err
 		}
-		h := ctx.Middleware(func(context.Context, any) (any, error) {
-			return u, nil
-		})
-		return ctx.Returns(h(ctx, u))
+		return ctx.Returns(u, nil)
 	})
 
 	if e, err := srv.Endpoint(); err != nil || e == nil {

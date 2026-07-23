@@ -28,7 +28,7 @@ client
   -> route and Google path-template matching
   -> request context and transport metadata
   -> path, query, and body binding
-  -> middleware selection and execution
+  -> generated middleware execution
   -> application service method
   -> database, cache, or downstream calls
   -> response or error encoding
@@ -251,17 +251,13 @@ application-visible lifetime, wire, cancellation, or transport behavior.
 The following two changes can affect framework users and were approved on
 July 23, 2026.
 
-### Q1. When Does Middleware Configuration Freeze?
+### Q1. When Is Middleware Configuration Final?
 
-Decision: configuration freezes at the first call to `Start` or `ServeHTTP`,
-whichever happens first. This permits each route to cache its matched middleware
-chain while preserving setup through either the managed server or direct
-`http.Handler` path.
-
-A later `Server.Use` call must fail explicitly rather than being ignored. The
-focused implementation proposal must choose between a documented panic for the
-existing void method and a new error-returning configuration API. Compatibility
-tests and a migration note are required.
+Decision: generated service middleware becomes immutable when
+`Wrap<Service>HTTPServer` constructs the wrapper. The constructor snapshots the
+plan and returns an error for invalid middleware before route registration.
+HTTP `Server.Use`, server `Middleware`, `Server.WrapMiddleware`, and
+`Context.Middleware` are removed rather than retained behind a freeze boundary.
 
 ### Q2. May Disabled Logging Skip User Formatting Hooks?
 
@@ -278,7 +274,7 @@ The expected next-stage order is:
 1. Land the persistent stage-by-stage and real TCP benchmark matrix.
 2. Archive the `4f11c9e8` to `6fc25444` request-path result with raw evidence.
 3. Precompute immutable route and binding facts.
-4. Precompose middleware dispatch under the approved Q1 freeze boundary.
+4. Precompose middleware dispatch in generated wrapper constructors.
 5. Optimize query binding with differential and fuzz tests.
 6. Optimize body decoding while preserving body replay.
 7. Optimize response encoding while preserving exact bytes.

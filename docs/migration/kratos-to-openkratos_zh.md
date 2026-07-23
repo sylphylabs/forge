@@ -192,28 +192,65 @@ OpenKratos 使用标准库 `http.ServeMux` 的优先级规则，不再依赖 Gor
 行为。如果服务有意使用 `http.DefaultServeMux` 兜底，需要通过 `NotFoundHandler`
 显式传入。
 
-所有 HTTP middleware 都必须在首次调用 `Start` 或 `ServeHTTP` 前完成配置。不再
-支持 serving 期间修改配置：
+## 6. 迁移 Server Middleware
+
+OpenKratos 直接移除 server 侧 selector API，不保留运行时兼容路径。先完成以下
+机械重命名：
+
+| Kratos 名称 | OpenKratos 名称 |
+| --- | --- |
+| `middleware.Handler` | `middleware.UnaryHandler` |
+| `middleware.Middleware` | `middleware.UnaryMiddleware` |
+| `middleware.Chain` | `middleware.ChainUnary` |
+
+删除 `http.Middleware`、`grpc.Middleware`、`grpc.StreamMiddleware`、
+`Server.Use`、`Server.WrapMiddleware` 与 `http.Context.Middleware`。把每个
+selector 精确展开为对应的 protobuf method，再将 middleware 直接写入生成的
+service plan：
 
 ```go
-// 迁移前：这里可能与请求并发，生成 handler 也会反复构造 chain。
-srv.ServeHTTP(w, r)
-srv.Use("/example.Greeter/*", authMiddleware)
+plan := pb.GreeterMiddleware{
+	Unary: []middleware.UnaryMiddleware{
+		recovery.Recovery(),
+		logging.Server(logger),
+	},
+	Methods: pb.GreeterMethodMiddleware{
+		SayHello: []middleware.UnaryMiddleware{authorizeSayHello},
+	},
+}
+
+httpService, err := pb.WrapGreeterHTTPServer(service, plan)
+if err != nil {
+	return err
+}
+pb.RegisterGreeterHTTPServer(httpServer, httpService)
+
+grpcService, err := pb.WrapGreeterGRPCServer(service, plan)
+if err != nil {
+	return err
+}
+pb.RegisterGreeterServer(grpcServer, grpcService)
 ```
 
-应将配置移到 serving 之前：
+`Unary` 与 `Stream` 作用于整个 service；`Methods` 下的字段追加 method 专属
+middleware。切片第一项位于最外层。Wrapper 构造时会拒绝 nil middleware 或 nil
+handler，并快照所有切片，因此随后修改 plan 不会影响已构造的 wrapper。
 
-```go
-srv := http.NewServer(http.Middleware(defaultMiddleware))
-srv.Use("/example.Greeter/*", authMiddleware)
-pb.RegisterGreeterHTTPServer(srv, service)
-// 配置完成后再调用 Start 或 ServeHTTP。
-```
+完整 stream 生命周期行为应迁移到 `middleware.StreamMiddleware`。它围绕整个
+stream 只执行一次；需要观察每次 `SendMsg` 或 `RecvMsg` 时，应装饰
+`middleware.ServerStream`。旧 gRPC stream middleware 路径只构造 handler chain
+却没有调用它，因此迁移后的生命周期 middleware 会真正执行；对比行为时应将其
+视为正确性修复。
 
-冻结后调用 `Use` 会显式 panic。重新生成的 unary handler 会使用
-`Server.WrapMiddleware`，业务应用无需直接调用它。
+原始 HTTP request/response 行为应放入 `http.Filter`。gRPC 原生 metadata、peer、
+status、compression、header 或 trailer 行为应放入 `grpc.UnaryInterceptor`、
+`grpc.StreamInterceptor` 或 `grpc.Options`。这些 transport 原生层位于生成式
+service middleware 外层。
 
-## 6. 检查 Google HTTP Transcoding
+`middleware/selector.Server` 随 server selector 路径一并移除；client 侧仍可用
+`middleware/selector.Client` 按 operation 选择 middleware。
+
+## 7. 检查 Google HTTP Transcoding
 
 重新生成所有 HTTP client 与 server。OpenKratos 会更严格地校验 inline unary
 `google.api.HttpRule`；原 generator 仅警告或推迟到运行期处理的 schema 现在可能
@@ -273,12 +310,12 @@ Go client 时，应使用具体 primary rule，并把含糊规则放到 addition
 
 外部 `google.api.Service` YAML 与 `fully_decode_reserved_expansion` 目前尚未支持。
 
-## 7. 检查流式请求超时
+## 8. 检查流式请求超时
 
 HTTP SSE 与 WebSocket stream 不会再被 unary server timeout 终止。如果业务
 要求最大连接时长、读写超时或空闲超时，需要显式配置相应策略。
 
-## 8. 保留 Kratos v3 已完成的迁移
+## 9. 保留 Kratos v3 已完成的迁移
 
 OpenKratos 继续使用 Kratos v3 的 `log/slog` 日志模型、兼容标准库的 errors，
 以及相互独立的 `json` 与 `protojson` codec。已经使用 Kratos v3 的服务不应
@@ -287,7 +324,7 @@ OpenKratos 继续使用 Kratos v3 的 `log/slog` 日志模型、兼容标准库�
 HTTP generator 已支持 Edition 2023 Open/Opaque API。应从 schema 重新生成，
 不要继续保留上游 generator 产生的旧代码。
 
-## 9. 验证迁移
+## 10. 验证迁移
 
 先生成代码，再运行测试，避免生成文件中残留旧导入路径：
 
@@ -312,7 +349,10 @@ go vet ./...
 - [ ] 确认生成的 HTTP 文件断言 `SupportPackageIsVersion5`。
 - [ ] 使用 Go 与 Buf 命令替代 `kratos` CLI。
 - [ ] 检查路由优先级、冲突、prefix、斜杠、404 与 405。
-- [ ] 将所有 HTTP middleware 注册移动到 `Start` 或 `ServeHTTP` 之前。
+- [ ] 重命名 unary middleware 类型并重新生成 service middleware plan。
+- [ ] 用生成的 method 字段与 wrapper 替换 server selector。
+- [ ] 将 stream 生命周期行为迁移到 `StreamMiddleware`，按消息行为通过装饰 `ServerStream` 实现。
+- [ ] 将 transport 原生行为迁移到 HTTP filter 或 gRPC interceptor。
 - [ ] 重新生成并测试每个 inline `google.api.HttpRule` binding。
 - [ ] 动态模板继续使用 `BuildPath`；重复使用的固定模板只编译一次。
 - [ ] 检查 body/query 分类、ProtoJSON wire value 和 `%2F` 路径。

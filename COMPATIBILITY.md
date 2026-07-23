@@ -165,20 +165,27 @@ External `google.api.Service` configuration and
 separate Phase 2 described in
 [`docs/design/google-http-transcoding.md`](docs/design/google-http-transcoding.md).
 
-## HTTP Middleware Configuration
+## Generated Server Middleware
 
-HTTP middleware configuration freezes on the first call to `Server.Start` or
-`Server.ServeHTTP`, whichever occurs first. Calling `Server.Use`, or applying
-the `Middleware` server option manually, after that boundary panics with
-`http: middleware configuration is frozen`. Configure default and
-selector-specific middleware before serving requests.
+The ambiguous `middleware.Handler`, `middleware.Middleware`, and
+`middleware.Chain` names are replaced by `UnaryHandler`, `UnaryMiddleware`, and
+`ChainUnary`. Streaming uses the separate `ServerStream`, `StreamHandler`,
+`StreamMiddleware`, and `ChainStream` lifecycle contract.
 
-Generated unary handlers use `Server.WrapMiddleware` to select and compose the
-operation's middleware once. The middleware still runs for every request, in
-the same order, with the same request message and context propagation. Server
-streaming and hand-written calls to `Context.Middleware` retain dynamic handler
-composition because their terminal handler can be request-specific, but they
-observe the same frozen configuration.
+HTTP and gRPC server selector middleware is removed. `http.Middleware`,
+`grpc.Middleware`, `grpc.StreamMiddleware`, `Server.Use`,
+`Server.WrapMiddleware`, and `http.Context.Middleware` have no compatibility
+aliases. Regenerated code exposes a service-specific middleware plan and
+`Wrap<Service>HTTPServer` / `Wrap<Service>GRPCServer` constructors instead.
+Those constructors snapshot and compose all service and method middleware
+before registration; no selector lookup or chain construction remains on the
+request path.
+
+`middleware/selector.Server` is also removed. `middleware/selector.Client`
+remains available because generated server plans do not replace client-side
+operation selection. Use HTTP filters and gRPC interceptors for
+transport-native server behavior. Other client middleware options remain
+separate and are not affected by this server API replacement.
 
 The isolated before-and-after measurements are recorded in
 [`docs/benchmarks/http-middleware-2026-07-23.md`](docs/benchmarks/http-middleware-2026-07-23.md).

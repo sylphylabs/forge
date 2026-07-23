@@ -206,10 +206,9 @@ Implementation constraints:
 
 - Generated service bindings expose a typed internal entry point for each
   method.
-- Migration packages may adapt existing `middleware.Middleware` while users
-  move to generated service middleware plans. Generated core code
-  does not call that adapter, repeatedly reflect on the service method, or
-  rebuild metadata per request.
+- Migration documentation maps existing `middleware.Middleware` values to
+  `middleware.UnaryMiddleware` and generated service plans. No runtime adapter
+  or compatibility alias remains in core code.
 - Middleware names and execution policy do not enter Protobuf descriptors.
   Generated plans expose RPC fields and generated wrappers compose them before
   registration without runtime string dispatch.

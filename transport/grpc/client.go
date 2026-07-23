@@ -11,7 +11,6 @@ import (
 	grpcinsecure "google.golang.org/grpc/credentials/insecure"
 	grpcmd "google.golang.org/grpc/metadata"
 
-	"github.com/openkratos/kratos/internal/matcher"
 	"github.com/openkratos/kratos/middleware"
 	"github.com/openkratos/kratos/registry"
 	"github.com/openkratos/kratos/selector"
@@ -236,7 +235,7 @@ func unaryClientInterceptor(ms []middleware.UnaryMiddleware, timeout time.Durati
 type wrappedClientStream struct {
 	grpc.ClientStream
 	ctx        context.Context
-	middleware matcher.Matcher
+	middleware []middleware.UnaryMiddleware
 }
 
 func (w *wrappedClientStream) Context() context.Context {
@@ -248,13 +247,13 @@ func (w *wrappedClientStream) SendMsg(m any) error {
 		return req, w.ClientStream.SendMsg(m)
 	}
 
-	info, ok := transport.FromClientContext(w.ctx)
+	_, ok := transport.FromClientContext(w.ctx)
 	if !ok {
 		return fmt.Errorf("transport value stored in ctx returns: %v", ok)
 	}
 
-	if next := w.middleware.Match(info.Operation()); len(next) > 0 {
-		h = middleware.ChainUnary(next...)(h)
+	if len(w.middleware) > 0 {
+		h = middleware.ChainUnary(w.middleware...)(h)
 	}
 
 	_, err := h(w.ctx, m)
@@ -266,13 +265,13 @@ func (w *wrappedClientStream) RecvMsg(m any) error {
 		return req, w.ClientStream.RecvMsg(m)
 	}
 
-	info, ok := transport.FromClientContext(w.ctx)
+	_, ok := transport.FromClientContext(w.ctx)
 	if !ok {
 		return fmt.Errorf("transport value stored in ctx returns: %v", ok)
 	}
 
-	if next := w.middleware.Match(info.Operation()); len(next) > 0 {
-		h = middleware.ChainUnary(next...)(h)
+	if len(w.middleware) > 0 {
+		h = middleware.ChainUnary(w.middleware...)(h)
 	}
 
 	_, err := h(w.ctx, m)
@@ -295,20 +294,10 @@ func streamClientInterceptor(ms []middleware.UnaryMiddleware, filters []selector
 			return nil, err
 		}
 
-		h := func(_ context.Context, _ any) (any, error) {
-			return streamer, nil
-		}
-
-		m := matcher.New()
-		if len(ms) > 0 {
-			m.Use(ms...)
-			middleware.ChainUnary(ms...)(h)
-		}
-
 		wrappedStream := &wrappedClientStream{
 			ClientStream: clientStream,
 			ctx:          ctx,
-			middleware:   m,
+			middleware:   append([]middleware.UnaryMiddleware(nil), ms...),
 		}
 
 		return wrappedStream, nil

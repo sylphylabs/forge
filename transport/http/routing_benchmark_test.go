@@ -176,23 +176,17 @@ func BenchmarkServerRoute(b *testing.B) {
 }
 
 func BenchmarkMiddlewareDispatch(b *testing.B) {
-	operation := "/benchmark.Service/Call"
 	terminal := func(context.Context, any) (any, error) { return nil, nil }
 	for _, count := range []int{0, 1, 3} {
-		b.Run(fmt.Sprintf("dynamic/%d", count), func(b *testing.B) {
+		b.Run(fmt.Sprintf("request-time-composition/%d", count), func(b *testing.B) {
 			middlewares := make([]middleware.UnaryMiddleware, count)
 			for i := range middlewares {
-				middlewares[i] = func(next middleware.UnaryHandler) middleware.UnaryHandler { return next }
-			}
-			srv := NewServer(Middleware(middlewares...))
-			ctx := &wrapper{
-				router: srv.Route("/"),
-				req:    httptest.NewRequest(http.MethodGet, operation, nil),
+				middlewares[i] = benchmarkUnaryMiddleware
 			}
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
-				if _, err := ctx.Middleware(terminal)(ctx, nil); err != nil {
+				if _, err := middleware.ChainUnary(middlewares...)(terminal)(context.Background(), nil); err != nil {
 					b.Fatal(err)
 				}
 			}
@@ -200,10 +194,12 @@ func BenchmarkMiddlewareDispatch(b *testing.B) {
 		b.Run(fmt.Sprintf("precomposed/%d", count), func(b *testing.B) {
 			middlewares := make([]middleware.UnaryMiddleware, count)
 			for i := range middlewares {
-				middlewares[i] = func(next middleware.UnaryHandler) middleware.UnaryHandler { return next }
+				middlewares[i] = benchmarkUnaryMiddleware
 			}
-			srv := NewServer(Middleware(middlewares...))
-			handler := srv.WrapMiddleware(operation, terminal)
+			handler, err := middleware.ComposeUnary(terminal, middlewares...)
+			if err != nil {
+				b.Fatal(err)
+			}
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
@@ -212,6 +208,12 @@ func BenchmarkMiddlewareDispatch(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+func benchmarkUnaryMiddleware(next middleware.UnaryHandler) middleware.UnaryHandler {
+	return func(ctx context.Context, request any) (any, error) {
+		return next(ctx, request)
 	}
 }
 

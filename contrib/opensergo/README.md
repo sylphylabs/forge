@@ -9,13 +9,14 @@ if err != nil {
 }
 
 s := &server{}
-grpcSrv := grpc.NewServer(
-	grpc.Address(":9000"),
-	grpc.Middleware(
-		recovery.Recovery(),
-	),
-)
-helloworld.RegisterGreeterServer(grpcSrv, s)
+grpcSrv := grpc.NewServer(grpc.Address(":9000"))
+grpcService, err := helloworld.WrapGreeterGRPCServer(s, helloworld.GreeterMiddleware{
+	Unary: []middleware.UnaryMiddleware{recovery.Recovery()},
+})
+if err != nil {
+	panic(err)
+}
+helloworld.RegisterGreeterServer(grpcSrv, grpcService)
 
 app := kratos.New(
 	kratos.Name(Name),

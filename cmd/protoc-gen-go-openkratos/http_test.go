@@ -41,7 +41,7 @@ func TestHTTPTemplateClientUsesCompiledPathAndGoogleJSON(t *testing.T) {
 	}
 	got := sd.execute()
 	for _, want := range []string{
-		`h := s.WrapMiddleware(OperationGreeterSayHello`,
+		`out, err := srv.SayHello(ctx, &in)`,
 		`var _Greeter_SayHello0_HTTP_Path = http.MustCompilePath("/helloworld/{name}", new(HelloRequest), http.WithQueryParams())`,
 		`var _Greeter_CreateHello0_HTTP_Path = http.MustCompilePath("/helloworld", new(CreateHelloRequest))`,
 		`path, err := _Greeter_SayHello0_HTTP_Path.Build(in)`,
@@ -286,11 +286,11 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 	}
 	for _, want := range []string{
 		`const _ = http.SupportPackageIsVersion5`,
-		`r.Handle("GET", "/v1/{name=items/*}", _OpenService_Alternate0_HTTP_Handler(s, srv))`,
-		`r.Handle("GET", "/v1/alternate/{name=items/*}", _OpenService_Alternate1_HTTP_Handler(s, srv))`,
-		`r.Handle("REPORT", "/v1/report/{name=items/*}", _OpenService_Alternate2_HTTP_Handler(s, srv))`,
-		`r.Handle("*", "/v1/any/{name}", _OpenService_AnyMethod0_HTTP_Handler(s, srv))`,
-		`h := s.WrapMiddleware(OperationOpenServiceAlternate`,
+		`r.Handle("GET", "/v1/{name=items/*}", _OpenService_Alternate0_HTTP_Handler(srv))`,
+		`r.Handle("GET", "/v1/alternate/{name=items/*}", _OpenService_Alternate1_HTTP_Handler(srv))`,
+		`r.Handle("REPORT", "/v1/report/{name=items/*}", _OpenService_Alternate2_HTTP_Handler(srv))`,
+		`r.Handle("*", "/v1/any/{name}", _OpenService_AnyMethod0_HTTP_Handler(srv))`,
+		`out, err := srv.Alternate(ctx, &in)`,
 		`pattern := "/v1/{name=items/*}"`,
 		`return nil, http.ErrUnspecifiedHTTPMethod`,
 		`return nil, http.ErrUnboundPathWildcard`,

@@ -18,7 +18,6 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/openkratos/kratos/errors"
-	"github.com/openkratos/kratos/internal/matcher"
 	pb "github.com/openkratos/kratos/internal/testdata/helloworld"
 	"github.com/openkratos/kratos/log"
 	"github.com/openkratos/kratos/middleware"
@@ -77,18 +76,10 @@ func TestServer(t *testing.T) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, testKey{}, "test")
 	srv := NewServer(
-		Middleware(
-			func(handler middleware.UnaryHandler) middleware.UnaryHandler {
-				return func(ctx context.Context, req any) (reply any, err error) {
-					if tr, ok := transport.FromServerContext(ctx); ok {
-						if tr.ReplyHeader() != nil {
-							tr.ReplyHeader().Set("req_id", "3344")
-						}
-					}
-					return handler(ctx, req)
-				}
-			}),
 		UnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+			if tr, ok := transport.FromServerContext(ctx); ok && tr.ReplyHeader() != nil {
+				tr.ReplyHeader().Set("req_id", "3344")
+			}
 			return handler(ctx, req)
 		}),
 		Options(grpc.InitialConnWindowSize(0)),
@@ -266,12 +257,10 @@ func TestServer_unaryServerInterceptor(t *testing.T) {
 		t.Errorf("expect %v, got %v", nil, err)
 	}
 	srv := &Server{
-		baseCtx:    context.Background(),
-		endpoint:   u,
-		timeout:    time.Duration(10),
-		middleware: matcher.New(),
+		baseCtx:  context.Background(),
+		endpoint: u,
+		timeout:  time.Duration(10),
 	}
-	srv.middleware.Use(EmptyMiddleware())
 	req := &struct{}{}
 	rv, err := srv.unaryServerInterceptor()(context.TODO(), req, &grpc.UnaryServerInfo{}, func(context.Context, any) (any, error) {
 		return &testResp{Data: "hi"}, nil
@@ -326,14 +315,10 @@ func TestServer_streamServerInterceptor(t *testing.T) {
 		t.Errorf("expect %v, got %v", nil, err)
 	}
 	srv := &Server{
-		baseCtx:          context.Background(),
-		endpoint:         u,
-		timeout:          time.Duration(10),
-		middleware:       matcher.New(),
-		streamMiddleware: matcher.New(),
+		baseCtx:  context.Background(),
+		endpoint: u,
+		timeout:  time.Duration(10),
 	}
-
-	srv.streamMiddleware.Use(EmptyMiddleware())
 
 	mockStream := &mockServerStream{
 		ctx: srv.baseCtx,

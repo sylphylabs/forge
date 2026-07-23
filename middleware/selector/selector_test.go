@@ -79,21 +79,21 @@ func TestMatch(t *testing.T) {
 	}{
 		{
 			name: "/hello/world",
-			ctx:  transport.NewServerContext(context.Background(), &Transport{operation: "/hello/world"}),
+			ctx:  transport.NewClientContext(context.Background(), &Transport{operation: "/hello/world"}),
 			want: true,
 		},
 		{
 			name: "/hi/world",
-			ctx:  transport.NewServerContext(context.Background(), &Transport{operation: "/hi/world"}),
+			ctx:  transport.NewClientContext(context.Background(), &Transport{operation: "/hi/world"}),
 		},
 		{
 			name: "/test/1234",
-			ctx:  transport.NewServerContext(context.Background(), &Transport{operation: "/test/1234"}),
+			ctx:  transport.NewClientContext(context.Background(), &Transport{operation: "/test/1234"}),
 			want: true,
 		},
 		{
 			name: "/example/kratos",
-			ctx:  transport.NewServerContext(context.Background(), &Transport{operation: "/example/kratos"}),
+			ctx:  transport.NewClientContext(context.Background(), &Transport{operation: "/example/kratos"}),
 			want: true,
 		},
 	}
@@ -109,7 +109,7 @@ func TestMatch(t *testing.T) {
 			next := func(_ context.Context, _ any) (any, error) {
 				return "reply", nil
 			}
-			next = Server(markApplied).Prefix("/hello/").Regex(`/test/[0-9]+`).
+			next = Client(markApplied).Prefix("/hello/").Regex(`/test/[0-9]+`).
 				Path("/example/kratos").Build()(next)
 			reply, err := next(test.ctx, test.name)
 			if err != nil {
@@ -186,19 +186,19 @@ func TestFunc(t *testing.T) {
 	}{
 		{
 			name: "/hello.Update/world",
-			ctx:  transport.NewServerContext(context.Background(), &Transport{operation: "/hello.Update/world"}),
+			ctx:  transport.NewClientContext(context.Background(), &Transport{operation: "/hello.Update/world"}),
 		},
 		{
 			name: "/hi.Create/world",
-			ctx:  transport.NewServerContext(context.Background(), &Transport{operation: "/hi.Create/world"}),
+			ctx:  transport.NewClientContext(context.Background(), &Transport{operation: "/hi.Create/world"}),
 		},
 		{
 			name: "/test.Name/1234",
-			ctx:  transport.NewServerContext(context.Background(), &Transport{operation: "/test.Name/1234"}),
+			ctx:  transport.NewClientContext(context.Background(), &Transport{operation: "/test.Name/1234"}),
 		},
 		{
 			name: "/go-kratos.dev/kratos",
-			ctx:  transport.NewServerContext(context.Background(), &Transport{operation: "/go-kratos.dev/kratos"}),
+			ctx:  transport.NewClientContext(context.Background(), &Transport{operation: "/go-kratos.dev/kratos"}),
 		},
 	}
 	for _, test := range tests {
@@ -207,7 +207,7 @@ func TestFunc(t *testing.T) {
 				t.Log(req)
 				return "reply", nil
 			}
-			next = Server(testMiddleware).Match(func(_ context.Context, operation string) bool {
+			next = Client(testMiddleware).Match(func(_ context.Context, operation string) bool {
 				if strings.HasPrefix(operation, "/go-kratos.dev") || strings.HasSuffix(operation, "world") {
 					return true
 				}
@@ -231,28 +231,28 @@ func TestHeaderFunc(t *testing.T) {
 	}{
 		{
 			name: "/hello.Update/world",
-			ctx: transport.NewServerContext(context.Background(), &Transport{
+			ctx: transport.NewClientContext(context.Background(), &Transport{
 				operation: "/hello.Update/world",
 				headers:   &mockHeader{map[string][]string{"X-Test": {"test"}}},
 			}),
 		},
 		{
 			name: "/hi.Create/world",
-			ctx: transport.NewServerContext(context.Background(), &Transport{
+			ctx: transport.NewClientContext(context.Background(), &Transport{
 				operation: "/hi.Create/world",
 				headers:   &mockHeader{map[string][]string{"X-Test": {"test2"}, "go-kratos": {"kratos"}}},
 			}),
 		},
 		{
 			name: "/test.Name/1234",
-			ctx: transport.NewServerContext(context.Background(), &Transport{
+			ctx: transport.NewClientContext(context.Background(), &Transport{
 				operation: "/test.Name/1234",
 				headers:   &mockHeader{map[string][]string{"X-Test": {"test3"}}},
 			}),
 		},
 		{
 			name: "/go-kratos.dev/kratos",
-			ctx: transport.NewServerContext(context.Background(), &Transport{
+			ctx: transport.NewClientContext(context.Background(), &Transport{
 				operation: "/go-kratos.dev/kratos",
 				headers:   &mockHeader{map[string][]string{"X-Test": {"test"}}},
 			}),
@@ -264,8 +264,8 @@ func TestHeaderFunc(t *testing.T) {
 				t.Log(req)
 				return "reply", nil
 			}
-			next = Server(testMiddleware).Match(func(ctx context.Context, _ string) bool {
-				tr, ok := transport.FromServerContext(ctx)
+			next = Client(testMiddleware).Match(func(ctx context.Context, _ string) bool {
+				tr, ok := transport.FromClientContext(ctx)
 				if !ok {
 					return false
 				}
@@ -363,8 +363,8 @@ func Test_RegexMatch(t *testing.T) {
 			next := func(_ context.Context, _ any) (any, error) {
 				return "reply", nil
 			}
-			ctx := transport.NewServerContext(context.Background(), &Transport{operation: tt.operation})
-			handler := Server(markMiddleware).Regex(tt.regex...).Build()(next)
+			ctx := transport.NewClientContext(context.Background(), &Transport{operation: tt.operation})
+			handler := Client(markMiddleware).Regex(tt.regex...).Build()(next)
 			_, _ = handler(ctx, tt.operation)
 			if middlewareApplied != tt.want {
 				t.Errorf("middleware applied = %v, want %v", middlewareApplied, tt.want)
@@ -374,7 +374,7 @@ func Test_RegexMatch(t *testing.T) {
 }
 
 func Test_InvalidRegexSkipped(t *testing.T) {
-	b := Server(testMiddleware).Regex("^\b(?", `/valid/[0-9]+`)
+	b := Client(testMiddleware).Regex("^\b(?", `/valid/[0-9]+`)
 	m := b.Build()
 	if m == nil {
 		t.Fatal("Build() must not return nil")

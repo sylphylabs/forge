@@ -145,17 +145,25 @@ API。手写代码如果反复使用固定模板，应通过 `CompilePath` 或 `
 仍属于 [`docs/design/google-http-transcoding.md`](docs/design/google-http-transcoding.md)
 定义的独立 Phase 2。
 
-## HTTP Middleware 配置
+## 生成式 Server Middleware
 
-HTTP middleware 配置会在首次调用 `Server.Start` 或 `Server.ServeHTTP` 时冻结。
-在此边界后调用 `Server.Use`，或手动再次应用 `Middleware` server option，会以
-`http: middleware configuration is frozen` panic。默认 middleware 与 selector
-middleware 都必须在开始处理请求前配置完成。
+语义含糊的 `middleware.Handler`、`middleware.Middleware` 与
+`middleware.Chain` 已分别替换为 `UnaryHandler`、`UnaryMiddleware` 与
+`ChainUnary`。Streaming 使用独立的 `ServerStream`、`StreamHandler`、
+`StreamMiddleware` 与 `ChainStream` 生命周期协议。
 
-生成的 unary handler 通过 `Server.WrapMiddleware` 只选择并组合一次 operation
-对应的 middleware。Middleware 仍按相同顺序在每次请求中执行，并收到相同的请求
-message 与 context。Server streaming 与手写的 `Context.Middleware` 因 terminal
-handler 可能属于单次请求，仍采用动态 handler 组合，但同样只能读取已冻结配置。
+HTTP 与 gRPC server 的 selector middleware 已移除。`http.Middleware`、
+`grpc.Middleware`、`grpc.StreamMiddleware`、`Server.Use`、
+`Server.WrapMiddleware` 与 `http.Context.Middleware` 均不保留兼容 alias。
+重新生成的代码会提供 service 专属 middleware plan，以及
+`Wrap<Service>HTTPServer` / `Wrap<Service>GRPCServer` 构造函数。构造函数会在注册前
+快照并组合 service 与 method middleware，请求路径不再执行 selector 查找或 chain
+构造。
+
+`middleware/selector.Server` 也已移除。生成式 server plan 不替代 client 侧
+operation 选择，因此 `middleware/selector.Client` 继续保留。Transport 原生的
+server 行为应使用 HTTP filter 或 gRPC interceptor；其他 client middleware option
+独立存在，不受本次 server API 替换影响。
 
 隔离的前后性能数据记录在
 [`docs/benchmarks/http-middleware-2026-07-23.md`](docs/benchmarks/http-middleware-2026-07-23.md)。
