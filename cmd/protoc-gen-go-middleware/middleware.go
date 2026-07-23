@@ -63,7 +63,7 @@ func generateMiddlewareFile(gen *protogen.Plugin, file *protogen.File, mode http
 		httpMethods := enabledHTTPMethods(service, mode)
 		generateMiddlewarePlan(g, service)
 		if mode != httpDisabled && len(httpMethods) > 0 {
-			generateHTTPMiddlewareWrapper(g, service, httpMethods)
+			generateHTTPMiddlewareWrapper(g, service, httpMethods, mode)
 		}
 		if grpcEnabled {
 			generateGRPCMiddlewareWrapper(g, service)
@@ -157,15 +157,23 @@ func generateMiddlewarePlan(g *protogen.GeneratedFile, service *protogen.Service
 	g.P()
 }
 
-func generateHTTPMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.Service, methods []*protogen.Method) {
-	wrapper := lowerFirst(service.GoName) + "HTTPMiddlewareServer"
+func generateHTTPMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.Service, methods []*protogen.Method, mode httpMode) {
+	wrapper := "_" + service.GoName + "HTTPMiddlewareServer"
+	expectedMethodSet := 1
+	if mode == httpAll {
+		expectedMethodSet = 2
+	}
+	methodSet := "_" + service.GoName + "HTTPMethodSet"
+	g.P("var _ [", methodSet, "-", expectedMethodSet, "]struct{}")
+	g.P("var _ [", expectedMethodSet, "-", methodSet, "]struct{}")
+	g.P()
 	g.P("type ", wrapper, " struct {")
 	g.P(service.GoName, "HTTPServer")
 	for _, method := range methods {
 		if isStreaming(method) {
-			g.P(lowerFirst(method.GoName), " ", middlewarePackage.Ident("StreamHandler"))
+			g.P("handler", method.GoName, " ", middlewarePackage.Ident("StreamHandler"))
 		} else {
-			g.P(lowerFirst(method.GoName), " ", middlewarePackage.Ident("UnaryHandler"))
+			g.P("handler", method.GoName, " ", middlewarePackage.Ident("UnaryHandler"))
 		}
 	}
 	g.P("}")
@@ -194,14 +202,14 @@ func generateHTTPMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.
 }
 
 func generateGRPCMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.Service) {
-	wrapper := lowerFirst(service.GoName) + "GRPCMiddlewareServer"
+	wrapper := "_" + service.GoName + "GRPCMiddlewareServer"
 	g.P("type ", wrapper, " struct {")
 	g.P(service.GoName, "Server")
 	for _, method := range service.Methods {
 		if isStreaming(method) {
-			g.P(lowerFirst(method.GoName), " ", middlewarePackage.Ident("StreamHandler"))
+			g.P("handler", method.GoName, " ", middlewarePackage.Ident("StreamHandler"))
 		} else {
-			g.P(lowerFirst(method.GoName), " ", middlewarePackage.Ident("UnaryHandler"))
+			g.P("handler", method.GoName, " ", middlewarePackage.Ident("UnaryHandler"))
 		}
 	}
 	g.P("}")
@@ -230,7 +238,7 @@ func generateGRPCMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.
 }
 
 func generateComposeBlock(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, transport, serviceVar, wrapperVar string) {
-	field := lowerFirst(method.GoName)
+	field := "handler" + method.GoName
 	qualified := string(service.Desc.FullName()) + "/" + string(method.Desc.Name()) + " " + transport
 	g.P("{")
 	if isStreaming(method) {
@@ -276,7 +284,7 @@ func generateStreamTerminal(g *protogen.GeneratedFile, service *protogen.Service
 }
 
 func generateHTTPWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, wrapper string) {
-	field := lowerFirst(method.GoName)
+	field := "handler" + method.GoName
 	if !isStreaming(method) {
 		g.P("func (s *", wrapper, ") ", method.GoName, "(ctx ", contextPackage.Ident("Context"), ", request *", method.Input.GoIdent, ") (*", method.Output.GoIdent, ", error) {")
 		g.P("reply, err := s.", field, "(ctx, request)")
@@ -304,7 +312,7 @@ func generateHTTPWrapperMethod(g *protogen.GeneratedFile, service *protogen.Serv
 }
 
 func generateGRPCWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, wrapper string) {
-	field := lowerFirst(method.GoName)
+	field := "handler" + method.GoName
 	if !isStreaming(method) {
 		g.P("func (s *", wrapper, ") ", method.GoName, "(ctx ", contextPackage.Ident("Context"), ", request *", method.Input.GoIdent, ") (*", method.Output.GoIdent, ", error) {")
 		g.P("reply, err := s.", field, "(ctx, request)")
@@ -395,11 +403,4 @@ func streamAdapterName(service *protogen.Service, method *protogen.Method, trans
 
 func isStreaming(method *protogen.Method) bool {
 	return method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer()
-}
-
-func lowerFirst(name string) string {
-	if name == "" {
-		return ""
-	}
-	return strings.ToLower(name[:1]) + name[1:]
 }

@@ -26,9 +26,12 @@ type GreeterMethodMiddleware struct {
 	SayHelloStream []middleware.StreamMiddleware
 }
 
-type greeterHTTPMiddlewareServer struct {
+var _ [_GreeterHTTPMethodSet - 1]struct{}
+var _ [1 - _GreeterHTTPMethodSet]struct{}
+
+type _GreeterHTTPMiddlewareServer struct {
 	GreeterHTTPServer
-	sayHello middleware.UnaryHandler
+	handlerSayHello middleware.UnaryHandler
 }
 
 // WrapGreeterHTTPServer snapshots plan and composes every HTTP handler before registration.
@@ -36,7 +39,7 @@ func WrapGreeterHTTPServer(srv GreeterHTTPServer, plan GreeterMiddleware) (Greet
 	if srv == nil {
 		return nil, fmt.Errorf("openkratos: nil Greeter HTTP server")
 	}
-	wrapped := &greeterHTTPMiddlewareServer{GreeterHTTPServer: srv}
+	wrapped := &_GreeterHTTPMiddlewareServer{GreeterHTTPServer: srv}
 	{
 		middlewares := make([]middleware.UnaryMiddleware, 0, len(plan.Unary)+len(plan.Methods.SayHello))
 		middlewares = append(middlewares, plan.Unary...)
@@ -51,13 +54,13 @@ func WrapGreeterHTTPServer(srv GreeterHTTPServer, plan GreeterMiddleware) (Greet
 		if err != nil {
 			return nil, fmt.Errorf("openkratos: wrapping helloworld.Greeter/SayHello HTTP: %w", err)
 		}
-		wrapped.sayHello = handler
+		wrapped.handlerSayHello = handler
 	}
 	return wrapped, nil
 }
 
-func (s *greeterHTTPMiddlewareServer) SayHello(ctx context.Context, request *HelloRequest) (*HelloReply, error) {
-	reply, err := s.sayHello(ctx, request)
+func (s *_GreeterHTTPMiddlewareServer) SayHello(ctx context.Context, request *HelloRequest) (*HelloReply, error) {
+	reply, err := s.handlerSayHello(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -68,10 +71,10 @@ func (s *greeterHTTPMiddlewareServer) SayHello(ctx context.Context, request *Hel
 	return typed, nil
 }
 
-type greeterGRPCMiddlewareServer struct {
+type _GreeterGRPCMiddlewareServer struct {
 	GreeterServer
-	sayHello       middleware.UnaryHandler
-	sayHelloStream middleware.StreamHandler
+	handlerSayHello       middleware.UnaryHandler
+	handlerSayHelloStream middleware.StreamHandler
 }
 
 type _Greeter_SayHelloStreamGRPCMiddlewareStreamKey struct{}
@@ -112,7 +115,7 @@ func WrapGreeterGRPCServer(srv GreeterServer, plan GreeterMiddleware) (GreeterSe
 	if srv == nil {
 		return nil, fmt.Errorf("openkratos: nil Greeter gRPC server")
 	}
-	wrapped := &greeterGRPCMiddlewareServer{GreeterServer: srv}
+	wrapped := &_GreeterGRPCMiddlewareServer{GreeterServer: srv}
 	{
 		middlewares := make([]middleware.UnaryMiddleware, 0, len(plan.Unary)+len(plan.Methods.SayHello))
 		middlewares = append(middlewares, plan.Unary...)
@@ -127,7 +130,7 @@ func WrapGreeterGRPCServer(srv GreeterServer, plan GreeterMiddleware) (GreeterSe
 		if err != nil {
 			return nil, fmt.Errorf("openkratos: wrapping helloworld.Greeter/SayHello gRPC: %w", err)
 		}
-		wrapped.sayHello = handler
+		wrapped.handlerSayHello = handler
 	}
 	{
 		middlewares := make([]middleware.StreamMiddleware, 0, len(plan.Stream)+len(plan.Methods.SayHelloStream))
@@ -147,13 +150,13 @@ func WrapGreeterGRPCServer(srv GreeterServer, plan GreeterMiddleware) (GreeterSe
 		if err != nil {
 			return nil, fmt.Errorf("openkratos: wrapping helloworld.Greeter/SayHelloStream gRPC: %w", err)
 		}
-		wrapped.sayHelloStream = handler
+		wrapped.handlerSayHelloStream = handler
 	}
 	return wrapped, nil
 }
 
-func (s *greeterGRPCMiddlewareServer) SayHello(ctx context.Context, request *HelloRequest) (*HelloReply, error) {
-	reply, err := s.sayHello(ctx, request)
+func (s *_GreeterGRPCMiddlewareServer) SayHello(ctx context.Context, request *HelloRequest) (*HelloReply, error) {
+	reply, err := s.handlerSayHello(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +167,7 @@ func (s *greeterGRPCMiddlewareServer) SayHello(ctx context.Context, request *Hel
 	return typed, nil
 }
 
-func (s *greeterGRPCMiddlewareServer) SayHelloStream(stream Greeter_SayHelloStreamServer) error {
+func (s *_GreeterGRPCMiddlewareServer) SayHelloStream(stream Greeter_SayHelloStreamServer) error {
 	base := &_Greeter_SayHelloStreamGRPCMiddlewareStream{ServerStream: stream, ctx: context.WithValue(stream.Context(), _Greeter_SayHelloStreamGRPCMiddlewareStreamKey{}, grpc.ServerStream(stream))}
-	return s.sayHelloStream(nil, base)
+	return s.handlerSayHelloStream(nil, base)
 }

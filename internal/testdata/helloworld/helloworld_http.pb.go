@@ -21,6 +21,8 @@ const OperationGreeterSayHello = "/helloworld.Greeter/SayHello"
 
 var _Greeter_SayHello0_HTTP_Path = http.MustCompilePath("/helloworld/{name}", new(HelloRequest), http.WithQueryParams())
 
+const _GreeterHTTPMethodSet = 1
+
 type GreeterHTTPServer interface {
 	// SayHello Sends a greeting
 	SayHello(context.Context, *HelloRequest) (*HelloReply, error)

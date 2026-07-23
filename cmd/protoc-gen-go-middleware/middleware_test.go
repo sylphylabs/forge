@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/openkratos/kratos/cmd/internal/generator/testutil"
@@ -191,5 +193,104 @@ func TestGeneratedMiddlewarePlanDoesNotRequireTransportWrappers(t *testing.T) {
 		if bytes.Contains(generated, []byte(forbidden)) {
 			t.Fatalf("generated plan unexpectedly contains %q:\n%s", forbidden, generated)
 		}
+	}
+}
+
+func TestHTTPMethodSetModesMustMatch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping protoc integration test in short mode")
+	}
+	for _, tool := range []string{"go", "protoc"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("%s is not installed: %v", tool, err)
+		}
+	}
+
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiRoot := filepath.Join(filepath.Dir(root), "OpenKratos-api")
+	tmp := t.TempDir()
+	bin := filepath.Join(tmp, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.RunCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go"), "google.golang.org/protobuf/cmd/protoc-gen-go")
+	testutil.RunCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go-http"), "../protoc-gen-go-http")
+	testutil.RunCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go-middleware"), ".")
+
+	tests := []struct {
+		name           string
+		httpOmitEmpty  bool
+		middlewareMode string
+		wantCompile    bool
+	}{
+		{name: "annotated", httpOmitEmpty: true, middlewareMode: "annotated", wantCompile: true},
+		{name: "all", httpOmitEmpty: false, middlewareMode: "all", wantCompile: true},
+		{name: "HTTP annotated middleware all", httpOmitEmpty: true, middlewareMode: "all"},
+		{name: "HTTP all middleware annotated", httpOmitEmpty: false, middlewareMode: "annotated"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			out := filepath.Join(tmp, strings.ReplaceAll(test.name, " ", "_"))
+			if err := os.MkdirAll(out, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{
+				"-I", "testdata",
+				"-I", filepath.Join(root, "third_party"),
+				"--go_out=" + out,
+				"--go_opt=module=methodset.test",
+				"--go-http_out=" + out,
+				"--go-http_opt=module=methodset.test,omitempty=" + strconv.FormatBool(test.httpOmitEmpty),
+				"--go-middleware_out=" + out,
+				"--go-middleware_opt=module=methodset.test,http=" + test.middlewareMode,
+				"methodset/service.proto",
+			}
+			cmd := exec.Command("protoc", args...)
+			cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("protoc failed: %v\n%s", err, output)
+			}
+			consumer, err := os.ReadFile(filepath.Join("testdata", "methodset", "consumer_test.gotxt"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(out, "api", "consumer_test.go"), consumer, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			goMod := fmt.Sprintf(`module methodset.test
+
+go 1.27rc2
+
+require (
+	github.com/openkratos/api v0.0.0
+	github.com/openkratos/kratos v0.0.0
+	google.golang.org/protobuf v1.36.11
+)
+
+replace github.com/openkratos/api => %s
+
+replace github.com/openkratos/kratos => %s
+`, apiRoot, root)
+			if err := os.WriteFile(filepath.Join(out, "go.mod"), []byte(goMod), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			cmd = exec.Command("go", "test", "-mod=mod", "./...")
+			cmd.Dir = out
+			output, err := cmd.CombinedOutput()
+			if test.wantCompile && err != nil {
+				t.Fatalf("matching method sets did not compile: %v\n%s", err, output)
+			}
+			if !test.wantCompile {
+				if err == nil {
+					t.Fatal("mismatched method sets unexpectedly compiled")
+				}
+				if !bytes.Contains(output, []byte("invalid array length")) {
+					t.Fatalf("mismatch failure is not the compile-time method-set assertion:\n%s", output)
+				}
+			}
+		})
 	}
 }

@@ -11,6 +11,8 @@ var _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Path = http.MustCompilePath("{{.PathTem
 {{- end}}
 {{- end}}
 
+const _{{.ServiceType}}HTTPMethodSet = {{.MethodSet}}
+
 type {{.ServiceType}}HTTPServer interface {
 {{- range .ClientMethods}}
 	{{- if ne .Comment ""}}

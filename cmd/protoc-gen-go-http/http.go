@@ -80,6 +80,10 @@ func genService(_ *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFi
 		ServiceType: service.GoName,
 		ServiceName: string(service.Desc.FullName()),
 		Metadata:    file.Desc.Path(),
+		MethodSet:   1,
+	}
+	if !omitempty {
+		sd.MethodSet = 2
 	}
 	for _, method := range service.Methods {
 		rule, ok := proto.GetExtension(method.Desc.Options(), annotations.E_Http).(*annotations.HttpRule)

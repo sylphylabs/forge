@@ -1,0 +1,26 @@
+package api
+
+import (
+	"context"
+	"testing"
+)
+
+type methodSetServer struct{}
+
+func (*methodSetServer) Annotated(context.Context, *Request) (*Reply, error) {
+	return new(Reply), nil
+}
+
+func (*methodSetServer) Default(context.Context, *Request) (*Reply, error) {
+	return new(Reply), nil
+}
+
+func TestHTTPWrapperCompiles(t *testing.T) {
+	wrapped, err := WrapMethodSetServiceHTTPServer(new(methodSetServer), MethodSetServiceMiddleware{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wrapped == nil {
+		t.Fatal("nil wrapped server")
+	}
+}

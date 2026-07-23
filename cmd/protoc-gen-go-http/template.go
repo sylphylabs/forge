@@ -14,6 +14,7 @@ type serviceDesc struct {
 	ServiceType   string // Greeter
 	ServiceName   string // helloworld.Greeter
 	Metadata      string // api/helloworld/helloworld.proto
+	MethodSet     int
 	Methods       []*methodDesc
 	ClientMethods []*methodDesc
 }

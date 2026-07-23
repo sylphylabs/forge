@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package methodset.test.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "methodset.test/api;api";
+
+service MethodSetService {
+  rpc Annotated(Request) returns (Reply) {
+    option (google.api.http) = {get: "/v1/annotated"};
+  }
+  rpc Default(Request) returns (Reply);
+}
+
+message Request {}
+message Reply {}
