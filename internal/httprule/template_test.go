@@ -171,6 +171,21 @@ func TestExtract(t *testing.T) {
 	}
 }
 
+func TestExtractValuesUsesVariableOrder(t *testing.T) {
+	template, err := Parse("/v1/{parent=publishers/*}/books/{book}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := template.ExtractValues("/v1/publishers/acme/books/42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"publishers/acme", "42"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ExtractValues() = %#v, want %#v", got, want)
+	}
+}
+
 func TestExtractRejectsMismatches(t *testing.T) {
 	template, err := Parse("/v1/{name=publishers/*}:archive")
 	if err != nil {

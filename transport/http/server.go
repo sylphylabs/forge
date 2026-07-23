@@ -263,7 +263,7 @@ func (f *serverFilter) serveMatchedRoute(
 	w http.ResponseWriter,
 	req *http.Request,
 	route *compiledRoute,
-	values map[string]string,
+	values []string,
 	captureNames []string,
 ) {
 	f.serve(w, req, route, values, captureNames)
@@ -273,7 +273,7 @@ func (f *serverFilter) serve(
 	w http.ResponseWriter,
 	req *http.Request,
 	route *compiledRoute,
-	values map[string]string,
+	values []string,
 	captureNames []string,
 ) {
 	ctx := req.Context()

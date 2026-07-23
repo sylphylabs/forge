@@ -171,8 +171,14 @@ func expandVariable(segments []segment, value string) ([]string, error) {
 	return result, nil
 }
 
-// Extract recovers public variable values from an escaped request path.
-func (t *Template) Extract(escapedPath string) (map[string]string, error) {
+type captureRange struct {
+	start int
+	end   int
+}
+
+// ExtractValues recovers public variable values in Variables order from an
+// escaped request path.
+func (t *Template) ExtractValues(escapedPath string) ([]string, error) {
 	if escapedPath == "" || escapedPath[0] != '/' {
 		return nil, fmt.Errorf("extract %q: %w", t.pattern, ErrPathMismatch)
 	}
@@ -191,14 +197,12 @@ func (t *Template) Extract(escapedPath string) (map[string]string, error) {
 		rawParts[len(rawParts)-1] = prefix
 	}
 
-	captures := make([][]string, len(t.variables))
+	captures := make([]captureRange, len(t.variables))
 	pathIndex := 0
 	for _, part := range t.parts {
+		captureStart := pathIndex
 		for _, expected := range part.segments {
 			if expected.kind == multiWildcardSegment {
-				if part.variable >= 0 {
-					captures[part.variable] = append(captures[part.variable], rawParts[pathIndex:]...)
-				}
 				pathIndex = len(rawParts)
 				continue
 			}
@@ -218,19 +222,20 @@ func (t *Template) Extract(escapedPath string) (map[string]string, error) {
 					return nil, fmt.Errorf("extract %q: literal mismatch: %w", t.pattern, ErrPathMismatch)
 				}
 			}
-			if part.variable >= 0 {
-				captures[part.variable] = append(captures[part.variable], raw)
-			}
 			pathIndex++
+		}
+		if part.variable >= 0 {
+			captures[part.variable] = captureRange{start: captureStart, end: pathIndex}
 		}
 	}
 	if pathIndex != len(rawParts) {
 		return nil, fmt.Errorf("extract %q: too many path segments: %w", t.pattern, ErrPathMismatch)
 	}
 
-	values := make(map[string]string, len(t.variables))
+	values := make([]string, len(t.variables))
 	for i, variable := range t.variables {
-		raw := strings.Join(captures[i], "/")
+		capture := captures[i]
+		raw := strings.Join(rawParts[capture.start:capture.end], "/")
 		var (
 			value string
 			err   error
@@ -243,7 +248,20 @@ func (t *Template) Extract(escapedPath string) (map[string]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("extract %q variable %q: %w", t.pattern, variable.FieldPath, err)
 		}
-		values[variable.FieldPath] = value
+		values[i] = value
+	}
+	return values, nil
+}
+
+// Extract recovers public variable values from an escaped request path.
+func (t *Template) Extract(escapedPath string) (map[string]string, error) {
+	extracted, err := t.ExtractValues(escapedPath)
+	if err != nil {
+		return nil, err
+	}
+	values := make(map[string]string, len(t.variables))
+	for i, variable := range t.variables {
+		values[variable.FieldPath] = extracted[i]
 	}
 	return values, nil
 }

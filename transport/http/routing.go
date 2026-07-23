@@ -44,12 +44,12 @@ type compiledRoute struct {
 	directPathValues bool
 }
 
-func (r *compiledRoute) match(req *http.Request) (map[string]string, bool, error) {
+func (r *compiledRoute) match(req *http.Request) ([]string, bool, error) {
 	if r.httpRule != nil {
 		if r.directPathValues {
 			return nil, true, nil
 		}
-		values, err := r.httpRule.Extract(req.URL.EscapedPath())
+		values, err := r.httpRule.ExtractValues(req.URL.EscapedPath())
 		if stderrors.Is(err, httprule.ErrPathMismatch) {
 			return nil, false, nil
 		}
@@ -58,18 +58,18 @@ func (r *compiledRoute) match(req *http.Request) (map[string]string, bool, error
 		}
 		return values, true, nil
 	}
-	values := make(map[string]string, len(r.vars))
-	for _, variable := range r.vars {
+	values := make([]string, len(r.vars))
+	for i, variable := range r.vars {
 		value, ok := variable.value(req)
 		if !ok || variable.validate != nil && !variable.validate.MatchString(value) {
 			return nil, false, nil
 		}
-		values[variable.name] = value
+		values[i] = value
 	}
 	return values, true, nil
 }
 
-func (r *compiledRoute) setPathValues(req *http.Request, values map[string]string, captureNames []string) {
+func (r *compiledRoute) setPathValues(req *http.Request, values []string, captureNames []string) {
 	if r.directPathValues {
 		for i, variable := range r.vars {
 			captureName := variable.parts[0].pathValue
@@ -81,8 +81,8 @@ func (r *compiledRoute) setPathValues(req *http.Request, values map[string]strin
 			}
 		}
 	} else {
-		for name, value := range values {
-			req.SetPathValue(name, value)
+		for i, variable := range r.vars {
+			req.SetPathValue(variable.name, values[i])
 		}
 	}
 	for _, name := range captureNames {
@@ -138,7 +138,7 @@ type routeVariant struct {
 }
 
 type matchedRouteHandler interface {
-	serveMatchedRoute(http.ResponseWriter, *http.Request, *compiledRoute, map[string]string, []string)
+	serveMatchedRoute(http.ResponseWriter, *http.Request, *compiledRoute, []string, []string)
 }
 
 type routeBucket struct {
