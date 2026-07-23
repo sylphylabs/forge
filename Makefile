@@ -1,26 +1,7 @@
-user	:=	$(shell whoami)
-rev		:= 	$(shell git rev-parse --short HEAD)
-os		:=	$(shell uname)
-
-# GOBIN > GOPATH > INSTALLDIR
-# Mac OS X
-ifeq ($(os),Darwin)
-GOBIN	:=	$(shell echo $(GOBIN) | cut -d':' -f1)
-GOPATH	:=	$(shell echo $(GOPATH) | cut -d':' -f1)
+BIN := $(shell go env GOBIN)
+ifeq ($(BIN),)
+BIN := $(shell go env GOPATH)/bin
 endif
-
-# Linux
-ifeq ($(os),Linux)
-GOBIN	:=	$(shell echo $(GOBIN) | cut -d':' -f1)
-GOPATH	:=	$(shell echo $(GOPATH) | cut -d':' -f1)
-endif
-
-# Windows
-ifneq ($(findstring MINGW,$(shell uname -s)),)
-GOBIN := $(shell echo "$(GOBIN)" | sed 's|\\|/|g' | cut -d';' -f1 | sed 's|^\([A-Za-z]\):|/\1|')
-GOPATH := $(shell echo "$(GOPATH)" | sed 's|\\|/|g' | cut -d';' -f1 | sed 's|^\([A-Za-z]\):|/\1|')
-endif
-BIN		:= ""
 
 TOOLS_SHELL="./hack/tools.sh"
 # golangci-lint
@@ -28,33 +9,15 @@ LINTER := bin/golangci-lint
 BUF_VERSION := v1.72.0
 BUF := go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
 
-# check GOBIN
-ifneq ($(GOBIN),)
-	BIN=$(GOBIN)
-else
-# check GOPATH
-	ifneq ($(GOPATH),)
-		BIN=$(GOPATH)/bin
-	endif
-endif
-
 $(LINTER):
 	curl -SL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s latest
 
 all:
-	@cd cmd/protoc-gen-go-openkratos && go build && cd - &> /dev/null
+	@cd cmd && GOWORK=off go build ./protoc-gen-go-errors ./protoc-gen-go-http ./protoc-gen-go-middleware
 
 .PHONY: install
 install: all
-ifeq ($(user),root)
-#root, install for all user
-	@cp ./cmd/protoc-gen-go-openkratos/protoc-gen-go-openkratos /usr/bin
-else
-#!root, install for current user
-	$(shell if [ -z '$(BIN)' ]; then read -p "Please select installdir: " REPLY; mkdir -p $${REPLY};\
-	cp ./cmd/protoc-gen-go-openkratos/protoc-gen-go-openkratos $${REPLY}/;else mkdir -p '$(BIN)';\
-	cp ./cmd/protoc-gen-go-openkratos/protoc-gen-go-openkratos '$(BIN)'; fi)
-endif
+	@cd cmd && GOWORK=off GOBIN='$(BIN)' go install ./protoc-gen-go-errors ./protoc-gen-go-http ./protoc-gen-go-middleware
 	@which protoc-gen-go &> /dev/null || go get google.golang.org/protobuf/cmd/protoc-gen-go
 	@which protoc-gen-go-grpc &> /dev/null || go get google.golang.org/grpc/cmd/protoc-gen-go-grpc
 	@which protoc-gen-validate  &> /dev/null || go get github.com/envoyproxy/protoc-gen-validate
@@ -62,7 +25,7 @@ endif
 
 .PHONY: uninstall
 uninstall:
-	$(shell for i in `which -a protoc-gen-go-openkratos 2>/dev/null | sort | uniq`; do read -p "Press to remove $${i} (y/n): " REPLY; if [ $${REPLY} = "y" ]; then rm -f $${i}; fi; done)
+	$(shell for tool in protoc-gen-go-errors protoc-gen-go-http protoc-gen-go-middleware; do for i in `which -a $${tool} 2>/dev/null | sort | uniq`; do read -p "Press to remove $${i} (y/n): " REPLY; if [ $${REPLY} = "y" ]; then rm -f $${i}; fi; done; done)
 	@echo "uninstall finished"
 
 .PHONY: clean

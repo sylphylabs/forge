@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/openkratos/kratos/cmd/internal/generator/testutil"
 )
 
 func TestGeneratedMiddlewareCompilesAndRuns(t *testing.T) {
@@ -42,9 +44,10 @@ func TestGeneratedMiddlewareCompilesAndRuns(t *testing.T) {
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	runCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go"), "google.golang.org/protobuf/cmd/protoc-gen-go")
-	runCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go-grpc"), "google.golang.org/grpc/cmd/protoc-gen-go-grpc")
-	runCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go-openkratos"), ".")
+	testutil.RunCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go"), "google.golang.org/protobuf/cmd/protoc-gen-go")
+	testutil.RunCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go-grpc"), "google.golang.org/grpc/cmd/protoc-gen-go-grpc")
+	testutil.RunCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go-http"), "../protoc-gen-go-http")
+	testutil.RunCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go-middleware"), ".")
 
 	args := []string{
 		"-I", "testdata",
@@ -54,8 +57,10 @@ func TestGeneratedMiddlewareCompilesAndRuns(t *testing.T) {
 		"--go_opt=module=middleware.test",
 		"--go-grpc_out=" + out,
 		"--go-grpc_opt=module=middleware.test",
-		"--go-openkratos_out=" + out,
-		"--go-openkratos_opt=module=middleware.test,grpc=true",
+		"--go-http_out=" + out,
+		"--go-http_opt=module=middleware.test",
+		"--go-middleware_out=" + out,
+		"--go-middleware_opt=module=middleware.test,http=annotated,grpc=true",
 		"middleware/service.proto",
 	}
 	cmd := exec.Command("protoc", args...)
@@ -64,7 +69,7 @@ func TestGeneratedMiddlewareCompilesAndRuns(t *testing.T) {
 		t.Fatalf("protoc failed: %v\n%s", err, output)
 	}
 
-	generatedPath := filepath.Join(out, "api", "service_openkratos.pb.go")
+	generatedPath := filepath.Join(out, "api", "service_middleware.pb.go")
 	generated, err := os.ReadFile(generatedPath)
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +118,7 @@ replace github.com/openkratos/kratos => %s
 	if err := os.WriteFile(filepath.Join(out, "go.mod"), []byte(goMod), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	runCommand(t, out, "go", "test", "-mod=mod", "./...")
+	testutil.RunCommand(t, out, "go", "test", "-mod=mod", "./...")
 }
 
 func TestGeneratedMiddlewareRejectsIdentifierCollision(t *testing.T) {
@@ -125,14 +130,14 @@ func TestGeneratedMiddlewareRejectsIdentifierCollision(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	plugin := filepath.Join(tmp, "protoc-gen-go-openkratos")
-	runCommand(t, ".", "go", "build", "-o", plugin, ".")
+	plugin := filepath.Join(tmp, "protoc-gen-go-middleware")
+	testutil.RunCommand(t, ".", "go", "build", "-o", plugin, ".")
 	cmd := exec.Command(
 		"protoc",
 		"-I", "testdata",
-		"--plugin=protoc-gen-go-openkratos="+plugin,
-		"--go-openkratos_out="+tmp,
-		"--go-openkratos_opt=grpc=true",
+		"--plugin=protoc-gen-go-middleware="+plugin,
+		"--go-middleware_out="+tmp,
+		"--go-middleware_opt=grpc=true",
 		"middleware/collision.proto",
 	)
 	output, err := cmd.CombinedOutput()
@@ -147,6 +152,44 @@ func TestGeneratedMiddlewareRejectsIdentifierCollision(t *testing.T) {
 	} {
 		if !bytes.Contains(output, []byte(want)) {
 			t.Fatalf("protoc error missing %q:\n%s", want, output)
+		}
+	}
+}
+
+func TestGeneratedMiddlewarePlanDoesNotRequireTransportWrappers(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping protoc integration test in short mode")
+	}
+	if _, err := exec.LookPath("protoc"); err != nil {
+		t.Skipf("protoc is not installed: %v", err)
+	}
+
+	tmp := t.TempDir()
+	plugin := filepath.Join(tmp, "protoc-gen-go-middleware")
+	testutil.RunCommand(t, ".", "go", "build", "-o", plugin, ".")
+	cmd := exec.Command(
+		"protoc",
+		"-I", "testdata",
+		"-I", filepath.Join("..", "..", "third_party"),
+		"--plugin=protoc-gen-go-middleware="+plugin,
+		"--go-middleware_out="+tmp,
+		"--go-middleware_opt=paths=source_relative",
+		"middleware/service.proto",
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("protoc failed: %v\n%s", err, output)
+	}
+	generated, err := os.ReadFile(filepath.Join(tmp, "middleware", "service_middleware.pb.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(generated, []byte("type DocumentServiceMiddleware struct")) {
+		t.Fatalf("generated plan is missing:\n%s", generated)
+	}
+	for _, forbidden := range []string{"WrapDocumentServiceHTTPServer", "WrapDocumentServiceGRPCServer"} {
+		if bytes.Contains(generated, []byte(forbidden)) {
+			t.Fatalf("generated plan unexpectedly contains %q:\n%s", forbidden, generated)
 		}
 	}
 }

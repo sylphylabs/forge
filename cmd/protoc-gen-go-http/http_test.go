@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/openkratos/kratos/cmd/internal/generator/testutil"
 )
 
 func TestHTTPTemplateClientUsesCompiledPathAndGoogleJSON(t *testing.T) {
@@ -240,7 +242,7 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	protobufDir := strings.TrimSpace(runCommand(t, ".", "go", "list", "-m", "-f", "{{.Dir}}", "google.golang.org/protobuf"))
+	protobufDir := strings.TrimSpace(testutil.RunCommand(t, ".", "go", "list", "-m", "-f", "{{.Dir}}", "google.golang.org/protobuf"))
 	protocPath, err := exec.LookPath("protoc")
 	if err != nil {
 		t.Fatal(err)
@@ -255,9 +257,9 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 	if err := os.Mkdir(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	plugin := filepath.Join(bin, "protoc-gen-go-openkratos")
-	runCommand(t, ".", "go", "build", "-o", plugin, ".")
-	runCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go"), "google.golang.org/protobuf/cmd/protoc-gen-go")
+	plugin := filepath.Join(bin, "protoc-gen-go-http")
+	testutil.RunCommand(t, ".", "go", "build", "-o", plugin, ".")
+	testutil.RunCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go"), "google.golang.org/protobuf/cmd/protoc-gen-go")
 
 	protocArgs := []string{
 		"-I", "testdata",
@@ -266,8 +268,8 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 		"-I", filepath.Join(root, "third_party"),
 		"--go_out=" + tmp,
 		"--go_opt=module=opaque.test",
-		"--go-openkratos_out=" + tmp,
-		"--go-openkratos_opt=module=opaque.test",
+		"--go-http_out=" + tmp,
+		"--go-http_opt=module=opaque.test",
 		"opaque/opaque.proto",
 		"open/open.proto",
 	}
@@ -619,7 +621,7 @@ func fieldJSON(message proto.Message, field string) string {
 	if err := os.WriteFile(filepath.Join(tmp, "conformance_test.go"), []byte(conformanceTest), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	runCommand(t, tmp, "go", "test", "-mod=mod", "./...")
+	testutil.RunCommand(t, tmp, "go", "test", "-mod=mod", "./...")
 }
 
 func TestInvalidHTTPRulesFailGeneration(t *testing.T) {
@@ -649,8 +651,8 @@ func TestInvalidHTTPRulesFailGeneration(t *testing.T) {
 	if err := os.Mkdir(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	plugin := filepath.Join(bin, "protoc-gen-go-openkratos")
-	runCommand(t, ".", "go", "build", "-o", plugin, ".")
+	plugin := filepath.Join(bin, "protoc-gen-go-http")
+	testutil.RunCommand(t, ".", "go", "build", "-o", plugin, ".")
 
 	const header = `syntax = "proto3";
 package invalid;
@@ -742,7 +744,7 @@ service API { rpc Get(Request) returns (Reply) { option (google.api.http) = { ge
 				"-I", dir,
 				"-I", protocInclude,
 				"-I", filepath.Join(root, "third_party"),
-				"--go-openkratos_out="+dir,
+				"--go-http_out="+dir,
 				"invalid.proto",
 			)
 			cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -762,15 +764,4 @@ service API { rpc Get(Request) returns (Reply) { option (google.api.http) = { ge
 			}
 		})
 	}
-}
-
-func runCommand(t *testing.T, dir, name string, args ...string) string {
-	t.Helper()
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("%s %s failed: %v\n%s", name, strings.Join(args, " "), err, output)
-	}
-	return string(output)
 }

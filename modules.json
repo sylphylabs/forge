@@ -11,12 +11,12 @@
       "dependsOn": []
     },
     {
-      "path": "cmd/protoc-gen-go-openkratos",
-      "module": "github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos",
+      "path": "cmd",
+      "module": "github.com/openkratos/kratos/cmd",
       "kind": "tool",
       "support": "official",
       "owner": "openkratos-maintainers",
-      "tagPrefix": "cmd/protoc-gen-go-openkratos",
+      "tagPrefix": "cmd",
       "dependsOn": ["github.com/openkratos/kratos"]
     },
     {

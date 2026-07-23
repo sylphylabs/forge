@@ -6,7 +6,7 @@ import (
 	"text/template"
 )
 
-//go:embed errors_template.tpl
+//go:embed errors.tpl
 var errorsTemplate string
 
 type errorInfo struct {
@@ -22,14 +22,14 @@ type errorWrapper struct {
 	Errors []*errorInfo
 }
 
-func (e *errorWrapper) execute() string {
+func (e *errorWrapper) execute() (string, error) {
 	buf := new(bytes.Buffer)
 	tmpl, err := template.New("errors").Parse(errorsTemplate)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 	if err := tmpl.Execute(buf, e); err != nil {
-		panic(err)
+		return "", err
 	}
-	return buf.String()
+	return buf.String(), nil
 }

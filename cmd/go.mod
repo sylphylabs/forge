@@ -1,4 +1,4 @@
-module github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
+module github.com/openkratos/kratos/cmd
 
 go 1.27rc2
 
@@ -11,9 +11,9 @@ require (
 
 require google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.1 // indirect
 
-replace github.com/openkratos/kratos => ../..
+replace github.com/openkratos/kratos => ..
 
 // Local-only until github.com/openkratos/api has its first public release.
-replace github.com/openkratos/api => ../../../OpenKratos-api
+replace github.com/openkratos/api => ../../OpenKratos-api
 
 tool google.golang.org/grpc/cmd/protoc-gen-go-grpc
