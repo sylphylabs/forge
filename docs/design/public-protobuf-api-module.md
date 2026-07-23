@@ -323,18 +323,13 @@ cmd/protoc-gen-go-errors/errors/errors.proto
 third_party/errors/errors.proto
 ```
 
-The current checkout contains none of them, and release checks reject their
-return. The runtime and generator already compile against the sibling API module
-through an explicitly local pre-publication replacement. The remaining release
-work is to:
-
-- remove the inherited named Buf modules
-  `buf.build/kratos/apis` and
-  `buf.build/go-kratos/protoc-gen-go-errors` from active configuration;
-- keep historical references only in migration documentation and repository
-  history;
-- add CI checks that reject a second hand-maintained definition of the public
-  error file or extensions.
+The current checkout contains none of them or the inherited named Buf module
+configurations `buf.build/kratos/apis` and
+`buf.build/go-kratos/protoc-gen-go-errors`. Release checks reject a second local
+schema. The runtime and generator compile against the sibling API module through
+an explicitly local pre-publication replacement. Historical names remain only
+in migration documentation, design records, tests that reject their return, and
+repository history.
 
 No OpenKratos release job publishes new content under a Kratos-owned BSR name.
 

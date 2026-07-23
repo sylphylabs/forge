@@ -16,7 +16,7 @@ go1.27rc2 version
 
 ## Modules
 
-OpenKratos contains 27 Go modules. The root `go test ./...` command does not cover nested modules. Use the repository helpers for complete checks:
+OpenKratos contains 26 Go modules. The root `go test ./...` command does not cover nested modules. Use the repository helpers for complete checks:
 
 ```shell
 ./hack/tools.sh tidy

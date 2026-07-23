@@ -1,6 +1,6 @@
 # Atomic Protobuf Generation
 
-Status: approved target contract; implementation pending
+Status: local atomic cutover implemented; public Buf publication pending
 
 Last reviewed: July 23, 2026
 
@@ -9,11 +9,10 @@ Last reviewed: July 23, 2026
 This document defines the target ownership, packaging, diagnostics, release,
 and compatibility contract for OpenKratos-owned Go Protobuf generators.
 
-The current checkout still ships the transitional
-`protoc-gen-go-openkratos` executable. It remains the documented current
-behavior until the atomic plugins pass their acceptance gates and the cutover
-lands. This contract defines that cutover; it does not claim that the new Buf
-plugins are already published.
+The current checkout ships the three atomic commands and no transitional
+`protoc-gen-go-openkratos` executable. The intended Buf plugins are not yet
+published; local command and fixture evidence must not be presented as public
+BSR acceptance.
 
 The public annotation schemas are defined by
 [`public-protobuf-api-module.md`](public-protobuf-api-module.md). Generated
@@ -276,8 +275,7 @@ installation contract.
 ## Local Cutover
 
 The cutover is intentionally breaking. OpenKratos does not retain a forwarding
-`protoc-gen-go-openkratos` binary after the local atomic commands pass their
-acceptance gates.
+`protoc-gen-go-openkratos` binary.
 
 Implementation proceeds in this order:
 

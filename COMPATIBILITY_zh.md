@@ -66,7 +66,7 @@ github.com/go-kratos/kratos/contrib/middleware/jwt/v3
 github.com/openkratos/kratos/contrib/middleware/jwt
 
 github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v3
-github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
+github.com/openkratos/kratos/cmd
 ```
 
 首次发布前，仓库内部 module 使用临时的 `v0.0.0` requirement 和相对路径
@@ -98,15 +98,19 @@ panic。OpenKratos 不保留或修补这种隐式改写源码的工作流。
 | `kratos upgrade` | `go get`、`go install` 与 `go mod tidy` |
 | `kratos changelog` | Git 历史与 GitHub release notes |
 
-OpenKratos 自有的 Protobuf 生成已合并为一个确定性的 module：
+三个原子化 OpenKratos Protobuf 命令共享一个确定性的源码 module：
 
 ```text
-github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
+github.com/openkratos/kratos/cmd/protoc-gen-go-errors
+github.com/openkratos/kratos/cmd/protoc-gen-go-http
+github.com/openkratos/kratos/cmd/protoc-gen-go-middleware
 ```
 
-`protoc-gen-go-openkratos` 声明支持到 protobuf Edition 2024。真实 `protoc` fixture
-已经对 Edition 2023 Open/Opaque API 的 message、scalar、repeated、map、显式
-presence 与 oneof 字段完成编译和执行验证。
+每条命令都声明支持到 protobuf Edition 2024，并且只生成自己拥有的
+`_errors.pb.go`、`_http.pb.go` 或 `_middleware.pb.go` 产物。项目不保留
+`protoc-gen-go-openkratos` 转发命令。真实 `protoc` fixture 已经对 Edition 2023
+Open/Opaque API 的 message、scalar、repeated、map、显式 presence 与 oneof 字段
+完成编译和执行验证。
 
 Inline unary `google.api.HttpRule` 在生成、client 展开、ServeMux 注册和 server
 提取阶段使用同一个 Google 路径模板实现。Primary binding 定义生成的 Go client

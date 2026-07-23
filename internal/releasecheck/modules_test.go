@@ -119,6 +119,29 @@ func TestLegacyErrorSchemasRemoved(t *testing.T) {
 	}
 }
 
+func TestLegacyBufModulesRemoved(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, name := range []string{"buf.yaml", "buf.gen.yaml"} {
+		data, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, legacy := range []string{
+			"buf.build/kratos/apis",
+			"buf.build/go-kratos/protoc-gen-go-errors",
+		} {
+			if strings.Contains(string(data), legacy) {
+				t.Errorf("%s contains legacy Buf module %q", name, legacy)
+			}
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "third_party", "buf.yaml")); err == nil {
+		t.Error("legacy third_party/buf.yaml still exists")
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("stat third_party/buf.yaml: %v", err)
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 	_, filename, _, ok := runtime.Caller(0)

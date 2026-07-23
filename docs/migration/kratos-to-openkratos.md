@@ -110,16 +110,15 @@ Enum-value overrides similarly change from `(errors.code)` to
 the generator no longer carries a private fallback descriptor for the old
 annotations.
 
-Replace both inherited generator modules with the unified OpenKratos generator
-and pin the selected revision in the project's Buf configuration or tool
-dependencies:
+Replace the inherited generator modules with the three atomic OpenKratos
+commands. During local development they share one source module:
 
 ```text
-github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
+github.com/openkratos/kratos/cmd
 ```
 
-Replace `go-http` and `go-errors` plugin entries with one `go-openkratos`
-entry, then regenerate HTTP clients, HTTP servers, and error helpers:
+Keep errors and HTTP generation independently selectable, and add middleware
+generation only when the application uses generated service plans:
 
 ```yaml
 # Before
@@ -131,24 +130,37 @@ plugins:
     out: gen/go
     opt: paths=source_relative
 
-# OpenKratos
+# OpenKratos local cutover
 plugins:
-  - local: protoc-gen-go-openkratos
+  - local: protoc-gen-go-errors
     out: gen/go
-    opt: paths=source_relative,http_omitempty=true,grpc=true
+    opt: paths=source_relative
+  - local: protoc-gen-go-http
+    out: gen/go
+    opt: paths=source_relative,omitempty=true
+  - local: protoc-gen-go-middleware
+    out: gen/go
+    opt: paths=source_relative,http=annotated,grpc=true
 ```
 
-Generator option names change as follows:
+The HTTP plugin retains its option names. The middleware HTTP method-set option
+must match the HTTP binding policy:
 
-| Previous `go-http` option | `go-openkratos` option |
+| `go-http` | matching `go-middleware` |
 | --- | --- |
-| `omitempty` | `http_omitempty` |
-| `omitempty_prefix` | `http_omitempty_prefix` |
+| `omitempty=true` | `http=annotated` |
+| `omitempty=false` | `http=all` |
 
-There is no feature list for errors or HTTP. The unified generator emits each
-artifact only when the input descriptor requires it. Set `grpc=true` when the
-same invocation also runs `protoc-gen-go-grpc`; this emits gRPC middleware
-wrappers that compile against the generated gRPC server interfaces.
+Omit the middleware `http` option when no HTTP wrapper is required. Set
+`grpc=true` only when the same generation pipeline runs
+`protoc-gen-go-grpc`. The three outputs are `_errors.pb.go`, `_http.pb.go`, and
+`_middleware.pb.go`; delete obsolete `_openkratos.pb.go` files before checking
+the regenerated diff. No forwarding `protoc-gen-go-openkratos` command or
+`--go-openkratos_out` flag is retained.
+
+Published projects will replace these local entries with pinned
+`buf.build/openkratos/go-errors`, `go-http`, and `go-middleware` revisions after
+those plugins are public. Do not use an unpinned development revision.
 
 ```shell
 buf generate

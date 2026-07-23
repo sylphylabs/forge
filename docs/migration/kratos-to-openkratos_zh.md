@@ -106,15 +106,15 @@ enum value override 同样需要从 `(errors.code)` 改为
 `(openkratos.errors.v1.code)`。修改源文件后应重新生成 helper；generator 不再携带
 旧 annotation 的私有 fallback descriptor。
 
-用统一的 OpenKratos 生成器替换原有两个 generator module，并在 Buf 配置或工具
-依赖中固定版本：
+用三个原子化 OpenKratos 命令替换继承来的 generator module。本地开发期间它们
+共享一个源码 module：
 
 ```text
-github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
+github.com/openkratos/kratos/cmd
 ```
 
-把 `go-http` 与 `go-errors` plugin 配置合并为一个 `go-openkratos` entry，然后重新
-生成 HTTP client、HTTP server 和错误辅助代码：
+errors 与 HTTP 生成保持独立可选；只有应用使用生成的 service plan 时才加入
+middleware 生成：
 
 ```yaml
 # 修改前
@@ -126,23 +126,36 @@ plugins:
     out: gen/go
     opt: paths=source_relative
 
-# OpenKratos
+# OpenKratos 本地切换
 plugins:
-  - local: protoc-gen-go-openkratos
+  - local: protoc-gen-go-errors
     out: gen/go
-    opt: paths=source_relative,http_omitempty=true,grpc=true
+    opt: paths=source_relative
+  - local: protoc-gen-go-http
+    out: gen/go
+    opt: paths=source_relative,omitempty=true
+  - local: protoc-gen-go-middleware
+    out: gen/go
+    opt: paths=source_relative,http=annotated,grpc=true
 ```
 
-generator option 名称映射如下：
+HTTP plugin 保留原 option 名称。middleware 的 HTTP 方法集合必须与 HTTP binding
+策略一致：
 
-| 原 `go-http` option | `go-openkratos` option |
+| `go-http` | 对应的 `go-middleware` |
 | --- | --- |
-| `omitempty` | `http_omitempty` |
-| `omitempty_prefix` | `http_omitempty_prefix` |
+| `omitempty=true` | `http=annotated` |
+| `omitempty=false` | `http=all` |
 
-errors 与 HTTP 不再需要额外 feature list。统一生成器只在输入 descriptor 确实需要
-对应产物时才生成文件。同一次生成也运行 `protoc-gen-go-grpc` 时应设置
-`grpc=true`，从而生成依赖 gRPC server interface 的 middleware wrapper。
+不需要 HTTP wrapper 时省略 middleware 的 `http` option。只有同一生成流程也运行
+`protoc-gen-go-grpc` 时才设置 `grpc=true`。三类输出分别是
+`_errors.pb.go`、`_http.pb.go` 和 `_middleware.pb.go`；检查生成 diff 前应删除旧的
+`_openkratos.pb.go`。项目不保留 `protoc-gen-go-openkratos` 转发命令或
+`--go-openkratos_out` flag。
+
+三个 plugin 公开后，已发布项目应把本地 entry 替换为固定 revision 的
+`buf.build/openkratos/go-errors`、`go-http` 和 `go-middleware`，不得使用未固定的
+开发 revision。
 
 ```shell
 buf generate

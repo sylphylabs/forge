@@ -68,7 +68,7 @@ github.com/go-kratos/kratos/contrib/middleware/jwt/v3
 github.com/openkratos/kratos/contrib/middleware/jwt
 
 github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v3
-github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
+github.com/openkratos/kratos/cmd
 ```
 
 Until the first release, local development uses `v0.0.0` requirements and
@@ -109,16 +109,19 @@ Use explicit tools instead:
 | `kratos upgrade` | `go get`, `go install`, and `go mod tidy` |
 | `kratos changelog` | Git history and GitHub release notes |
 
-OpenKratos-owned Protobuf generation is consolidated into one deterministic
-module:
+Three atomic OpenKratos Protobuf commands share one deterministic source module:
 
 ```text
-github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos
+github.com/openkratos/kratos/cmd/protoc-gen-go-errors
+github.com/openkratos/kratos/cmd/protoc-gen-go-http
+github.com/openkratos/kratos/cmd/protoc-gen-go-middleware
 ```
 
-`protoc-gen-go-openkratos` declares protobuf Editions support through Edition 2024.
-Real `protoc` fixtures compile and execute Edition 2023 Open and Opaque APIs for
-message, scalar, repeated, map, explicit-presence, and oneof fields.
+Each command declares protobuf Editions support through Edition 2024 and emits
+only its owned `_errors.pb.go`, `_http.pb.go`, or `_middleware.pb.go` artifact.
+There is no `protoc-gen-go-openkratos` forwarding command. Real `protoc`
+fixtures compile and execute Edition 2023 Open and Opaque APIs for message,
+scalar, repeated, map, explicit-presence, and oneof fields.
 
 Inline unary `google.api.HttpRule` bindings use one shared Google path-template
 implementation across generation, client expansion, ServeMux registration, and

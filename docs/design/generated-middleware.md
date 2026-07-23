@@ -1,6 +1,6 @@
 # Generated Middleware Wiring
 
-Status: runtime implemented locally; atomic generator packaging pending
+Status: runtime and local atomic generator implemented; publication pending
 
 Last reviewed: July 23, 2026
 
@@ -443,7 +443,7 @@ and gRPC per-message semantics.
 
 - [x] Generate zero-value usable service plans with service-default and method
   fields.
-- [ ] Move the implemented plan and wrapper pass to
+- [x] Move the implemented plan and wrapper pass to
   `protoc-gen-go-middleware` as its sole owner.
 - [x] Generate HTTP and gRPC wrappers consuming the same plan type without copying
   their wire bindings.

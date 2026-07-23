@@ -125,7 +125,7 @@ remaining inherited runtime boundaries rather than reopening validated work.
 | Config watchers | `Config.Load` starts retrying watcher goroutines; `Close` stops watchers but does not explicitly join every loop. Source APIs do not accept contexts. | Context-aware load/watch APIs with deterministic close and retry ownership. |
 | Protocol surface | Core transports are HTTP and gRPC; browser and schema consumers need separate integration work. | Optional adapters built from the same generated operation description. |
 | Telemetry configuration | Some paths still default to global OpenTelemetry providers and middleware owns parts of operation interpretation. | Injected providers and a stable, cardinality-bounded operation contract. |
-| Release topology | The repository contains 27 Go modules with temporary local replacements before the first release. | A machine-readable release inventory, support tiers, and external-consumer validation. |
+| Release topology | The repository contains 26 Go modules with temporary local replacements before the first release. | A machine-readable release inventory, support tiers, and external-consumer validation. |
 
 The presence of reflection, allocations, middleware, or telemetry does not by
 itself indicate waste. Most of those operations implement necessary behavior.

@@ -36,11 +36,12 @@ go get github.com/openkratos/kratos@main
 OpenKratos 有意不提供项目脚手架 CLI。项目创建、依赖升级和服务运行均使用
 标准 Go 工具链。
 
-项目需要生成 HTTP 绑定、middleware plan 或错误定义时，安装 OpenKratos
-Protobuf 生成器：
+公开 Buf plugin 发布前，可以从当前 checkout 构建三个原子化 OpenKratos
+Protobuf generator：
 
 ```shell
-go install github.com/openkratos/kratos/cmd/protoc-gen-go-openkratos@main
+cd cmd
+GOWORK=off go install ./protoc-gen-go-errors ./protoc-gen-go-http ./protoc-gen-go-middleware
 ```
 
 ## 生成并运行
