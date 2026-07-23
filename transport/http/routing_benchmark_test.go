@@ -31,6 +31,18 @@ func BenchmarkRouteMux(b *testing.B) {
 		router.handleHeader("X-Route", "special", http.HandlerFunc(benchmarkHandler))
 		benchmarkRouterWithHeader(b, router, "/static", "X-Route", "special")
 	})
+	b.Run("custom-not-found", func(b *testing.B) {
+		router := newRouteMux()
+		router.notFoundHandler = http.HandlerFunc(benchmarkHandler)
+		router.handle(http.MethodGet, "/resource", http.HandlerFunc(benchmarkHandler), false)
+		benchmarkRouter(b, router, "/missing", false)
+	})
+	b.Run("custom-method-not-allowed", func(b *testing.B) {
+		router := newRouteMux()
+		router.methodNotAllowedHandler = http.HandlerFunc(benchmarkHandler)
+		router.handle(http.MethodGet, "/resource", http.HandlerFunc(benchmarkHandler), false)
+		benchmarkRouterMethod(b, router, http.MethodPost, "/resource")
+	})
 	for _, routes := range []int{1, 100, 1000} {
 		b.Run(fmt.Sprintf("static/%d", routes), func(b *testing.B) {
 			router := newRouteMux()
@@ -123,6 +135,17 @@ func benchmarkRouterWithHeader(b *testing.B, handler http.Handler, path, key, va
 	b.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	req.Header.Set(key, value)
+	w := &benchmarkResponseWriter{header: make(http.Header)}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		handler.ServeHTTP(w, req)
+	}
+}
+
+func benchmarkRouterMethod(b *testing.B, handler http.Handler, method, path string) {
+	b.Helper()
+	req := httptest.NewRequest(method, path, nil)
 	w := &benchmarkResponseWriter{header: make(http.Header)}
 	b.ReportAllocs()
 	b.ResetTimer()

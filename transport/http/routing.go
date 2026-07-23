@@ -182,6 +182,7 @@ type routeMux struct {
 	mu                      sync.RWMutex
 	buckets                 map[string]*routeBucket
 	methods                 map[string]struct{}
+	methodList              atomic.Pointer[[]string]
 	routes                  []RouteInfo
 	headers                 []headerRoute
 	notFoundHandler         http.Handler
@@ -223,7 +224,17 @@ func (r *routeMux) handleCompiled(method string, route compiledRoute, handler ht
 		bucket.add(routeVariant{route: route, handler: handler})
 	}
 	if method != "*" {
-		r.methods[method] = struct{}{}
+		if _, ok := r.methods[method]; !ok {
+			r.methods[method] = struct{}{}
+			current := r.methodList.Load()
+			methods := make([]string, 0, 1)
+			if current != nil {
+				methods = make([]string, 0, len(*current)+1)
+				methods = append(methods, (*current)...)
+			}
+			methods = append(methods, method)
+			r.methodList.Store(&methods)
+		}
 	}
 	if walk && method != "*" {
 		r.routes = append(r.routes, RouteInfo{Method: method, Path: route.template})
@@ -289,13 +300,11 @@ func (r *routeMux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		r.mux.ServeHTTP(w, req)
 		return
 	}
-	r.mu.RLock()
-	methods := make([]string, 0, len(r.methods))
-	for method := range r.methods {
-		methods = append(methods, method)
+	methods := r.methodList.Load()
+	var methodNotAllowedMatch bool
+	if methods != nil {
+		methodNotAllowedMatch = matchesOtherMethod(r.mux, *methods, req)
 	}
-	r.mu.RUnlock()
-	methodNotAllowedMatch := matchesOtherMethod(r.mux, methods, req)
 	if methodNotAllowedMatch && methodNotAllowed != nil {
 		methodNotAllowed.ServeHTTP(w, req)
 		return
