@@ -90,7 +90,3 @@ test-coverage:
 lint: $(LINTER)
 	@${TOOLS_SHELL} lint
 	@echo "lint check finished"
-
-.PHONY: proto
-proto:
-	buf generate --path errors/errors.proto

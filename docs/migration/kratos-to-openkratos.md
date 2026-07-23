@@ -65,6 +65,26 @@ explicit ID if its value or version is part of an operational contract.
 
 ## 3. Update Code Generators
 
+OpenKratos owns its public error descriptor in the separate
+`github.com/openkratos/api` module. The runtime still emits and accepts the
+four-field `{code, reason, message, metadata}` error envelope; it does not use
+`google.rpc.Status` as a replacement.
+
+Most applications construct errors through `errors.New`, `errors.Newf`, or the
+generated error helpers and need no runtime code change. Code that explicitly
+names the old generated message must update its import and type:
+
+```text
+github.com/go-kratos/kratos/v3/errors.Status
+github.com/openkratos/api/errors/v1.Status
+```
+
+The runtime `errors.Error` embeds `errorsv1.Status`, so field selectors such as
+`err.Code`, `err.Reason`, `err.Message`, and `err.Metadata` remain unchanged.
+Update `.proto` imports and enum annotations when the OpenKratos API module is
+published; do not retain or vendor one of the inherited `errors/errors.proto`
+copies.
+
 Change generator module paths and pin the selected revision in the project's
 Buf configuration or tool dependencies:
 

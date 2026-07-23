@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	errorsv1 "github.com/openkratos/api/errors/v1"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/status"
 
@@ -21,7 +22,7 @@ const (
 
 // Error is a status error.
 type Error struct {
-	Status
+	errorsv1.Status
 	cause error
 }
 
@@ -67,7 +68,7 @@ func (e *Error) GRPCStatus() *status.Status {
 // New returns an error object for the code, message.
 func New(code int, reason, message string) *Error {
 	return &Error{
-		Status: Status{
+		Status: errorsv1.Status{
 			Code:    int32(code),
 			Message: message,
 			Reason:  reason,
@@ -114,7 +115,7 @@ func Clone(err *Error) *Error {
 	}
 	return &Error{
 		cause: err.cause,
-		Status: Status{
+		Status: errorsv1.Status{
 			Code:     err.Code,
 			Reason:   err.Reason,
 			Message:  err.Message,

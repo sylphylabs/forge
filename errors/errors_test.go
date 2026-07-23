@@ -1,14 +1,18 @@
 package errors
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
 	"testing"
 
+	errorsv1 "github.com/openkratos/api/errors/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 type TestError struct{ message string }
@@ -109,6 +113,62 @@ func TestCause(t *testing.T) {
 		if te.message != testError.message {
 			t.Fatalf("want %s but got %s", testError.message, te.message)
 		}
+	}
+}
+
+func TestStatusContract(t *testing.T) {
+	want := New(409, "DOCUMENT_CONFLICT", "document changed").WithMetadata(map[string]string{
+		"document": "documents/42",
+	})
+
+	wire, err := proto.Marshal(want)
+	if err != nil {
+		t.Fatalf("proto.Marshal() error = %v", err)
+	}
+	var status errorsv1.Status
+	if err := proto.Unmarshal(wire, &status); err != nil {
+		t.Fatalf("proto.Unmarshal() error = %v", err)
+	}
+	if !proto.Equal(&status, &want.Status) {
+		t.Fatalf("wire status = %v, want %v", &status, &want.Status)
+	}
+	grpcRoundTrip := FromError(want.GRPCStatus().Err())
+	if !proto.Equal(&grpcRoundTrip.Status, &want.Status) {
+		t.Fatalf("gRPC status = %v, want %v", &grpcRoundTrip.Status, &want.Status)
+	}
+
+	for name, marshal := range map[string]func(any) ([]byte, error){
+		"encoding/json": json.Marshal,
+		"protojson": func(v any) ([]byte, error) {
+			return protojson.Marshal(v.(proto.Message))
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			data, err := marshal(want)
+			if err != nil {
+				t.Fatalf("Marshal() error = %v", err)
+			}
+			var got map[string]any
+			if err := json.Unmarshal(data, &got); err != nil {
+				t.Fatalf("json.Unmarshal() error = %v", err)
+			}
+			if len(got) != 4 {
+				t.Errorf("JSON body %s has %d fields, want 4", data, len(got))
+			}
+			if got["code"] != float64(409) {
+				t.Errorf("JSON code = %v, want 409", got["code"])
+			}
+			if got["reason"] != "DOCUMENT_CONFLICT" {
+				t.Errorf("JSON reason = %v, want DOCUMENT_CONFLICT", got["reason"])
+			}
+			if got["message"] != "document changed" {
+				t.Errorf("JSON message = %v, want document changed", got["message"])
+			}
+			metadata, ok := got["metadata"].(map[string]any)
+			if !ok || metadata["document"] != "documents/42" {
+				t.Errorf("JSON metadata = %v, want document=documents/42", got["metadata"])
+			}
+		})
 	}
 }
 

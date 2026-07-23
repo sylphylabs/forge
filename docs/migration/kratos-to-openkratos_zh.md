@@ -64,6 +64,24 @@ ID 从 UUIDv1 改为 UUIDv4；如果其值或 version 属于运维契约，应�
 
 ## 3. 更新代码生成器
 
+OpenKratos 将公开错误 descriptor 统一放在独立的
+`github.com/openkratos/api` module 中。runtime 对外发送和接收的仍然是
+`{code, reason, message, metadata}` 四字段错误体，不会用
+`google.rpc.Status` 替换它。
+
+大多数业务通过 `errors.New`、`errors.Newf` 或生成的错误辅助函数构造错误，不需要
+修改 runtime 调用。只有显式引用旧生成消息类型的代码需要更新 import 和类型：
+
+```text
+github.com/go-kratos/kratos/v3/errors.Status
+github.com/openkratos/api/errors/v1.Status
+```
+
+runtime 的 `errors.Error` 会嵌入 `errorsv1.Status`，因此 `err.Code`、
+`err.Reason`、`err.Message` 与 `err.Metadata` 等字段访问保持不变。待 OpenKratos API
+module 发布后，还需更新 `.proto` import 与 enum annotation；不应继续保留或
+vendor 继承自 Kratos 的任一份 `errors/errors.proto`。
+
 在 Buf 配置或工具依赖中固定 OpenKratos 生成器版本：
 
 ```text
