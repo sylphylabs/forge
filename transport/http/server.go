@@ -112,14 +112,6 @@ func TLSConfig(c *tls.Config) ServerOption {
 	}
 }
 
-// StrictSlash is retained for source compatibility.
-// Deprecated: net/http.ServeMux owns path cleaning and trailing-slash redirects.
-func StrictSlash(strictSlash bool) ServerOption {
-	return func(o *Server) {
-		o.strictSlash = strictSlash
-	}
-}
-
 // Listener with server lis
 func Listener(lis net.Listener) ServerOption {
 	return func(s *Server) {
@@ -165,7 +157,6 @@ type Server struct {
 	decBody          DecodeRequestFunc
 	enc              EncodeResponseFunc
 	ene              EncodeErrorFunc
-	strictSlash      bool
 	pathPrefix       string
 	router           *routeMux
 }
@@ -173,17 +164,16 @@ type Server struct {
 // NewServer creates an HTTP server by options.
 func NewServer(opts ...ServerOption) *Server {
 	srv := &Server{
-		network:     "tcp",
-		address:     ":0",
-		timeout:     1 * time.Second,
-		middleware:  matcher.New(),
-		decVars:     DefaultRequestVars,
-		decQuery:    DefaultRequestQuery,
-		decBody:     DefaultRequestDecoder,
-		enc:         DefaultResponseEncoder,
-		ene:         DefaultErrorEncoder,
-		strictSlash: true,
-		router:      newRouteMux(),
+		network:    "tcp",
+		address:    ":0",
+		timeout:    1 * time.Second,
+		middleware: matcher.New(),
+		decVars:    DefaultRequestVars,
+		decQuery:   DefaultRequestQuery,
+		decBody:    DefaultRequestDecoder,
+		enc:        DefaultResponseEncoder,
+		ene:        DefaultErrorEncoder,
+		router:     newRouteMux(),
 	}
 	for _, o := range opts {
 		o(srv)

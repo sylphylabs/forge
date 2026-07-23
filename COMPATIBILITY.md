@@ -148,8 +148,8 @@ Version 4 introduced a concurrency-safe `CompiledPath` for each fixed client
 binding; version 5 additionally precomposes unary server middleware. Template
 parsing, descriptor validation, middleware matching, and middleware handler
 composition are therefore removed from their respective steady-state request
-paths. Older generated files continue to compile through the version 3 and 4
-sentinels, but must be regenerated to receive both optimizations.
+paths. The obsolete version 3 and 4 sentinels are removed: generated HTTP files
+must be regenerated with the current generator before upgrading the runtime.
 
 `transport/http.BuildPath` returns `(string, error)` and remains the convenience
 API for genuinely dynamic templates. Hand-written code that repeatedly uses a
@@ -240,8 +240,9 @@ The public differences are:
   single-segment legacy regular expressions are supported.
 - Arbitrary Gorilla regular expressions spanning multiple path segments are
   rejected. Express the route as an AIP template instead.
-- `StrictSlash` is deprecated and has no effect. Path cleaning and
-  trailing-slash redirects use `http.ServeMux` behavior.
+- The inherited no-op `StrictSlash` option is removed. Delete it from server
+  construction; path cleaning and trailing-slash redirects use `http.ServeMux`
+  behavior.
 - `HandlePrefix` uses path-segment prefix semantics, not arbitrary string-prefix
   matching.
 - Unknown routes do not fall through to the process-wide

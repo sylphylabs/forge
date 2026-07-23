@@ -48,7 +48,7 @@ This is intentionally not route-compatible with Gorilla mux:
 - Conflicting patterns panic during registration instead of selecting the first registered route.
 - AIP variables, terminal `**` wildcards, terminal custom verbs, and single-segment legacy regular expressions are supported.
 - Arbitrary Gorilla regular expressions spanning multiple path segments are rejected. Use an AIP template instead.
-- `StrictSlash` is deprecated and has no effect; path cleaning and trailing-slash redirects use `http.ServeMux` behavior.
+- The inherited `StrictSlash` option is removed; path cleaning and trailing-slash redirects use `http.ServeMux` behavior.
 - `HandlePrefix` uses path-segment prefix semantics rather than Gorilla's arbitrary string-prefix matching.
 - Unmatched requests no longer fall through to the process-wide `http.DefaultServeMux`. Pass it explicitly to `NotFoundHandler` if that behavior is required.
 

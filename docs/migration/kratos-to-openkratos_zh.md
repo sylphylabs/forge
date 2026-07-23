@@ -83,11 +83,9 @@ go mod tidy
 生成代码。
 
 当前生成的 HTTP 文件会断言 `transport/http.SupportPackageIsVersion5`，从而在
-编译期发现“新 generator 搭配旧 runtime”的错误组合。仍断言 version 3 或 4 的旧
-生成文件可以继续编译，但 version 3 client 会在每次请求中解析固定路径模板，
-version 5 之前的 unary server handler 会在每次请求中组合 middleware。必须重新
-生成 client 与 server 才能同时获得两项优化；只升级 runtime module 不会改写已有
-生成代码。
+编译期发现“新 generator 搭配旧 runtime”的错误组合。Version 3 和 4 sentinel
+已经不再导出。升级 runtime 前必须重新生成 client 与 server；只升级 runtime
+module 不会改写已有生成代码。
 
 ## 4. 替换 Kratos CLI 工作流
 
@@ -118,9 +116,10 @@ OpenKratos 使用标准库 `http.ServeMux` 的优先级规则，不再依赖 Gor
 - prefix handler；
 - 预期的 404 与 405 响应。
 
-跨多段路径的 Gorilla 正则应改写为 Google AIP 模板。`StrictSlash` 不再改变
-行为。如果服务有意使用 `http.DefaultServeMux` 兜底，需要通过
-`NotFoundHandler` 显式传入。
+跨多段路径的 Gorilla 正则应改写为 Google AIP 模板。从 server 构造中删除
+`http.StrictSlash(...)`；OpenKratos 遵循 `http.ServeMux` 的路径清理和尾部斜杠
+行为。如果服务有意使用 `http.DefaultServeMux` 兜底，需要通过 `NotFoundHandler`
+显式传入。
 
 所有 HTTP middleware 都必须在首次调用 `Start` 或 `ServeHTTP` 前完成配置。不再
 支持 serving 期间修改配置：

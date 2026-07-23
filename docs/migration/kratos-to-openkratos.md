@@ -87,12 +87,10 @@ Do not edit generated `.pb.go` files with global text replacement. Change the
 
 Current generated HTTP files assert
 `transport/http.SupportPackageIsVersion5`. This intentionally catches a stale
-runtime paired with a newer generator at compile time. Older generated files
-that assert version 3 or 4 still compile, but version 3 clients parse fixed path
-templates on each request and versions before 5 compose unary server
-middleware on each request. Regenerate clients and servers to receive both
-optimizations; upgrading only the runtime module does not rewrite generated
-code.
+runtime paired with a newer generator at compile time. Version 3 and 4
+sentinels are no longer exported. Regenerate clients and servers before
+upgrading the runtime; upgrading only the runtime module does not rewrite
+generated code.
 
 ## 4. Replace Kratos CLI Workflows
 
@@ -124,9 +122,10 @@ mux registration order. Review every hand-written route and add tests for:
 - expected 404 and 405 responses.
 
 Replace multi-segment Gorilla regular expressions with Google AIP templates.
-`StrictSlash` no longer changes behavior. If the service intentionally used
-`http.DefaultServeMux` as a fallback, pass it explicitly through
-`NotFoundHandler`.
+Remove `http.StrictSlash(...)` from server construction; OpenKratos uses
+`http.ServeMux` path cleaning and trailing-slash behavior. If the service
+intentionally used `http.DefaultServeMux` as a fallback, pass it explicitly
+through `NotFoundHandler`.
 
 Configure all HTTP middleware before the first call to `Start` or `ServeHTTP`.
 Late mutation is no longer supported:

@@ -476,15 +476,6 @@ func TestTLSConfig(t *testing.T) {
 	}
 }
 
-func TestStrictSlash(t *testing.T) {
-	o := &Server{}
-	v := true
-	StrictSlash(v)(o)
-	if !reflect.DeepEqual(v, o.strictSlash) {
-		t.Errorf("expected %v got %v", v, o.tlsConf)
-	}
-}
-
 func TestListener(t *testing.T) {
 	lis, err := net.Listen("tcp", ":0")
 	if err != nil {

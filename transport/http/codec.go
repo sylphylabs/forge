@@ -18,8 +18,6 @@ import (
 
 // These constants should not be referenced from any other code.
 const (
-	SupportPackageIsVersion3 = true
-	SupportPackageIsVersion4 = true
 	SupportPackageIsVersion5 = true
 )
 

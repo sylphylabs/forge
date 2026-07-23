@@ -131,8 +131,8 @@ query、path 顺序绑定，因此 URL path 始终具有最终优先级。
 生成的 HTTP 文件要求 `transport/http.SupportPackageIsVersion5`。Version 4 为每个
 固定 client binding 引入并发安全的 `CompiledPath`；version 5 进一步预组合 unary
 server middleware。因此模板解析、descriptor 校验、middleware 匹配与 handler
-组合都不再发生在各自的稳态请求路径中。旧生成文件仍可通过 version 3 和 4
-sentinel 编译，但必须重新生成后才能同时获得这两项优化。
+组合都不再发生在各自的稳态请求路径中。已经移除过时的 version 3 和 4
+sentinel；升级 runtime 前必须使用当前 generator 重新生成 HTTP 文件。
 
 `transport/http.BuildPath` 返回 `(string, error)`，继续作为真正动态模板的便捷
 API。手写代码如果反复使用固定模板，应通过 `CompilePath` 或 `MustCompilePath`
@@ -209,7 +209,8 @@ pattern，匹配变量仍可通过 `transport/http.Context.Vars()` 和
 - 冲突 pattern 在注册时 panic，不再静默选择第一个路由；
 - 支持 AIP 变量、末尾 `**`、末尾 custom verb 和单路径段旧式正则；
 - 拒绝跨多个路径段的任意 Gorilla 正则，应改写为 AIP 模板；
-- `StrictSlash` 已弃用且不产生效果，路径清理和尾部斜杠重定向遵循标准库；
+- 已移除继承自 Kratos 且不产生效果的 `StrictSlash` 选项；从 server 构造中删除
+  该选项，路径清理和尾部斜杠重定向遵循标准库；
 - `HandlePrefix` 使用路径段前缀语义，而不是任意字符串前缀；
 - 未匹配请求不会落入进程级 `http.DefaultServeMux`；确有需要时应将其显式传给
   `NotFoundHandler`；
