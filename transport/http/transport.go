@@ -35,6 +35,7 @@ type Transport struct {
 	request      *http.Request
 	response     http.ResponseWriter
 	pathTemplate string
+	route        *compiledRoute
 }
 
 // Kind returns the transport kind.

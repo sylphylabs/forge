@@ -246,31 +246,62 @@ func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 
 func (s *Server) filter() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			ctx := req.Context()
-			if s.timeout > 0 {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, s.timeout)
-				defer cancel()
-			}
-
-			pathTemplate := routeTemplate(req)
-
-			tr := &Transport{
-				operation:    pathTemplate,
-				pathTemplate: pathTemplate,
-				reqHeader:    headerCarrier(req.Header),
-				replyHeader:  headerCarrier(w.Header()),
-				request:      req,
-				response:     w,
-			}
-			if s.endpoint != nil {
-				tr.endpoint = s.endpoint.String()
-			}
-			tr.request = req.WithContext(transport.NewServerContext(ctx, tr))
-			next.ServeHTTP(w, tr.request)
-		})
+		return &serverFilter{server: s, next: next}
 	}
+}
+
+type serverFilter struct {
+	server *Server
+	next   http.Handler
+}
+
+func (f *serverFilter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	f.serve(w, req, nil, nil)
+}
+
+func (f *serverFilter) serveMatchedRoute(
+	w http.ResponseWriter,
+	req *http.Request,
+	route *compiledRoute,
+	values map[string]string,
+) {
+	f.serve(w, req, route, values)
+}
+
+func (f *serverFilter) serve(
+	w http.ResponseWriter,
+	req *http.Request,
+	route *compiledRoute,
+	values map[string]string,
+) {
+	ctx := req.Context()
+	if f.server.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, f.server.timeout)
+		defer cancel()
+	}
+
+	pathTemplate := routeTemplate(req)
+	if route != nil {
+		pathTemplate = route.template
+	}
+	tr := &Transport{
+		operation:    pathTemplate,
+		pathTemplate: pathTemplate,
+		reqHeader:    headerCarrier(req.Header),
+		replyHeader:  headerCarrier(w.Header()),
+		request:      req,
+		response:     w,
+		route:        route,
+	}
+	if f.server.endpoint != nil {
+		tr.endpoint = f.server.endpoint.String()
+	}
+	tr.request = req.WithContext(transport.NewServerContext(ctx, tr))
+	if route != nil {
+		route.setPathValues(tr.request, values)
+	}
+	f.next.ServeHTTP(w, tr.request)
 }
 
 // Endpoint return a real address to registry endpoint.

@@ -15,6 +15,7 @@ import (
 
 	kratoserrors "github.com/openkratos/kratos/errors"
 	"github.com/openkratos/kratos/internal/httprule"
+	"github.com/openkratos/kratos/transport"
 )
 
 const internalPathValuePrefix = "__openkratos"
@@ -123,6 +124,10 @@ type routeVariant struct {
 	handler http.Handler
 }
 
+type matchedRouteHandler interface {
+	serveMatchedRoute(http.ResponseWriter, *http.Request, *compiledRoute, map[string]string)
+}
+
 type routeBucket struct {
 	router *routeMux
 	mu     sync.Mutex
@@ -161,6 +166,10 @@ func (b *routeBucket) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		if !ok {
 			continue
+		}
+		if handler, ok := candidate.handler.(matchedRouteHandler); ok {
+			handler.serveMatchedRoute(w, req, &candidate.route, values)
+			return
 		}
 		ctx := context.WithValue(req.Context(), routeContextKey{}, &candidate.route)
 		matchedReq := req.WithContext(ctx)
@@ -359,7 +368,7 @@ func (r *routeMux) serveRouteError(w http.ResponseWriter, req *http.Request, err
 }
 
 func routeTemplate(req *http.Request) string {
-	if route, ok := req.Context().Value(routeContextKey{}).(*compiledRoute); ok {
+	if route, ok := routeFromRequest(req); ok {
 		return route.template
 	}
 	if req.Pattern != "" {
@@ -372,11 +381,26 @@ func routeTemplate(req *http.Request) string {
 }
 
 func requestVars(req *http.Request) url.Values {
-	route, ok := req.Context().Value(routeContextKey{}).(*compiledRoute)
+	route, ok := routeFromRequest(req)
 	if !ok || len(route.vars) == 0 {
 		return url.Values{}
 	}
 	return route.values(req)
+}
+
+func routeFromRequest(req *http.Request) (*compiledRoute, bool) {
+	if route, ok := req.Context().Value(routeContextKey{}).(*compiledRoute); ok {
+		return route, true
+	}
+	tr, ok := transport.FromServerContext(req.Context())
+	if !ok {
+		return nil, false
+	}
+	httpTransport, ok := tr.(*Transport)
+	if !ok || httpTransport.route == nil {
+		return nil, false
+	}
+	return httpTransport.route, true
 }
 
 func compileRoute(template string) (compiledRoute, error) {

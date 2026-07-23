@@ -21,6 +21,7 @@ import (
 	kratoserrors "github.com/openkratos/kratos/errors"
 	"github.com/openkratos/kratos/internal/host"
 	"github.com/openkratos/kratos/log"
+	"github.com/openkratos/kratos/transport"
 )
 
 var h = func(w http.ResponseWriter, r *http.Request) {
@@ -335,6 +336,48 @@ func TestServerWithoutTimeoutPreservesRequestContext(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/context", nil).WithContext(parent)
+	srv.ServeHTTP(httptest.NewRecorder(), req)
+}
+
+func TestMatchedRoutePreservesRequestSemantics(t *testing.T) {
+	type contextKey struct{}
+	parent, cancel := context.WithCancel(context.WithValue(context.Background(), contextKey{}, "value"))
+	defer cancel()
+
+	srv := NewServer(Timeout(0))
+	srv.Route("").GET("/context/{name}", func(ctx Context) error {
+		request := ctx.Request()
+		if got := request.Pattern; got != "GET /context/{__openkratos0}" {
+			t.Fatalf("request pattern = %q", got)
+		}
+		if got := request.PathValue("name"); got != "kratos" {
+			t.Fatalf("path value = %q", got)
+		}
+		if got := ctx.Value(contextKey{}); got != "value" {
+			t.Fatalf("context value = %v", got)
+		}
+		transportRequest, ok := RequestFromServerContext(ctx)
+		if !ok || transportRequest != request {
+			t.Fatal("transport request does not match handler request")
+		}
+		tr, ok := transport.FromServerContext(ctx)
+		if !ok || tr.Operation() != "/context/{name}" {
+			t.Fatalf("transport operation = %v", tr)
+		}
+		httpTransport, ok := tr.(Transporter)
+		if !ok || httpTransport.PathTemplate() != "/context/{name}" {
+			t.Fatalf("transport path template = %v", tr)
+		}
+		cancel()
+		select {
+		case <-ctx.Done():
+		default:
+			t.Fatal("request cancellation did not propagate")
+		}
+		return nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/context/kratos", nil).WithContext(parent)
 	srv.ServeHTTP(httptest.NewRecorder(), req)
 }
 

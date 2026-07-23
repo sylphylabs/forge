@@ -131,6 +131,30 @@ func BenchmarkRouteMux(b *testing.B) {
 	}
 }
 
+func BenchmarkServerRoute(b *testing.B) {
+	b.Run("parameter", func(b *testing.B) {
+		srv := NewServer(Timeout(0))
+		srv.Route("").GET("/resource/{value}", func(Context) error { return nil })
+		benchmarkRouter(b, srv, "/resource/42", false)
+	})
+	b.Run("parameter-vars", func(b *testing.B) {
+		srv := NewServer(Timeout(0))
+		srv.Route("").GET("/resource/{value}", func(ctx Context) error {
+			ctx.Response().(*benchmarkResponseWriter).value = ctx.Vars().Get("value")
+			return nil
+		})
+		benchmarkRouter(b, srv, "/resource/42", false)
+	})
+	b.Run("parameter-proto", func(b *testing.B) {
+		srv := NewServer(Timeout(0))
+		srv.Route("").GET("/resource/{value}", func(ctx Context) error {
+			var target wrapperspb.StringValue
+			return ctx.BindVars(&target)
+		})
+		benchmarkRouter(b, srv, "/resource/42", false)
+	})
+}
+
 func benchmarkRouterWithHeader(b *testing.B, handler http.Handler, path, key, value string) {
 	b.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
