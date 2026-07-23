@@ -24,6 +24,7 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/openkratos/api v0.0.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/net v0.57.0 // indirect
@@ -35,3 +36,5 @@ require (
 )
 
 replace github.com/openkratos/kratos => ../../
+
+replace github.com/openkratos/api => ../../../OpenKratos-api

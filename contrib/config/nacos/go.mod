@@ -67,3 +67,5 @@ require (
 )
 
 replace github.com/openkratos/kratos => ../../../
+
+replace github.com/openkratos/api => ../../../../OpenKratos-api
