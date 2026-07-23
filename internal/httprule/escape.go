@@ -9,7 +9,17 @@ import (
 const upperHex = "0123456789ABCDEF"
 
 func escapeSegment(value string) string {
+	escaped := 0
+	for i := range len(value) {
+		if !isUnreserved(value[i]) {
+			escaped++
+		}
+	}
+	if escaped == 0 {
+		return value
+	}
 	var builder strings.Builder
+	builder.Grow(len(value) + 2*escaped)
 	for i := 0; i < len(value); i++ {
 		c := value[i]
 		if isUnreserved(c) {
@@ -32,7 +42,11 @@ func escapeSegments(value string) []string {
 }
 
 func decodeMulti(value string) (string, error) {
+	if !strings.ContainsRune(value, '%') {
+		return value, nil
+	}
 	var builder strings.Builder
+	builder.Grow(len(value))
 	for i := 0; i < len(value); i++ {
 		if value[i] != '%' {
 			builder.WriteByte(value[i])
