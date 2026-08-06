@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 	"uuid"
@@ -21,33 +22,119 @@ type mockRegistry struct {
 }
 
 type errorRegistry struct {
+	registerErr   error
 	deregisterErr error
+	registerWait  <-chan struct{}
+	registered    chan struct{}
+	deregistered  chan struct{}
+}
+
+type delayedRegistry struct {
+	registerStarted chan struct{}
+	registerRelease chan struct{}
+	registered      chan struct{}
+	deregistered    chan struct{}
 }
 
 type lifecycleServer struct {
 	started  chan struct{}
 	stopped  chan struct{}
+	exited   chan struct{}
 	stopOnce sync.Once
+	startErr error
+	exitErr  error
+	stopErr  error
 }
 
 func newLifecycleServer() *lifecycleServer {
-	return &lifecycleServer{started: make(chan struct{}), stopped: make(chan struct{})}
+	return &lifecycleServer{
+		started: make(chan struct{}),
+		stopped: make(chan struct{}),
+		exited:  make(chan struct{}),
+	}
 }
 
 func (s *lifecycleServer) Start(context.Context) error {
 	close(s.started)
+	defer close(s.exited)
+	if s.startErr != nil {
+		return s.startErr
+	}
 	<-s.stopped
-	return nil
+	return s.exitErr
 }
 
 func (s *lifecycleServer) Stop(context.Context) error {
 	s.stopOnce.Do(func() { close(s.stopped) })
+	return s.stopErr
+}
+
+func (r *errorRegistry) Register(ctx context.Context, _ *registry.ServiceInstance) error {
+	if r.registerWait != nil {
+		select {
+		case <-r.registerWait:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	if r.registered != nil {
+		close(r.registered)
+	}
+	return r.registerErr
+}
+
+func (r *errorRegistry) Deregister(context.Context, *registry.ServiceInstance) error {
+	if r.deregistered != nil {
+		close(r.deregistered)
+	}
+	return r.deregisterErr
+}
+
+func (r *delayedRegistry) Register(context.Context, *registry.ServiceInstance) error {
+	close(r.registerStarted)
+	<-r.registerRelease // Deliberately ignore cancellation to exercise the ownership handshake.
+	close(r.registered)
 	return nil
 }
 
-func (*errorRegistry) Register(context.Context, *registry.ServiceInstance) error { return nil }
-func (r *errorRegistry) Deregister(context.Context, *registry.ServiceInstance) error {
-	return r.deregisterErr
+func (r *delayedRegistry) Deregister(context.Context, *registry.ServiceInstance) error {
+	close(r.deregistered)
+	return nil
+}
+
+type endpointLifecycleServer struct {
+	*lifecycleServer
+	endpointBuilt chan struct{}
+}
+
+func newEndpointLifecycleServer() *endpointLifecycleServer {
+	return &endpointLifecycleServer{
+		lifecycleServer: newLifecycleServer(),
+		endpointBuilt:   make(chan struct{}),
+	}
+}
+
+func (s *endpointLifecycleServer) Endpoint() (*url.URL, error) {
+	close(s.endpointBuilt)
+	return url.Parse("test://127.0.0.1")
+}
+
+func requireClosed(t *testing.T, ch <-chan struct{}, name string) {
+	t.Helper()
+	select {
+	case <-ch:
+	default:
+		t.Fatalf("%s was not closed", name)
+	}
+}
+
+func requireOpen(t *testing.T, ch <-chan struct{}, name string) {
+	t.Helper()
+	select {
+	case <-ch:
+		t.Fatalf("%s was closed", name)
+	default:
+	}
 }
 
 func (r *mockRegistry) Register(_ context.Context, service *registry.ServiceInstance) error {
@@ -114,6 +201,216 @@ func TestAppDefaultIDIsUUIDv4(t *testing.T) {
 	}
 }
 
+func TestAppBeforeStartFailureInvokesTransportStopAfterEndpointBuild(t *testing.T) {
+	startErr := errors.New("before start")
+	server := newEndpointLifecycleServer()
+	registerCalled := make(chan struct{})
+	deregisterCalled := make(chan struct{})
+	beforeStopCalled := make(chan struct{})
+	afterStopCalled := make(chan struct{})
+	app := New(
+		Server(server),
+		Registrar(&errorRegistry{
+			registered:   registerCalled,
+			deregistered: deregisterCalled,
+		}),
+		BeforeStart(func(context.Context) error {
+			requireClosed(t, server.endpointBuilt, "endpoint build signal")
+			return startErr
+		}),
+		BeforeStop(func(context.Context) error {
+			close(beforeStopCalled)
+			return nil
+		}),
+		AfterStop(func(context.Context) error {
+			close(afterStopCalled)
+			return nil
+		}),
+	)
+
+	err := app.Run()
+	if !errors.Is(err, startErr) {
+		t.Fatalf("Run() error = %v, want %v", err, startErr)
+	}
+	requireClosed(t, server.stopped, "server stop signal")
+	requireOpen(t, server.started, "server start signal")
+	requireOpen(t, registerCalled, "register signal")
+	requireOpen(t, deregisterCalled, "deregister signal")
+	requireClosed(t, beforeStopCalled, "BeforeStop signal")
+	requireClosed(t, afterStopCalled, "AfterStop signal")
+	requireClosed(t, app.ctx.Done(), "application context")
+}
+
+func TestAppRegisterFailureRollsBackStartedServers(t *testing.T) {
+	registerErr := errors.New("register")
+	beforeStopErr := errors.New("before stop")
+	serverStopErr := errors.New("server stop")
+	afterStopErr := errors.New("after stop")
+	server := newLifecycleServer()
+	server.stopErr = serverStopErr
+	registerCalled := make(chan struct{})
+	deregisterCalled := make(chan struct{})
+	app := New(
+		Server(server),
+		Registrar(&errorRegistry{
+			registerErr:  registerErr,
+			registerWait: server.started,
+			registered:   registerCalled,
+			deregistered: deregisterCalled,
+		}),
+		BeforeStop(func(context.Context) error { return beforeStopErr }),
+		AfterStop(func(context.Context) error { return afterStopErr }),
+	)
+
+	err := app.Run()
+	for _, want := range []error{registerErr, beforeStopErr, serverStopErr, afterStopErr} {
+		if !errors.Is(err, want) {
+			t.Errorf("Run() error %v does not contain %v", err, want)
+		}
+	}
+	requireClosed(t, registerCalled, "register signal")
+	requireOpen(t, deregisterCalled, "deregister signal")
+	requireClosed(t, server.started, "server start signal")
+	requireClosed(t, server.stopped, "server stop signal")
+	requireClosed(t, server.exited, "server exit signal")
+	requireClosed(t, app.ctx.Done(), "application context")
+}
+
+func TestAppAfterStartFailureRollsBackRegisteredServers(t *testing.T) {
+	afterStartErr := errors.New("after start")
+	beforeStopErr := errors.New("before stop")
+	deregisterErr := errors.New("deregister")
+	serverStopErr := errors.New("server stop")
+	afterStopErr := errors.New("after stop")
+	server := newLifecycleServer()
+	server.stopErr = serverStopErr
+	registerCalled := make(chan struct{})
+	deregisterCalled := make(chan struct{})
+	app := New(
+		Server(server),
+		Registrar(&errorRegistry{
+			deregisterErr: deregisterErr,
+			registerWait:  server.started,
+			registered:    registerCalled,
+			deregistered:  deregisterCalled,
+		}),
+		AfterStart(func(context.Context) error { return afterStartErr }),
+		BeforeStop(func(context.Context) error { return beforeStopErr }),
+		AfterStop(func(context.Context) error { return afterStopErr }),
+	)
+
+	err := app.Run()
+	for _, want := range []error{afterStartErr, beforeStopErr, deregisterErr, serverStopErr, afterStopErr} {
+		if !errors.Is(err, want) {
+			t.Errorf("Run() error %v does not contain %v", err, want)
+		}
+	}
+	requireClosed(t, registerCalled, "register signal")
+	requireClosed(t, deregisterCalled, "deregister signal")
+	requireClosed(t, server.started, "server start signal")
+	requireClosed(t, server.stopped, "server stop signal")
+	requireClosed(t, server.exited, "server exit signal")
+	requireClosed(t, app.ctx.Done(), "application context")
+}
+
+func TestAppStartFailureRollsBackAndJoinsCleanupErrors(t *testing.T) {
+	startErr := errors.New("server start")
+	beforeStopErr := errors.New("before stop")
+	serverStopErr := errors.New("server stop")
+	afterStopErr := errors.New("after stop")
+	server := newLifecycleServer()
+	server.startErr = startErr
+	server.stopErr = serverStopErr
+	registered := make(chan struct{})
+	deregistered := make(chan struct{})
+	app := New(
+		Server(server),
+		Registrar(&errorRegistry{registered: registered, deregistered: deregistered}),
+		BeforeStop(func(context.Context) error { return beforeStopErr }),
+		AfterStop(func(context.Context) error { return afterStopErr }),
+	)
+
+	err := app.Run()
+	for _, want := range []error{startErr, beforeStopErr, serverStopErr, afterStopErr} {
+		if !errors.Is(err, want) {
+			t.Errorf("Run() error %v does not contain %v", err, want)
+		}
+	}
+	requireClosed(t, server.started, "server start signal")
+	requireClosed(t, server.stopped, "server stop signal")
+	requireClosed(t, server.exited, "server exit signal")
+	requireClosed(t, registered, "register signal")
+	requireClosed(t, deregistered, "deregister signal")
+	requireClosed(t, app.ctx.Done(), "application context")
+}
+
+func TestAppPreservesCleanupErrorJoinedWithCancellation(t *testing.T) {
+	cleanupErr := errors.New("cleanup")
+	server := newLifecycleServer()
+	server.stopErr = errors.Join(context.Canceled, cleanupErr)
+	app := New(Server(server))
+	go func() {
+		<-server.started
+		_ = app.Stop()
+	}()
+
+	err := app.Run()
+	if !errors.Is(err, cleanupErr) {
+		t.Fatalf("Run() error = %v, want cleanup error", err)
+	}
+}
+
+func TestAppReturnsUnexpectedServerCancellation(t *testing.T) {
+	server := newLifecycleServer()
+	server.startErr = context.Canceled
+	app := New(Server(server))
+
+	if err := app.Run(); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want context.Canceled", err)
+	}
+}
+
+func TestAppSuppressesServerCancellationDuringRequestedStop(t *testing.T) {
+	server := newLifecycleServer()
+	server.exitErr = context.Canceled
+	app := New(Server(server))
+	go func() {
+		<-server.started
+		_ = app.Stop()
+	}()
+
+	if err := app.Run(); err != nil {
+		t.Fatalf("Run() error = %v, want nil", err)
+	}
+}
+
+func TestAppStopDuringRegisterRollsBackLateSuccess(t *testing.T) {
+	server := newLifecycleServer()
+	registrar := &delayedRegistry{
+		registerStarted: make(chan struct{}),
+		registerRelease: make(chan struct{}),
+		registered:      make(chan struct{}),
+		deregistered:    make(chan struct{}),
+	}
+	app := New(Server(server), Registrar(registrar))
+	runErr := make(chan error, 1)
+	go func() { runErr <- app.Run() }()
+
+	<-registrar.registerStarted
+	if err := app.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	requireOpen(t, registrar.deregistered, "deregister signal")
+	close(registrar.registerRelease)
+	if err := <-runErr; err != nil {
+		t.Fatal(err)
+	}
+	requireClosed(t, registrar.registered, "register signal")
+	requireClosed(t, registrar.deregistered, "deregister signal")
+	requireClosed(t, server.stopped, "server stop signal")
+	requireClosed(t, server.exited, "server exit signal")
+}
+
 func TestAppAfterStopUsesFreshBoundedContext(t *testing.T) {
 	called := false
 	server := newLifecycleServer()
@@ -152,14 +449,15 @@ func TestAppJoinsLifecycleErrorsAndStillCancels(t *testing.T) {
 	deregisterErr := errors.New("deregister")
 	afterErr := errors.New("after stop")
 	server := newLifecycleServer()
+	registered := make(chan struct{})
 	app := New(
 		Server(server),
-		Registrar(&errorRegistry{deregisterErr: deregisterErr}),
+		Registrar(&errorRegistry{deregisterErr: deregisterErr, registered: registered}),
 		BeforeStop(func(context.Context) error { return beforeErr }),
 		AfterStop(func(context.Context) error { return afterErr }),
 	)
 	go func() {
-		<-server.started
+		<-registered
 		_ = app.Stop()
 	}()
 
@@ -190,6 +488,34 @@ func TestAppStopIsIdempotent(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("BeforeStop called %d times, want 1", calls)
+	}
+}
+
+func TestAppConcurrentStopIsIdempotent(t *testing.T) {
+	const callers = 32
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var calls atomic.Int32
+	app := New(BeforeStop(func(context.Context) error {
+		calls.Add(1)
+		close(entered)
+		<-release
+		return nil
+	}))
+
+	errs := make(chan error, callers)
+	for range callers {
+		go func() { errs <- app.Stop() }()
+	}
+	<-entered
+	close(release)
+	for range callers {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("BeforeStop called %d times, want 1", got)
 	}
 }
 
@@ -228,6 +554,21 @@ func TestApp_Metadata(t *testing.T) {
 	}
 }
 
+func TestAppMetadataReturnsSnapshot(t *testing.T) {
+	metadata := map[string]string{"region": "ap-northeast-1"}
+	app := New(Metadata(metadata))
+	metadata["region"] = "external-change"
+
+	got := app.Metadata()
+	if got["region"] != "ap-northeast-1" {
+		t.Fatalf("Metadata()[region] = %q, want %q", got["region"], "ap-northeast-1")
+	}
+	got["region"] = "returned-map-change"
+	if current := app.Metadata()["region"]; current != "ap-northeast-1" {
+		t.Fatalf("Metadata()[region] after returned map mutation = %q", current)
+	}
+}
+
 func TestApp_Endpoint(t *testing.T) {
 	v := []string{"https://go-kratos.dev", "localhost"}
 	var endpoints []*url.URL
@@ -246,6 +587,19 @@ func TestApp_Endpoint(t *testing.T) {
 	}
 	if !reflect.DeepEqual(o.Endpoint(), v) {
 		t.Errorf("Endpoint() = %v, want %v", o.Endpoint(), v)
+	}
+}
+
+func TestAppEndpointReturnsSnapshot(t *testing.T) {
+	app := New()
+	app.mu.Lock()
+	app.endpoints = []string{"http://127.0.0.1:8000"}
+	app.mu.Unlock()
+
+	got := app.Endpoint()
+	got[0] = "http://127.0.0.1:9000"
+	if current := app.Endpoint()[0]; current != "http://127.0.0.1:8000" {
+		t.Fatalf("Endpoint()[0] after returned slice mutation = %q", current)
 	}
 }
 
