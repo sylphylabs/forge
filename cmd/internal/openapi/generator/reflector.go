@@ -114,6 +114,13 @@ func (r *OpenAPIv3Reflector) responseContentForMessage(message protoreflect.Mess
 	return "200", wk.NewApplicationJsonMediaType(r.schemaOrReferenceForMessage(message))
 }
 
+func (r *OpenAPIv3Reflector) responseContentForField(field protoreflect.FieldDescriptor) (string, *v3.MediaTypes) {
+	if field.Kind() == protoreflect.MessageKind && r.fullMessageTypeName(field.Message()) == ".google.api.HttpBody" {
+		return "200", wk.NewGoogleApiHttpBodyMediaType()
+	}
+	return "200", wk.NewApplicationJsonMediaType(r.schemaOrReferenceForField(field))
+}
+
 func (r *OpenAPIv3Reflector) schemaReferenceForMessage(message protoreflect.MessageDescriptor) string {
 	schemaName := r.formatMessageName(message)
 	if !contains(r.requiredSchemas, schemaName) {

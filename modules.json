@@ -234,6 +234,15 @@
       "owner": "openkratos-maintainers",
       "tagPrefix": "contrib/transport/mcp",
       "dependsOn": ["github.com/openkratos/kratos"]
+    },
+    {
+      "path": "contrib/transport/nats",
+      "module": "github.com/openkratos/kratos/contrib/transport/nats",
+      "kind": "integration",
+      "support": "official",
+      "owner": "openkratos-maintainers",
+      "tagPrefix": "contrib/transport/nats",
+      "dependsOn": ["github.com/openkratos/kratos"]
     }
   ]
 }

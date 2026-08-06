@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/pb33f/libopenapi"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"google.golang.org/genproto/googleapis/api/annotations"
+	"google.golang.org/genproto/googleapis/api/httpbody"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -81,6 +83,142 @@ func TestGenerateOpenAPIPatchesAnnotatedErrorResponses(t *testing.T) {
 	}
 }
 
+func TestGenerateOpenAPIProjectsBodyAndResponseSchemas(t *testing.T) {
+	content, document := generateOpenAPIDocument(t, projectionTestFile())
+
+	scalar := requestBodySchema(t, findOperation(t, document, "/v1/scalar/{name}", "POST"))
+	if scalar.Type != "integer" || scalar.Format != "int32" {
+		t.Fatalf("scalar request schema = type %q format %q, want integer/int32", scalar.Type, scalar.Format)
+	}
+
+	repeated := requestBodySchema(t, findOperation(t, document, "/v1/repeated/{name}", "POST"))
+	if repeated.Type != "array" || repeated.Items == nil {
+		t.Fatalf("repeated request schema = %+v, want array with items", repeated)
+	}
+
+	mapped := requestBodySchema(t, findOperation(t, document, "/v1/mapped/{name}", "POST"))
+	if mapped.Type != "object" || mapped.AdditionalProperties == nil {
+		t.Fatalf("map request schema = %+v, want object with additionalProperties", mapped)
+	}
+
+	response := findOperationResponse(t, findOperation(t, document, "/v1/scalar/{name}", "POST"), "200")
+	responseSchema := mediaTypeSchema(t, response.Content, "application/json")
+	if responseSchema.Type != "string" {
+		t.Fatalf("projected response schema type = %q, want string", responseSchema.Type)
+	}
+
+	nested := findOperation(t, document, "/v1/nested/{resource.name}", "GET")
+	if !hasParameter(nested, "resource.name", "path") {
+		t.Fatal("nested path field is missing its path parameter")
+	}
+	if hasParameter(nested, "resource.name", "query") {
+		t.Fatal("nested path field was duplicated as a query parameter")
+	}
+	if !hasParameter(nested, "resource.zone", "query") {
+		t.Fatal("unbound nested field is missing its query parameter")
+	}
+
+	validateOpenAPI32(t, content)
+}
+
+func TestGenerateOpenAPIUsesHTTPBodyMediaType(t *testing.T) {
+	file := httpBodyTestFile()
+	content, document := generateOpenAPIDocument(t, file,
+		protodesc.ToFileDescriptorProto(httpbody.File_google_api_httpbody_proto))
+	operation := findOperation(t, document, "/v1/media/{name}", "POST")
+
+	requestBody := operation.RequestBody.GetRequestBody()
+	if requestBody == nil {
+		t.Fatal("request body is nil")
+	}
+	if mediaType(t, requestBody.Content, "*/*").Schema != nil {
+		t.Fatal("HttpBody request media type should not declare a JSON schema")
+	}
+
+	response := findOperationResponse(t, operation, "200")
+	if mediaType(t, response.Content, "*/*").Schema != nil {
+		t.Fatal("HttpBody response media type should not declare a JSON schema")
+	}
+
+	validateOpenAPI32(t, content)
+}
+
+func TestGenerateOpenAPISupportsStandardCustomMethods(t *testing.T) {
+	rule := &annotations.HttpRule{
+		Pattern: &annotations.HttpRule_Custom{Custom: &annotations.CustomHttpPattern{
+			Kind: "HEAD",
+			Path: "/v1/head/{name}",
+		}},
+		AdditionalBindings: []*annotations.HttpRule{
+			{Pattern: &annotations.HttpRule_Custom{Custom: &annotations.CustomHttpPattern{Kind: "OPTIONS", Path: "/v1/options/{name}"}}},
+			{Pattern: &annotations.HttpRule_Custom{Custom: &annotations.CustomHttpPattern{Kind: "TRACE", Path: "/v1/trace/{name}"}}},
+		},
+	}
+	content, document := generateOpenAPIDocument(t, bindingTestFile(rule))
+
+	findOperation(t, document, "/v1/head/{name}", "HEAD")
+	findOperation(t, document, "/v1/options/{name}", "OPTIONS")
+	findOperation(t, document, "/v1/trace/{name}", "TRACE")
+	validateOpenAPI32(t, content)
+}
+
+func TestGenerateOpenAPIRejectsInvalidBindings(t *testing.T) {
+	tests := []struct {
+		name    string
+		file    *descriptorpb.FileDescriptorProto
+		wantErr string
+	}{
+		{
+			name: "nested additional binding",
+			file: bindingTestFile(&annotations.HttpRule{
+				Pattern: &annotations.HttpRule_Get{Get: "/v1/{name}"},
+				AdditionalBindings: []*annotations.HttpRule{
+					{
+						Pattern: &annotations.HttpRule_Get{Get: "/v1/alt/{name}"},
+						AdditionalBindings: []*annotations.HttpRule{
+							{Pattern: &annotations.HttpRule_Get{Get: "/v1/nested/{name}"}},
+						},
+					},
+				},
+			}),
+			wantErr: "nested additional bindings are not allowed",
+		},
+		{
+			name: "conflicting routes",
+			file: bindingTestFile(
+				&annotations.HttpRule{Pattern: &annotations.HttpRule_Get{Get: "/v1/{name}/tail"}},
+				&annotations.HttpRule{Pattern: &annotations.HttpRule_Get{Get: "/v1/head/{other}"}},
+			),
+			wantErr: "conflicting HTTP rule",
+		},
+		{
+			name: "query method",
+			file: bindingTestFile(&annotations.HttpRule{
+				Pattern: &annotations.HttpRule_Custom{Custom: &annotations.CustomHttpPattern{Kind: "QUERY", Path: "/v1/query/{name}"}},
+			}),
+			wantErr: `HTTP method "QUERY" cannot be represented`,
+		},
+		{
+			name: "arbitrary method",
+			file: bindingTestFile(&annotations.HttpRule{
+				Pattern: &annotations.HttpRule_Custom{Custom: &annotations.CustomHttpPattern{Kind: "REPORT", Path: "/v1/report/{name}"}},
+			}),
+			wantErr: `HTTP method "REPORT" cannot be represented`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plugin := newOpenAPIPluginForFile(t, tt.file)
+			generator.Configure(plugin)
+			err := generateOpenAPI(plugin, testConfig())
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("generateOpenAPI() error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func findResponse(t *testing.T, document *v3.Document, name string) *v3.Response {
 	t.Helper()
 
@@ -97,6 +235,124 @@ func findResponse(t *testing.T, document *v3.Document, name string) *v3.Response
 	}
 	t.Fatalf("response %q not found", name)
 	return nil
+}
+
+func findOperation(t *testing.T, document *v3.Document, path, method string) *v3.Operation {
+	t.Helper()
+
+	for _, namedPath := range document.GetPaths().GetPath() {
+		if namedPath.GetName() != path {
+			continue
+		}
+		pathItem := namedPath.GetValue()
+		var operation *v3.Operation
+		switch method {
+		case "GET":
+			operation = pathItem.GetGet()
+		case "POST":
+			operation = pathItem.GetPost()
+		case "PUT":
+			operation = pathItem.GetPut()
+		case "DELETE":
+			operation = pathItem.GetDelete()
+		case "OPTIONS":
+			operation = pathItem.GetOptions()
+		case "HEAD":
+			operation = pathItem.GetHead()
+		case "PATCH":
+			operation = pathItem.GetPatch()
+		case "TRACE":
+			operation = pathItem.GetTrace()
+		default:
+			t.Fatalf("unsupported test method %q", method)
+		}
+		if operation == nil {
+			t.Fatalf("operation %s %s is nil", method, path)
+		}
+		return operation
+	}
+	t.Fatalf("path %q not found", path)
+	return nil
+}
+
+func findOperationResponse(t *testing.T, operation *v3.Operation, name string) *v3.Response {
+	t.Helper()
+
+	for _, response := range operation.GetResponses().GetResponseOrReference() {
+		if response.GetName() == name {
+			return response.GetValue().GetResponse()
+		}
+	}
+	t.Fatalf("response %q not found", name)
+	return nil
+}
+
+func hasParameter(operation *v3.Operation, name, location string) bool {
+	for _, parameterOrReference := range operation.GetParameters() {
+		parameter := parameterOrReference.GetParameter()
+		if parameter.GetName() == name && parameter.GetIn() == location {
+			return true
+		}
+	}
+	return false
+}
+
+func requestBodySchema(t *testing.T, operation *v3.Operation) *v3.Schema {
+	t.Helper()
+
+	requestBody := operation.GetRequestBody().GetRequestBody()
+	if requestBody == nil {
+		t.Fatal("request body is nil")
+	}
+	return mediaTypeSchema(t, requestBody.Content, "application/json")
+}
+
+func mediaTypeSchema(t *testing.T, mediaTypes *v3.MediaTypes, name string) *v3.Schema {
+	t.Helper()
+
+	schema := mediaType(t, mediaTypes, name).GetSchema().GetSchema()
+	if schema == nil {
+		t.Fatalf("media type %q has no inline schema", name)
+	}
+	return schema
+}
+
+func mediaType(t *testing.T, mediaTypes *v3.MediaTypes, name string) *v3.MediaType {
+	t.Helper()
+
+	if mediaTypes == nil {
+		t.Fatalf("media types are nil, want %q", name)
+	}
+	for _, namedMediaType := range mediaTypes.GetAdditionalProperties() {
+		if namedMediaType.GetName() == name {
+			return namedMediaType.GetValue()
+		}
+	}
+	t.Fatalf("media type %q not found", name)
+	return nil
+}
+
+func generateOpenAPIDocument(t *testing.T, file *descriptorpb.FileDescriptorProto, dependencies ...*descriptorpb.FileDescriptorProto) (string, *v3.Document) {
+	t.Helper()
+
+	plugin := newOpenAPIPluginForFile(t, file, dependencies...)
+	generator.Configure(plugin)
+	if err := generateOpenAPI(plugin, testConfig()); err != nil {
+		t.Fatalf("generateOpenAPI() error = %v", err)
+	}
+	response := plugin.Response()
+	if response.GetError() != "" {
+		t.Fatalf("generation error = %s", response.GetError())
+	}
+	if len(response.File) != 1 {
+		t.Fatalf("generated files = %d, want 1", len(response.File))
+	}
+	content := response.File[0].GetContent()
+	document, err := v3.ParseDocument([]byte(content))
+	if err != nil {
+		t.Fatalf("parse generated OpenAPI: %v", err)
+	}
+	return content, document
 }
 
 func validateOpenAPI32(t *testing.T, content string) {
@@ -133,6 +389,168 @@ func validateOpenAPI32(t *testing.T, content string) {
 	if err := schema.Validate(instance); err != nil {
 		t.Fatalf("generated document does not validate against the official OpenAPI 3.2 schema: %v", err)
 	}
+}
+
+func projectionTestFile() *descriptorpb.FileDescriptorProto {
+	return &descriptorpb.FileDescriptorProto{
+		Name:       proto.String("test/v1/projection.proto"),
+		Package:    proto.String("test.v1"),
+		Syntax:     proto.String("proto3"),
+		Dependency: []string{"google/api/annotations.proto"},
+		Options: &descriptorpb.FileOptions{
+			GoPackage: proto.String("example.com/test/v1;testv1"),
+		},
+		MessageType: []*descriptorpb.DescriptorProto{
+			{
+				Name: proto.String("Resource"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("name"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+					{Name: proto.String("zone"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+				},
+			},
+			{
+				Name: proto.String("NestedRequest"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("resource"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(), TypeName: proto.String(".test.v1.Resource")},
+				},
+			},
+			{
+				Name: proto.String("ScalarRequest"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("name"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+					{Name: proto.String("value"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_INT32.Enum()},
+				},
+			},
+			{
+				Name: proto.String("RepeatedRequest"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("name"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+					{Name: proto.String("values"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+				},
+			},
+			{
+				Name: proto.String("MapRequest"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("name"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+					{Name: proto.String("values"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(), TypeName: proto.String(".test.v1.MapRequest.ValuesEntry")},
+				},
+				NestedType: []*descriptorpb.DescriptorProto{
+					{
+						Name:    proto.String("ValuesEntry"),
+						Options: &descriptorpb.MessageOptions{MapEntry: proto.Bool(true)},
+						Field: []*descriptorpb.FieldDescriptorProto{
+							{Name: proto.String("key"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+							{Name: proto.String("value"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+						},
+					},
+				},
+			},
+			{
+				Name: proto.String("Reply"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("result"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+				},
+			},
+		},
+		Service: []*descriptorpb.ServiceDescriptorProto{
+			{
+				Name: proto.String("Projection"),
+				Method: []*descriptorpb.MethodDescriptorProto{
+					{Name: proto.String("Nested"), InputType: proto.String(".test.v1.NestedRequest"), OutputType: proto.String(".test.v1.Reply"), Options: httpRuleOptions(&annotations.HttpRule{Pattern: &annotations.HttpRule_Get{Get: "/v1/nested/{resource.name}"}})},
+					{Name: proto.String("Scalar"), InputType: proto.String(".test.v1.ScalarRequest"), OutputType: proto.String(".test.v1.Reply"), Options: httpRuleOptions(&annotations.HttpRule{Pattern: &annotations.HttpRule_Post{Post: "/v1/scalar/{name}"}, Body: "value", ResponseBody: "result"})},
+					{Name: proto.String("Repeated"), InputType: proto.String(".test.v1.RepeatedRequest"), OutputType: proto.String(".test.v1.Reply"), Options: httpRuleOptions(&annotations.HttpRule{Pattern: &annotations.HttpRule_Post{Post: "/v1/repeated/{name}"}, Body: "values"})},
+					{Name: proto.String("Mapped"), InputType: proto.String(".test.v1.MapRequest"), OutputType: proto.String(".test.v1.Reply"), Options: httpRuleOptions(&annotations.HttpRule{Pattern: &annotations.HttpRule_Post{Post: "/v1/mapped/{name}"}, Body: "values"})},
+				},
+			},
+		},
+	}
+}
+
+func httpBodyTestFile() *descriptorpb.FileDescriptorProto {
+	return &descriptorpb.FileDescriptorProto{
+		Name:       proto.String("test/v1/http_body.proto"),
+		Package:    proto.String("test.v1"),
+		Syntax:     proto.String("proto3"),
+		Dependency: []string{"google/api/annotations.proto", "google/api/httpbody.proto"},
+		Options: &descriptorpb.FileOptions{
+			GoPackage: proto.String("example.com/test/v1;testv1"),
+		},
+		MessageType: []*descriptorpb.DescriptorProto{
+			{
+				Name: proto.String("MediaRequest"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("name"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+					{Name: proto.String("body"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(), TypeName: proto.String(".google.api.HttpBody")},
+				},
+			},
+			{
+				Name: proto.String("MediaReply"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("body"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(), TypeName: proto.String(".google.api.HttpBody")},
+				},
+			},
+		},
+		Service: []*descriptorpb.ServiceDescriptorProto{
+			{
+				Name: proto.String("Media"),
+				Method: []*descriptorpb.MethodDescriptorProto{
+					{
+						Name:       proto.String("Upload"),
+						InputType:  proto.String(".test.v1.MediaRequest"),
+						OutputType: proto.String(".test.v1.MediaReply"),
+						Options: httpRuleOptions(&annotations.HttpRule{
+							Pattern:      &annotations.HttpRule_Post{Post: "/v1/media/{name}"},
+							Body:         "body",
+							ResponseBody: "body",
+						}),
+					},
+				},
+			},
+		},
+	}
+}
+
+func bindingTestFile(rules ...*annotations.HttpRule) *descriptorpb.FileDescriptorProto {
+	methods := make([]*descriptorpb.MethodDescriptorProto, 0, len(rules))
+	for i, rule := range rules {
+		methods = append(methods, &descriptorpb.MethodDescriptorProto{
+			Name:       proto.String(fmt.Sprintf("Call%d", i+1)),
+			InputType:  proto.String(".test.v1.BindingRequest"),
+			OutputType: proto.String(".test.v1.BindingReply"),
+			Options:    httpRuleOptions(rule),
+		})
+	}
+	return &descriptorpb.FileDescriptorProto{
+		Name:       proto.String("test/v1/binding.proto"),
+		Package:    proto.String("test.v1"),
+		Syntax:     proto.String("proto3"),
+		Dependency: []string{"google/api/annotations.proto"},
+		Options: &descriptorpb.FileOptions{
+			GoPackage: proto.String("example.com/test/v1;testv1"),
+		},
+		MessageType: []*descriptorpb.DescriptorProto{
+			{
+				Name: proto.String("BindingRequest"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("name"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+					{Name: proto.String("other"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+				},
+			},
+			{
+				Name: proto.String("BindingReply"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("result"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+				},
+			},
+		},
+		Service: []*descriptorpb.ServiceDescriptorProto{{Name: proto.String("Bindings"), Method: methods}},
+	}
+}
+
+func httpRuleOptions(rule *annotations.HttpRule) *descriptorpb.MethodOptions {
+	options := new(descriptorpb.MethodOptions)
+	proto.SetExtension(options, annotations.E_Http, rule)
+	return options
 }
 
 func newOpenAPIPlugin(t *testing.T) *protogen.Plugin {
@@ -227,17 +645,25 @@ func newOpenAPIPlugin(t *testing.T) *protogen.Plugin {
 			},
 		},
 	}
+	return newOpenAPIPluginForFile(t, file)
+}
+
+func newOpenAPIPluginForFile(t *testing.T, file *descriptorpb.FileDescriptorProto, dependencies ...*descriptorpb.FileDescriptorProto) *protogen.Plugin {
+	t.Helper()
+
+	protoFiles := []*descriptorpb.FileDescriptorProto{
+		protodesc.ToFileDescriptorProto(descriptorpb.File_google_protobuf_descriptor_proto),
+		protodesc.ToFileDescriptorProto(anypb.File_google_protobuf_any_proto),
+		protodesc.ToFileDescriptorProto(annotations.File_google_api_http_proto),
+		protodesc.ToFileDescriptorProto(annotations.File_google_api_annotations_proto),
+		protodesc.ToFileDescriptorProto(v3.File_openapiv3_OpenAPIv3_proto),
+		protodesc.ToFileDescriptorProto(v3.File_openapiv3_annotations_proto),
+	}
+	protoFiles = append(protoFiles, dependencies...)
+	protoFiles = append(protoFiles, file)
 	request := &pluginpb.CodeGeneratorRequest{
 		FileToGenerate: []string{file.GetName()},
-		ProtoFile: []*descriptorpb.FileDescriptorProto{
-			protodesc.ToFileDescriptorProto(descriptorpb.File_google_protobuf_descriptor_proto),
-			protodesc.ToFileDescriptorProto(anypb.File_google_protobuf_any_proto),
-			protodesc.ToFileDescriptorProto(annotations.File_google_api_http_proto),
-			protodesc.ToFileDescriptorProto(annotations.File_google_api_annotations_proto),
-			protodesc.ToFileDescriptorProto(v3.File_openapiv3_OpenAPIv3_proto),
-			protodesc.ToFileDescriptorProto(v3.File_openapiv3_annotations_proto),
-			file,
-		},
+		ProtoFile:      protoFiles,
 	}
 	plugin, err := (protogen.Options{}).New(request)
 	if err != nil {

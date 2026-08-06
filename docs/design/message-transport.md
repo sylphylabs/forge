@@ -1,9 +1,9 @@
 # Asynchronous Message Transport
 
-Status: accepted core contract; broker adapters are not yet part of the root
+Status: accepted core contract; the first broker adapter is an optional nested
 module.
 
-Last reviewed: July 23, 2026
+Last reviewed: July 24, 2026
 
 ## Decision
 
@@ -23,6 +23,23 @@ The root module owns only:
 Kafka, NATS, RabbitMQ, MQTT, task queues, and their client options remain
 optional nested modules. They must not enlarge applications that only use HTTP
 and gRPC.
+
+The first official adapter is
+[`contrib/transport/nats`](../../contrib/transport/nats). It validates the core
+contract against a real NATS server without adding the NATS SDK to the root
+module.
+
+The same nested module contains two deliberately separate modes:
+
+- the root `nats` package provides ephemeral core NATS pub/sub and
+  request/reply;
+- the `nats/jetstream` package provides durable publish and consumption against
+  existing Streams and durable Consumers.
+
+Adopting JetStream is therefore not just enabling `jetstream: true` on a NATS
+server. The application adapter must use the JetStream publish API, wait for a
+`PubAck`, bind handlers to durable consumers, and make explicit ack, retry, and
+termination decisions.
 
 ## Why This Boundary
 
@@ -88,6 +105,29 @@ their multiplicity. OpenTelemetry propagation can be implemented by an
 adapter-specific carrier over these headers without putting an OTel provider
 or global propagator in the root module.
 
+The optional
+[`contrib/otel/message`](../../contrib/otel/message) package now provides that
+implementation as a protocol-neutral decorator:
+
+```go
+publisher := messageotel.NewPublisher(
+	nextPublisher,
+	messageotel.WithTracerProvider(provider),
+	messageotel.WithPropagator(propagation.TraceContext{}),
+	messageotel.WithSystem("nats"),
+)
+```
+
+`NewPublisher` creates a producer span and injects its context into a cloned
+message. `messageotel.Consumer` extracts the context from headers and creates a
+child process span around the typed handler. Both preserve the wrapped return
+value and record handler/publish errors with error status. Provider, propagator,
+and broker system are explicit instance options; the package does not read OTel
+globals or guess the broker from an adapter type. Span attributes are limited to
+the messaging system, destination, operation type/name, and optional message
+ID. Payloads and arbitrary header values are intentionally excluded to keep
+cardinality and data exposure bounded.
+
 ## Middleware and Error Semantics
 
 Message middleware is typed as `func(Handler) Handler`; it does not use the
@@ -103,20 +143,57 @@ of introducing a second broker selector or descriptor parser.
 
 ## Adapter and Repository Layout
 
-An official adapter belongs in a nested module such as:
+An official adapter belongs in a nested module such as the current NATS
+adapter:
 
 ```text
 contrib/transport/nats/
   go.mod
-  transport.go
+  nats.go
   README.md
-  transport_test.go
+  nats_test.go
 ```
 
 The adapter owns its SDK, connection and reconnection policy, delivery
 semantics, and protocol conformance tests. It implements `message.Publisher`
-and/or `message.Subscriber`, accepts an injected logger/telemetry dependency,
-and proves cancellation and close behavior without a repository `go.work`.
+and/or `message.Subscriber`, accepts application-owned callbacks and
+dependencies instead of process globals, and proves cancellation and close
+behavior without a repository `go.work`.
+
+### JetStream Adapter
+
+`contrib/transport/nats/jetstream` reuses the portable `message.Message` and
+lifecycle interfaces, but keeps durable delivery policy at the NATS boundary.
+It does not create or update Streams or Consumers during application startup.
+Deployment automation owns retention, storage, replicas, duplicate windows,
+filters, acknowledgement wait, maximum deliveries, backoff, and dead-letter
+handling.
+
+Each application destination maps explicitly to an existing Stream and pull
+Consumer:
+
+```go
+subscriber, err := jetstream.NewSubscriber(js, map[string]jetstream.Binding{
+	"orders.created": {Stream: "ORDERS", Consumer: "order-worker"},
+})
+```
+
+The publisher waits for `PubAck`. A non-empty `Message.ID` is sent as
+`Nats-Msg-Id`, so a configured Stream duplicate window can reject repeated
+publishes with the same ID. A successful handler uses confirmed acknowledgement
+by default. A handler error is negatively acknowledged with a configurable
+delay by default; an application classifier can terminate a permanently invalid
+message instead. Asynchronous consume, handler, and acknowledgement failures are
+reported through an injected callback rather than a package-global logger.
+
+JetStream changes delivery from best-effort pub/sub to durable at-least-once
+processing; it does not create exactly-once business effects. In particular, it
+cannot atomically commit an application database transaction and publish to
+NATS. Producers that require that boundary use a transactional outbox in the
+same database transaction, then publish with the outbox event ID as
+`Message.ID`. Consumers use an inbox or another database uniqueness constraint
+keyed by that ID before applying side effects. Stream duplicate detection is a
+useful retry optimization, not a replacement for either persistence pattern.
 
 The default project layout remains a small single-module HTTP/gRPC service.
 Broker adapters are opt-in examples or nested modules, not dependencies of a
@@ -146,6 +223,36 @@ The first implementation is covered by `transport/message` tests for:
 - parent-context cancellation;
 - configuration validation and post-start freezing.
 
-The next adapter work must add an external broker or protocol conformance
-fixture. A fake subscriber is sufficient for the core lifecycle contract but
-does not prove Kafka, NATS, or RabbitMQ wire behavior.
+The NATS nested module adds an in-process real NATS server fixture covering:
+
+- core publish/subscribe and concrete delivery subjects;
+- body, message ID, key, and multi-value header propagation;
+- server metadata injection for middleware and tracing carriers;
+- subscription cancellation and idempotent close;
+- asynchronous handler error reporting without a package-global logger;
+- adapter-specific request/reply without widening the portable interfaces;
+- owned versus application-injected connection shutdown.
+
+The optional OTel message decorator adds focused in-memory span evidence for:
+
+- producer trace-context injection without mutating the original message;
+- consumer parent extraction and producer/consumer span kinds;
+- semantic messaging attributes and destination-based span names;
+- publish and handler error recording;
+- custom providers/propagators and nil-message transparency.
+
+The JetStream subpackage extends that evidence with a real file-backed
+JetStream fixture covering:
+
+- publish acknowledgement, stream sequence, and duplicate detection;
+- body, ID, key, multi-value headers, and server metadata propagation;
+- confirmed successful acknowledgement;
+- delayed redelivery after retryable handler failure;
+- termination of permanent handler failure;
+- refusal to provision a missing Stream or Consumer implicitly;
+- cancellation, draining, idempotent close, and `message.Server` integration.
+
+This proves the first wire adapter and the root/nested-module dependency
+boundary, including JetStream acknowledgement and redelivery behavior. It does
+not prove database/message atomicity, Kafka rebalance and offset behavior, or
+RabbitMQ acknowledgement semantics.

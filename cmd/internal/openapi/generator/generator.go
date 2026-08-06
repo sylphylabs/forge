@@ -18,6 +18,7 @@ package generator
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"regexp"
 	"sort"
@@ -31,6 +32,7 @@ import (
 	any_pb "google.golang.org/protobuf/types/known/anypb"
 
 	v3 "github.com/google/gnostic/openapiv3"
+	"github.com/openkratos/kratos/cmd/internal/httpbinding"
 	wk "github.com/openkratos/kratos/cmd/internal/openapi/generator/wellknown"
 )
 
@@ -89,7 +91,10 @@ func NewOpenAPIv3Generator(plugin *protogen.Plugin, conf Configuration, inputFil
 
 // Run runs the generator.
 func (g *OpenAPIv3Generator) Run(outputFile *protogen.GeneratedFile) error {
-	d := g.buildDocumentV3()
+	d, err := g.buildDocumentV3()
+	if err != nil {
+		return err
+	}
 	bytes, err := d.YAMLValue("Generated with protoc-gen-openapi\n" + infoURL)
 	if err != nil {
 		return fmt.Errorf("failed to marshal yaml: %s", err.Error())
@@ -101,8 +106,9 @@ func (g *OpenAPIv3Generator) Run(outputFile *protogen.GeneratedFile) error {
 }
 
 // buildDocumentV3 builds an OpenAPIv3 document for a plugin request.
-func (g *OpenAPIv3Generator) buildDocumentV3() *v3.Document {
+func (g *OpenAPIv3Generator) buildDocumentV3() (*v3.Document, error) {
 	d := &v3.Document{}
+	rules := httpbinding.NewSet()
 
 	d.Openapi = stringValue(g.conf.OpenAPIVersion, defaultOpenAPIVersion)
 	d.Info = &v3.Info{
@@ -129,7 +135,9 @@ func (g *OpenAPIv3Generator) buildDocumentV3() *v3.Document {
 				proto.Merge(d, extDocument.(*v3.Document))
 			}
 
-			g.addPathsToDocumentV3(d, file.Services)
+			if err := g.addPathsToDocumentV3(d, file.Services, rules); err != nil {
+				return nil, fmt.Errorf("file %s: %w", file.Desc.Path(), err)
+			}
 		}
 	}
 
@@ -162,44 +170,20 @@ func (g *OpenAPIv3Generator) buildDocumentV3() *v3.Document {
 		servers := []string{}
 		// Only 1 server will ever be set, per method, by the generator
 
-		if path.Value.Get != nil && len(path.Value.Get.Servers) == 1 {
-			servers = appendUnique(servers, path.Value.Get.Servers[0].Url)
-			allServers = appendUnique(servers, path.Value.Get.Servers[0].Url)
-		}
-		if path.Value.Post != nil && len(path.Value.Post.Servers) == 1 {
-			servers = appendUnique(servers, path.Value.Post.Servers[0].Url)
-			allServers = appendUnique(servers, path.Value.Post.Servers[0].Url)
-		}
-		if path.Value.Put != nil && len(path.Value.Put.Servers) == 1 {
-			servers = appendUnique(servers, path.Value.Put.Servers[0].Url)
-			allServers = appendUnique(servers, path.Value.Put.Servers[0].Url)
-		}
-		if path.Value.Delete != nil && len(path.Value.Delete.Servers) == 1 {
-			servers = appendUnique(servers, path.Value.Delete.Servers[0].Url)
-			allServers = appendUnique(servers, path.Value.Delete.Servers[0].Url)
-		}
-		if path.Value.Patch != nil && len(path.Value.Patch.Servers) == 1 {
-			servers = appendUnique(servers, path.Value.Patch.Servers[0].Url)
-			allServers = appendUnique(servers, path.Value.Patch.Servers[0].Url)
+		for _, operation := range pathItemOperations(path.Value) {
+			if operation != nil && len(operation.Servers) == 1 {
+				servers = appendUnique(servers, operation.Servers[0].Url)
+				allServers = appendUnique(allServers, operation.Servers[0].Url)
+			}
 		}
 
 		if len(servers) == 1 {
 			path.Value.Servers = []*v3.Server{{Url: servers[0]}}
 
-			if path.Value.Get != nil {
-				path.Value.Get.Servers = nil
-			}
-			if path.Value.Post != nil {
-				path.Value.Post.Servers = nil
-			}
-			if path.Value.Put != nil {
-				path.Value.Put.Servers = nil
-			}
-			if path.Value.Delete != nil {
-				path.Value.Delete.Servers = nil
-			}
-			if path.Value.Patch != nil {
-				path.Value.Patch.Servers = nil
+			for _, operation := range pathItemOperations(path.Value) {
+				if operation != nil {
+					operation.Servers = nil
+				}
 			}
 		}
 	}
@@ -243,7 +227,20 @@ func (g *OpenAPIv3Generator) buildDocumentV3() *v3.Document {
 		})
 		d.Components.Schemas.AdditionalProperties = pairs
 	}
-	return d
+	return d, nil
+}
+
+func pathItemOperations(path *v3.PathItem) []*v3.Operation {
+	return []*v3.Operation{
+		path.Get,
+		path.Put,
+		path.Post,
+		path.Delete,
+		path.Options,
+		path.Head,
+		path.Patch,
+		path.Trace,
+	}
 }
 
 // filterCommentString removes linter rules from comments.
@@ -283,15 +280,23 @@ func (g *OpenAPIv3Generator) findAndFormatFieldName(name string, inMessage *prot
 // maps, Struct and Empty can NOT be used
 // messages can have any number of sub messages - including circular (e.g. sub.subsub.sub.subsub.id)
 
-// buildQueryParamsV3 extracts any valid query params, including sub and recursive messages
-func (g *OpenAPIv3Generator) buildQueryParamsV3(field *protogen.Field) []*v3.ParameterOrReference {
+// buildQueryParamsV3 extracts any valid query params, including sub and recursive messages.
+func (g *OpenAPIv3Generator) buildQueryParamsV3(field *protogen.Field, coveredFields []string) []*v3.ParameterOrReference {
 	depths := map[string]int{}
-	return g._buildQueryParamsV3(field, depths)
+	return g._buildQueryParamsV3(field, string(field.Desc.Name()), depths, coveredFields)
 }
 
 // depths are used to keep track of how many times a message's fields has been seen
-func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, depths map[string]int) []*v3.ParameterOrReference {
+func (g *OpenAPIv3Generator) _buildQueryParamsV3(
+	field *protogen.Field,
+	fieldPath string,
+	depths map[string]int,
+	coveredFields []string,
+) []*v3.ParameterOrReference {
 	parameters := []*v3.ParameterOrReference{}
+	if contains(coveredFields, fieldPath) {
+		return parameters
+	}
 
 	queryFieldName := g.reflect.formatFieldName(field.Desc)
 	fieldDescription := g.filterCommentString(field.Comments.Leading)
@@ -303,8 +308,20 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, depths m
 	} else if field.Desc.Kind() == protoreflect.MessageKind {
 		typeName := g.reflect.fullMessageTypeName(field.Desc.Message())
 
-		switch typeName {
-		case ".google.protobuf.Value":
+		coveredDescendant := false
+		for _, covered := range coveredFields {
+			if strings.HasPrefix(covered, fieldPath+".") {
+				coveredDescendant = true
+				break
+			}
+		}
+
+		switch {
+		case coveredDescendant:
+			// Expand the message below so a nested path field can be excluded while
+			// its unbound siblings remain query parameters.
+
+		case typeName == ".google.protobuf.Value":
 			fieldSchema := g.reflect.schemaOrReferenceForField(field.Desc)
 			parameters = append(parameters,
 				&v3.ParameterOrReference{
@@ -320,9 +337,11 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, depths m
 				})
 			return parameters
 
-		case ".google.protobuf.BoolValue", ".google.protobuf.BytesValue", ".google.protobuf.Int32Value", ".google.protobuf.UInt32Value",
-			".google.protobuf.StringValue", ".google.protobuf.Int64Value", ".google.protobuf.UInt64Value", ".google.protobuf.FloatValue",
-			".google.protobuf.DoubleValue":
+		case typeName == ".google.protobuf.BoolValue", typeName == ".google.protobuf.BytesValue",
+			typeName == ".google.protobuf.Int32Value", typeName == ".google.protobuf.UInt32Value",
+			typeName == ".google.protobuf.StringValue", typeName == ".google.protobuf.Int64Value",
+			typeName == ".google.protobuf.UInt64Value", typeName == ".google.protobuf.FloatValue",
+			typeName == ".google.protobuf.DoubleValue":
 			valueField := getValueField(field.Message.Desc)
 			fieldSchema := g.reflect.schemaOrReferenceForField(valueField)
 			parameters = append(parameters,
@@ -339,7 +358,7 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, depths m
 				})
 			return parameters
 
-		case ".google.protobuf.Timestamp":
+		case typeName == ".google.protobuf.Timestamp":
 			fieldSchema := g.reflect.schemaOrReferenceForMessage(field.Message.Desc)
 			parameters = append(parameters,
 				&v3.ParameterOrReference{
@@ -354,7 +373,7 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, depths m
 					},
 				})
 			return parameters
-		case ".google.protobuf.Duration":
+		case typeName == ".google.protobuf.Duration":
 			fieldSchema := g.reflect.schemaOrReferenceForMessage(field.Message.Desc)
 			parameters = append(parameters,
 				&v3.ParameterOrReference{
@@ -405,7 +424,8 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, depths m
 
 			if seen < *g.conf.CircularDepth {
 				depths[subFieldFullName]++
-				subParams := g._buildQueryParamsV3(subField, depths)
+				subFieldPath := fieldPath + "." + string(subField.Desc.Name())
+				subParams := g._buildQueryParamsV3(subField, subFieldPath, depths, coveredFields)
 				for _, subParam := range subParams {
 					if param, ok := subParam.Oneof.(*v3.ParameterOrReference_Parameter); ok {
 						param.Parameter.Name = queryFieldName + "." + param.Parameter.Name
@@ -443,15 +463,18 @@ func (g *OpenAPIv3Generator) buildOperationV3(
 	tagName string,
 	description string,
 	defaultHost string,
-	path string,
-	bodyField string,
+	binding *httpbinding.Binding,
 	inputMessage *protogen.Message,
 	outputMessage *protogen.Message,
 ) (*v3.Operation, string) {
+	path := binding.Path
 	// coveredParameters tracks the parameters that have been used in the body or path.
 	coveredParameters := make([]string, 0)
-	if bodyField != "" {
-		coveredParameters = append(coveredParameters, bodyField)
+	if binding.Body != "" {
+		coveredParameters = append(coveredParameters, binding.Body)
+	}
+	for _, variable := range binding.Template.Variables() {
+		coveredParameters = append(coveredParameters, variable.FieldPath)
 	}
 	// Initialize the list of operation parameters.
 	parameters := []*v3.ParameterOrReference{}
@@ -545,11 +568,11 @@ func (g *OpenAPIv3Generator) buildOperationV3(
 	}
 
 	// Add any unhandled fields in the request message as query parameters.
-	if bodyField != "*" && string(inputMessage.Desc.FullName()) != "google.api.HttpBody" {
+	if binding.Body != "*" && string(inputMessage.Desc.FullName()) != "google.api.HttpBody" {
 		for _, field := range inputMessage.Fields {
 			fieldName := string(field.Desc.Name())
-			if !contains(coveredParameters, fieldName) && fieldName != bodyField {
-				fieldParams := g.buildQueryParamsV3(field)
+			if !contains(coveredParameters, fieldName) && fieldName != binding.Body {
+				fieldParams := g.buildQueryParamsV3(field, coveredParameters)
 				parameters = append(parameters, fieldParams...)
 			}
 		}
@@ -557,6 +580,9 @@ func (g *OpenAPIv3Generator) buildOperationV3(
 
 	// Create the response.
 	name, content := g.reflect.responseContentForMessage(outputMessage.Desc)
+	if binding.ResponseBodyField != nil {
+		name, content = g.reflect.responseContentForField(binding.ResponseBodyField)
+	}
 	responses := &v3.Responses{
 		ResponseOrReference: []*v3.NamedResponseOrReference{
 			{
@@ -608,52 +634,32 @@ func (g *OpenAPIv3Generator) buildOperationV3(
 	}
 
 	// If a body field is specified, we need to pass a message as the request body.
-	if bodyField != "" {
+	if binding.Body != "" {
 		var requestSchema *v3.SchemaOrReference
+		var requestContent *v3.MediaTypes
 
-		if bodyField == "*" {
+		if binding.Body == "*" {
 			// Pass the entire request message as the request body.
 			requestSchema = g.reflect.schemaOrReferenceForMessage(inputMessage.Desc)
-
-		} else {
-			// If body refers to a message field, use that type.
-			for _, field := range inputMessage.Fields {
-				if string(field.Desc.Name()) == bodyField {
-					switch field.Desc.Kind() {
-					case protoreflect.StringKind:
-						requestSchema = &v3.SchemaOrReference{
-							Oneof: &v3.SchemaOrReference_Schema{
-								Schema: &v3.Schema{
-									Type: "string",
-								},
-							},
-						}
-
-					case protoreflect.MessageKind:
-						requestSchema = g.reflect.schemaOrReferenceForMessage(field.Message.Desc)
-
-					default:
-						log.Printf("unsupported field type %+v", field.Desc)
-					}
-					break
-				}
+			if g.reflect.fullMessageTypeName(inputMessage.Desc) == ".google.api.HttpBody" {
+				requestContent = wk.NewGoogleApiHttpBodyMediaType()
 			}
+		} else {
+			requestSchema = g.reflect.schemaOrReferenceForField(binding.BodyField)
+			if binding.BodyField.Kind() == protoreflect.MessageKind &&
+				g.reflect.fullMessageTypeName(binding.BodyField.Message()) == ".google.api.HttpBody" {
+				requestContent = wk.NewGoogleApiHttpBodyMediaType()
+			}
+		}
+		if requestContent == nil {
+			requestContent = wk.NewApplicationJsonMediaType(requestSchema)
 		}
 
 		op.RequestBody = &v3.RequestBodyOrReference{
 			Oneof: &v3.RequestBodyOrReference_RequestBody{
 				RequestBody: &v3.RequestBody{
 					Required: true,
-					Content: &v3.MediaTypes{
-						AdditionalProperties: []*v3.NamedMediaType{
-							{
-								Name: "application/json",
-								Value: &v3.MediaType{
-									Schema: requestSchema,
-								},
-							},
-						},
-					},
+					Content:  requestContent,
 				},
 			},
 		}
@@ -662,7 +668,7 @@ func (g *OpenAPIv3Generator) buildOperationV3(
 }
 
 // addOperationToDocumentV3 adds an operation to the specified path/method.
-func (g *OpenAPIv3Generator) addOperationToDocumentV3(d *v3.Document, op *v3.Operation, path string, methodName string) {
+func (g *OpenAPIv3Generator) addOperationToDocumentV3(d *v3.Document, op *v3.Operation, path string, methodName string) error {
 	var selectedPathItem *v3.NamedPathItem
 	for _, namedPathItem := range d.Paths.Path {
 		if namedPathItem.Name == path {
@@ -677,17 +683,26 @@ func (g *OpenAPIv3Generator) addOperationToDocumentV3(d *v3.Document, op *v3.Ope
 	}
 	// Set the operation on the specified method.
 	switch methodName {
-	case "GET":
+	case http.MethodGet:
 		selectedPathItem.Value.Get = op
-	case "POST":
+	case http.MethodPost:
 		selectedPathItem.Value.Post = op
-	case "PUT":
+	case http.MethodPut:
 		selectedPathItem.Value.Put = op
-	case "DELETE":
+	case http.MethodDelete:
 		selectedPathItem.Value.Delete = op
-	case "PATCH":
+	case http.MethodOptions:
+		selectedPathItem.Value.Options = op
+	case http.MethodHead:
+		selectedPathItem.Value.Head = op
+	case http.MethodPatch:
 		selectedPathItem.Value.Patch = op
+	case http.MethodTrace:
+		selectedPathItem.Value.Trace = op
+	default:
+		return fmt.Errorf("HTTP method %q cannot be represented by the current OpenAPI model", methodName)
 	}
+	return nil
 }
 
 func (g *OpenAPIv3Generator) openKratosErrorSchemaName() string {
@@ -736,7 +751,7 @@ func hasResponseContent(response *v3.Response) bool {
 }
 
 // addPathsToDocumentV3 adds paths from a specified file descriptor.
-func (g *OpenAPIv3Generator) addPathsToDocumentV3(d *v3.Document, services []*protogen.Service) {
+func (g *OpenAPIv3Generator) addPathsToDocumentV3(d *v3.Document, services []*protogen.Service, rules *httpbinding.Set) error {
 	for _, service := range services {
 		annotationsCount := 0
 
@@ -746,59 +761,39 @@ func (g *OpenAPIv3Generator) addPathsToDocumentV3(d *v3.Document, services []*pr
 			outputMessage := method.Output
 			operationID := service.GoName + "_" + method.GoName
 
-			rules := make([]*annotations.HttpRule, 0)
-
-			extHTTP := proto.GetExtension(method.Desc.Options(), annotations.E_Http)
-			if extHTTP != nil && extHTTP != annotations.E_Http.InterfaceOf(annotations.E_Http.Zero()) {
-				annotationsCount++
-
-				rule := extHTTP.(*annotations.HttpRule)
-				rules = append(rules, rule)
-				rules = append(rules, rule.AdditionalBindings...)
+			bindings, annotated, err := httpbinding.Analyze(method.Desc)
+			if err != nil {
+				return fmt.Errorf("RPC %s: %w", method.Desc.FullName(), err)
 			}
+			if !annotated {
+				continue
+			}
+			annotationsCount++
 
-			for _, rule := range rules {
-				var path string
-				var methodName string
-				var body string
-
-				body = rule.Body
-				switch pattern := rule.Pattern.(type) {
-				case *annotations.HttpRule_Get:
-					path = pattern.Get
-					methodName = "GET"
-				case *annotations.HttpRule_Post:
-					path = pattern.Post
-					methodName = "POST"
-				case *annotations.HttpRule_Put:
-					path = pattern.Put
-					methodName = "PUT"
-				case *annotations.HttpRule_Delete:
-					path = pattern.Delete
-					methodName = "DELETE"
-				case *annotations.HttpRule_Patch:
-					path = pattern.Patch
-					methodName = "PATCH"
-				case *annotations.HttpRule_Custom:
-					path = "custom-unsupported"
-				default:
-					path = "unknown-unsupported"
+			defaultHost, _ := proto.GetExtension(service.Desc.Options(), annotations.E_DefaultHost).(string)
+			for _, binding := range bindings {
+				if err := rules.Add(binding); err != nil {
+					if binding.Index == 0 {
+						return fmt.Errorf("RPC %s: %w", method.Desc.FullName(), err)
+					}
+					return fmt.Errorf("RPC %s additional binding %d: %w", method.Desc.FullName(), binding.Index, err)
 				}
 
-				if methodName != "" {
-					defaultHost := proto.GetExtension(service.Desc.Options(), annotations.E_DefaultHost).(string)
+				op, openAPIPath := g.buildOperationV3(
+					d, operationID, service.GoName, comment, defaultHost, binding, inputMessage, outputMessage)
 
-					op, path2 := g.buildOperationV3(
-						d, operationID, service.GoName, comment, defaultHost, path, body, inputMessage, outputMessage)
+				// Merge any `Operation` annotations with the current.
+				extOperation := proto.GetExtension(method.Desc.Options(), v3.E_Operation)
+				if extOperation != nil {
+					proto.Merge(op, extOperation.(*v3.Operation))
+				}
+				g.applyOpenKratosErrorResponses(d, op)
 
-					// Merge any `Operation` annotations with the current
-					extOperation := proto.GetExtension(method.Desc.Options(), v3.E_Operation)
-					if extOperation != nil {
-						proto.Merge(op, extOperation.(*v3.Operation))
+				if err := g.addOperationToDocumentV3(d, op, openAPIPath, binding.Method); err != nil {
+					if binding.Index == 0 {
+						return fmt.Errorf("RPC %s: %w", method.Desc.FullName(), err)
 					}
-					g.applyOpenKratosErrorResponses(d, op)
-
-					g.addOperationToDocumentV3(d, op, path2, methodName)
+					return fmt.Errorf("RPC %s additional binding %d: %w", method.Desc.FullName(), binding.Index, err)
 				}
 			}
 		}
@@ -808,6 +803,7 @@ func (g *OpenAPIv3Generator) addPathsToDocumentV3(d *v3.Document, services []*pr
 			d.Tags = append(d.Tags, &v3.Tag{Name: service.GoName, Description: comment})
 		}
 	}
+	return nil
 }
 
 // addSchemaForMessageToDocumentV3 adds the schema to the document if required

@@ -1,6 +1,7 @@
 # OpenAPI 3.2 Generation
 
-Status: Phase 1 implemented and schema-validated; advanced 3.2 features pending
+Status: Core generation and shared HTTP binding semantics implemented and
+schema-validated; advanced 3.2 features pending
 
 ## Decision
 
@@ -21,6 +22,8 @@ needed by current OpenKratos unary HTTP transcoding:
 
 - protobuf request and response schemas;
 - Google HTTP paths, query parameters, bodies, and additional bindings;
+- scalar, repeated, map, message, and whole-message request bodies;
+- `response_body` field projection and `google.api.HttpBody` media types;
 - existing gnostic OpenAPI v3 annotations;
 - merged or source-relative YAML output;
 - deterministic component references;
@@ -93,12 +96,30 @@ with `jsonschema/v6` against libopenapi's embedded official OpenAPI 3.2 schema.
 These dependencies are confined to the generator module and do not enter the
 OpenKratos runtime module.
 
+## Shared HTTP Binding Semantics
+
+`protoc-gen-openapi` and `protoc-gen-go-http` use the same normalized HTTP
+binding analyzer. OpenAPI generation therefore fails on the same invalid
+contracts that runtime code generation rejects, including:
+
+- invalid path, body, query, or `response_body` fields;
+- nested `additional_bindings`;
+- duplicate match sets and structurally conflicting routes.
+
+The OpenAPI generator emits all HTTP methods represented by the current
+gnostic path-item model: `GET`, `PUT`, `POST`, `DELETE`, `OPTIONS`, `HEAD`,
+`PATCH`, and `TRACE`. A custom `google.api.HttpRule` using one of those method
+names is supported. `QUERY` and arbitrary custom method names fail generation
+with an explicit diagnostic instead of being silently omitted.
+
 ## Deliberate Limitations
 
 Declaring version 3.2 does not mean every new OAS 3.2 object is expressible
 from protobuf annotations. Phase 1 intentionally does not claim support for:
 
-- the OAS 3.2 `QUERY` Path Item operation;
+- the OAS 3.2 `QUERY` Path Item operation, because the current gnostic model
+  does not expose it;
+- arbitrary custom HTTP operations outside the standard path-item methods;
 - sequential or streaming media types for streaming RPCs;
 - hierarchical tags and other 3.2-only document metadata;
 - validation-annotation projection into JSON Schema constraints;
@@ -110,10 +131,9 @@ changing only the version string is not sufficient evidence of support.
 
 ## Next Gates
 
-1. Share normalized HTTP binding analysis with `protoc-gen-go-http` so paths,
-   bodies, response projection, and custom verbs cannot drift.
-2. Add a method-level error declaration that links RPC methods to generated
+1. Add a method-level error declaration that links RPC methods to generated
    error enum values, then emit exact status/reason response documentation.
-3. Project supported Protovalidate and field-behavior annotations into JSON
+2. Project supported Protovalidate and field-behavior annotations into JSON
    Schema constraints.
-4. Design explicit `QUERY` and streaming behavior before enabling either.
+3. Replace or extend the gnostic model before enabling `QUERY`, arbitrary
+   operations, or streaming behavior.

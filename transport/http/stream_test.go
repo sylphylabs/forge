@@ -659,6 +659,87 @@ func TestServerStreamDetachesServerTimeout(t *testing.T) {
 	}
 }
 
+func TestServerSentEventStreamSurvivesServerTimeout(t *testing.T) {
+	serverTimedOut := make(chan struct{})
+	srv := NewServer(Timeout(10 * time.Millisecond))
+	srv.Route("/").GET("/events", func(ctx Context) error {
+		stream := NewServerSentEventServerStream(ctx)
+		<-ctx.Request().Context().Done()
+		close(serverTimedOut)
+		if err := stream.Context().Err(); err != nil {
+			return stream.Close(err)
+		}
+		if err := stream.SendMsg(&binding.HelloRequest{Name: "after-timeout"}); err != nil {
+			return stream.Close(err)
+		}
+		return stream.Close(nil)
+	})
+
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	client, err := NewClient(t.Context(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := client.ServerSentEvent(t.Context(), http.MethodGet, "/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-serverTimedOut
+	var out binding.HelloRequest
+	if err := stream.Recv(&out); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.GetName(); got != "after-timeout" {
+		t.Fatalf("stream response name = %q, want after-timeout", got)
+	}
+	if err := stream.Recv(&out); !errors.Is(err, io.EOF) {
+		t.Fatalf("expected EOF, got %v", err)
+	}
+}
+
+func TestWebSocketStreamSurvivesServerTimeout(t *testing.T) {
+	serverTimedOut := make(chan struct{})
+	srv := NewServer(Timeout(10 * time.Millisecond))
+	srv.Route("/").GET("/ws", func(ctx Context) error {
+		stream, err := NewWebSocketServerStream(ctx)
+		if err != nil {
+			return err
+		}
+		<-ctx.Request().Context().Done()
+		close(serverTimedOut)
+		if err := stream.Context().Err(); err != nil {
+			return stream.Close(err)
+		}
+		if err := stream.SendMsg(&binding.HelloRequest{Name: "after-timeout"}); err != nil {
+			return stream.Close(err)
+		}
+		return stream.Close(nil)
+	})
+
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	client, err := NewClient(t.Context(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := client.WebSocket(t.Context(), "/ws")
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-serverTimedOut
+	var out binding.HelloRequest
+	if err := stream.Recv(&out); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.GetName(); got != "after-timeout" {
+		t.Fatalf("stream response name = %q, want after-timeout", got)
+	}
+	if err := stream.Recv(&out); !errors.Is(err, io.EOF) {
+		t.Fatalf("expected EOF, got %v", err)
+	}
+}
+
 type closeCountingBody struct {
 	closed int
 }
