@@ -2,7 +2,7 @@
 
 Status: pre-release
 
-Last verified: July 23, 2026
+Last verified: July 25, 2026
 
 OpenKratos is an independent fork of `go-kratos/kratos`. It is not a drop-in
 replacement for Kratos v3 and does not promise source, behavior, or release
@@ -54,6 +54,7 @@ upstream revision explicitly.
 | App shutdown | Repeated stop and stage errors were not fully defined | Idempotent stop, joined errors, bounded after-stop stage | API and behavior change |
 | Config watch | Sources could be observed in a partially reloaded state | Complete resolved snapshots are published atomically | Behavior change |
 | OTel attributes | Legacy semconv and mixed transport attributes | semconv v1.41 transport-specific attributes | Telemetry schema change |
+| OTel metrics | Generic unary middleware with custom names, `code`, and `reason` | HTTP semconv v1.41 duration histograms and grpc-go A66 duration metrics | Source and telemetry schema breaking |
 
 ## Repository Identity and Versions
 
@@ -83,7 +84,7 @@ and CI use Go 1.27 RC2. The upstream baseline requires Go 1.25. Projects that
 must remain on Go 1.25 or Go 1.26 cannot migrate to OpenKratos without upgrading
 their toolchain.
 
-The repository currently contains 26 Go modules. Running `go test ./...` at the
+The repository currently contains 27 Go modules. Running `go test ./...` at the
 root does not test nested modules; use the repository commands documented in
 [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
@@ -319,6 +320,22 @@ are emitted separately, peer ports are integers, gRPC methods are validated,
 and invalid original method strings remain available for diagnosis. The former
 custom `rpc.status_code` field is now `kratos.error.code`, avoiding collision
 with standard RPC semantic attributes.
+
+Metrics are transport-native and duration-only. HTTP uses the stable v1.41
+`http.server.request.duration` and `http.client.request.duration` histograms.
+gRPC uses grpc-go's gRFC A66 `grpc.client.call.duration`,
+`grpc.client.attempt.duration`, and `grpc.server.call.duration`; OpenKratos does
+not also emit RC `rpc.*` or legacy generic metrics. Providers are mandatory,
+instance-scoped dependencies. SDK readers, exporters, resources, Views,
+cardinality limits, and exemplar policy remain application-owned.
+
+The inherited `metrics.Server`, `metrics.Client`, generic instrument options,
+default instrument/View helpers, and process-environment exemplar helper are
+removed without compatibility shims. HTTP instrumentation now covers the
+native `ServeHTTP` and `RoundTrip` lifecycles instead of unary middleware, and
+grpc-go owns unary, streaming, retry, and hedging lifecycles. The complete
+contract and cardinality policy are defined in
+[`docs/design/otel-metrics.md`](docs/design/otel-metrics.md).
 
 ## Inherited Kratos v3 Behavior
 

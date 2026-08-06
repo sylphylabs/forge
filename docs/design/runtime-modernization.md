@@ -2,7 +2,7 @@
 
 Status: proposed implementation contract
 
-Last reviewed: July 23, 2026
+Last reviewed: July 28, 2026
 
 ## Purpose
 
@@ -23,6 +23,8 @@ work to generation or construction time, and make production behavior testable.
 This contract complements the focused
 [performance design](performance.md), the
 [Google HTTP transcoding contract](google-http-transcoding.md), the
+[application lifecycle contract](application-lifecycle.md), the
+[config lifecycle contract](config-lifecycle.md), the
 [public Protobuf API contract](public-protobuf-api-module.md), and the
 [generated middleware contract](generated-middleware.md). The owned generator
 topology is defined by
@@ -125,7 +127,7 @@ remaining inherited runtime boundaries rather than reopening validated work.
 | Config watchers | `Config.Load` starts retrying watcher goroutines; `Close` stops watchers but does not explicitly join every loop. Source APIs do not accept contexts. | Context-aware load/watch APIs with deterministic close and retry ownership. |
 | Protocol surface | Core transports are HTTP and gRPC; browser and schema consumers need separate integration work. | Optional adapters built from the same generated operation description. |
 | Telemetry configuration | Some paths still default to global OpenTelemetry providers and middleware owns parts of operation interpretation. | Injected providers and a stable, cardinality-bounded operation contract. |
-| Release topology | The repository contains 26 Go modules with temporary local replacements before the first release. | A machine-readable release inventory, support tiers, and external-consumer validation. |
+| Release topology | The repository contains 27 Go modules with temporary local replacements before the first release. | A machine-readable release inventory, support tiers, and external-consumer validation. |
 
 The presence of reflection, allocations, middleware, or telemetry does not by
 itself indicate waste. Most of those operations implement necessary behavior.
@@ -171,6 +173,9 @@ constraints:
 - `App` retains its logger as a dependency and never calls `slog.SetDefault`.
 - Trace and metric providers and text-map propagation can be injected. Explicit
   `nil` or omitted options have documented behavior.
+- The optional [`contrib/otel/message`](../../contrib/otel/message) decorator
+  provides an instance-scoped producer/consumer path for asynchronous message
+  tracing. It does not change the root module's provider or propagator policy.
 - New core code and generated code do not call package-level default-runtime
   helpers. Migration tooling rewrites known legacy helper usage, and any
   temporary adapter lives outside the core module.
@@ -426,16 +431,22 @@ Acceptance gates:
 
 Workstreams are intentionally independent. The expected order is:
 
-1. Complete the release baseline and atomic Buf plugin publication.
-2. Introduce explicit runtime dependencies without changing operation binding.
-3. Redesign application lifecycle and config lifecycle as separate changes.
-4. Land the shared generated operation contract, generated Go middleware plans,
+1. Complete the release baseline and atomic Buf plugin publication in parallel
+   with compatibility-preserving runtime correctness work.
+2. Finish application failure rollback, then harden config watcher ownership
+   without changing either public context API yet.
+3. Freeze and implement one public error projection and privacy contract across
+   HTTP, gRPC, streaming, logging, and recovery boundaries.
+4. Introduce explicit runtime dependencies in owner-sized cuts: selector,
+   codecs, then application logging and telemetry.
+5. Add context-first application and config APIs, transport readiness, and
+   deterministic shutdown after their focused contracts are approved.
+6. Land the shared generated operation contract, generated Go middleware plans,
    and direct registration-time composition.
-5. Add HTTP safety defaults and per-operation budgets using that contract.
-6. Stabilize telemetry on the same operation identity.
-7. Evaluate optional protocol adapters one at a time.
-8. Apply module governance throughout; consolidate only with dependency and
-   release evidence.
+7. Add HTTP safety defaults and per-operation budgets using that contract, then
+   stabilize telemetry on the same operation identity.
+8. Evaluate optional protocol adapters one at a time and apply module governance
+   throughout; consolidate only with dependency and release evidence.
 
 A workstream may prepare private implementation details needed by the next one,
 but it must remain independently reviewable and revertible. No change should

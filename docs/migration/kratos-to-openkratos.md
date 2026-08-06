@@ -356,7 +356,125 @@ Kratos v3 should not undo those migrations.
 The HTTP generator supports Edition 2023 Open and Opaque APIs. Regenerate from
 the schema rather than retaining code produced by the upstream generator.
 
-## 10. Validate the Migration
+## 10. Replace Legacy Metrics Middleware
+
+OpenKratos removes the inherited generic metrics middleware without a
+compatibility shim or a second metric stream. Instrument HTTP at its native
+filter and `RoundTripper` boundaries:
+
+```go
+serverMetrics, err := metrics.NewHTTPServerFilter(provider)
+if err != nil {
+	return err
+}
+server := kratoshttp.NewServer(kratoshttp.Filter(serverMetrics))
+
+clientMetrics, err := metrics.NewHTTPClientWrapper(provider)
+if err != nil {
+	return err
+}
+client, err := kratoshttp.NewClient(
+	ctx,
+	kratoshttp.WithEndpoint(endpoint),
+	kratoshttp.WithRoundTripperWrapper(clientMetrics),
+)
+```
+
+The MeterProvider is required. Pass `metric/noop.NewMeterProvider()` when an
+explicitly disabled path is needed; the package does not read the global
+provider or silently install a no-op provider.
+
+Use grpc-go's gRFC A66 implementation directly for gRPC:
+
+```go
+metricSet := grpcstats.NewMetricSet(
+	grpcotel.ClientCallDurationMetricName,
+	grpcotel.ClientAttemptDurationMetricName,
+	grpcotel.ServerCallDurationMetricName,
+)
+otelOptions := grpcotel.Options{
+	MetricsOptions: grpcotel.MetricsOptions{
+		MeterProvider: provider,
+		Metrics:       metricSet,
+	},
+}
+
+server := kratosgrpc.NewServer(
+	kratosgrpc.Options(grpcotel.ServerOption(otelOptions)),
+)
+conn, err := kratosgrpc.NewClient(
+	ctx,
+	kratosgrpc.WithOptions(grpcotel.DialOption(otelOptions)),
+)
+```
+
+Do not leave `Metrics` nil and do not use `DefaultMetrics()`. Either choice
+enables started and message-size metrics and may adopt future grpc-go defaults.
+Keep `TraceOptions` at its zero value when existing tracing is installed, or
+the service can create duplicate spans.
+
+Replace the old API as follows:
+
+| Kratos API | OpenKratos replacement |
+| --- | --- |
+| `metrics.Server(...)` | `metrics.NewHTTPServerFilter(provider, ...)` for HTTP; `grpcotel.ServerOption` for gRPC |
+| `metrics.Client(...)` | `metrics.NewHTTPClientWrapper(provider, ...)` for HTTP; `grpcotel.DialOption` for gRPC |
+| `Option`, `WithRequests`, `WithSeconds` | Removed; the transport-specific constructor owns its fixed instrument set |
+| `DefaultRequestsCounter` | Use the duration histogram's count |
+| `DefaultSecondsHistogram` and `Default*` names | Fixed HTTP semconv or gRPC A66 instruments |
+| `DefaultSecondsHistogramView` | An application SDK View |
+| `EnableOTELExemplar` | `sdkmetric.WithExemplarFilter(...)` or `OTEL_METRICS_EXEMPLAR_FILTER` in application configuration |
+
+Metric streams change as follows. The old generic stream was split by
+transport, so choose the row matching each old `kind` value:
+
+| Legacy instrument | HTTP replacement | gRPC replacement |
+| --- | --- | --- |
+| `server_requests_seconds` | `http.server.request.duration` | `grpc.server.call.duration` |
+| `client_requests_seconds` | `http.client.request.duration` | `grpc.client.call.duration` |
+| `server_requests_code_total` | `http.server.request.duration` count | `grpc.server.call.duration` count |
+| `client_requests_code_total` | `http.client.request.duration` count | `grpc.client.call.duration` count |
+
+The legacy gRPC client middleware ran once per logical unary call. Migrate its
+rates, error ratios, and latency SLOs to `grpc.client.call.duration`. The A66
+`grpc.client.attempt.duration` stream is additional retry and hedging evidence:
+one logical call can produce multiple attempts, so attempt count is not an
+equivalent replacement. A66 also adds complete streaming lifecycle coverage
+that the legacy unary middleware did not provide.
+
+With standard Prometheus name translation, the duration streams are commonly
+exported as:
+
+| OTel instrument | Prometheus histogram base name |
+| --- | --- |
+| `http.server.request.duration` | `http_server_request_duration_seconds` |
+| `http.client.request.duration` | `http_client_request_duration_seconds` |
+| `grpc.server.call.duration` | `grpc_server_call_duration_seconds` |
+| `grpc.client.call.duration` | `grpc_client_call_duration_seconds` |
+| `grpc.client.attempt.duration` | `grpc_client_attempt_duration_seconds` |
+
+Prometheus histograms expose the base name with `_bucket`, `_sum`, and `_count`
+suffixes. Rewrite counter-based rates to the corresponding `_count` time
+series, preserving only bounded semantic attributes. Exporter or Collector
+translation settings can alter final names, so verify the deployed scrape
+output before changing dashboards and alerts.
+
+The old `kind`, `operation`, `code`, and `reason` labels do not carry forward as
+a bundle. Use the standard protocol-specific method, route/target, status, and
+`error.type` attributes. `reason` has no metric replacement; keep detailed
+business failure reasons in traces and logs. Configure custom histogram buckets
+with an SDK View and exemplar policy on the SDK MeterProvider.
+
+HTTP timing boundaries also change. Server duration covers the complete
+`ServeHTTP` call. Client duration ends when response headers arrive or the
+transport fails, so it no longer includes response-body reads or the Kratos
+decoder. Redirect attempts are independent `RoundTrip` measurements. Review
+latency SLOs rather than comparing the new and old client series as equivalent.
+
+The complete attribute, status, route, cardinality, and lifecycle contract is
+in [`docs/design/otel-metrics.md`](../design/otel-metrics.md).
+
+## 11. Validate the Migration
 
 Run generation before tests so stale imports cannot hide in generated files:
 
@@ -390,5 +508,8 @@ graceful shutdown in integration tests used by the service.
 - [ ] Keep `BuildPath` for dynamic templates; compile repeated fixed templates once.
 - [ ] Review body/query classification, ProtoJSON wire values, and `%2F` paths.
 - [ ] Define explicit HTTP stream lifetime policies.
+- [ ] Replace generic metrics middleware with the HTTP filter/wrapper and explicit gRPC A66 metric set.
+- [ ] Rewrite counter queries to histogram `_count` and remove `reason`-based metric dimensions.
+- [ ] Verify Prometheus names, buckets, exemplars, dashboards, and alerts against deployed exporter output.
 - [ ] Run race tests, vet, and service integration tests.
 - [ ] Review `COMPATIBILITY.md` again before release.

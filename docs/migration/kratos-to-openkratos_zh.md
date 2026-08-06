@@ -337,7 +337,117 @@ OpenKratos 继续使用 Kratos v3 的 `log/slog` 日志模型、兼容标准库�
 HTTP generator 已支持 Edition 2023 Open/Opaque API。应从 schema 重新生成，
 不要继续保留上游 generator 产生的旧代码。
 
-## 10. 验证迁移
+## 10. 替换旧 Metrics Middleware
+
+OpenKratos 直接移除继承的通用 metrics middleware，不提供兼容 shim，也不双发旧
+指标。HTTP 应在原生 filter 与 `RoundTripper` 边界安装：
+
+```go
+serverMetrics, err := metrics.NewHTTPServerFilter(provider)
+if err != nil {
+	return err
+}
+server := kratoshttp.NewServer(kratoshttp.Filter(serverMetrics))
+
+clientMetrics, err := metrics.NewHTTPClientWrapper(provider)
+if err != nil {
+	return err
+}
+client, err := kratoshttp.NewClient(
+	ctx,
+	kratoshttp.WithEndpoint(endpoint),
+	kratoshttp.WithRoundTripperWrapper(clientMetrics),
+)
+```
+
+MeterProvider 是必填依赖。需要显式关闭指标时应传入
+`metric/noop.NewMeterProvider()`；package 不读取 global provider，也不会静默
+安装 no-op provider。
+
+gRPC 直接使用 grpc-go 的 gRFC A66 实现：
+
+```go
+metricSet := grpcstats.NewMetricSet(
+	grpcotel.ClientCallDurationMetricName,
+	grpcotel.ClientAttemptDurationMetricName,
+	grpcotel.ServerCallDurationMetricName,
+)
+otelOptions := grpcotel.Options{
+	MetricsOptions: grpcotel.MetricsOptions{
+		MeterProvider: provider,
+		Metrics:       metricSet,
+	},
+}
+
+server := kratosgrpc.NewServer(
+	kratosgrpc.Options(grpcotel.ServerOption(otelOptions)),
+)
+conn, err := kratosgrpc.NewClient(
+	ctx,
+	kratosgrpc.WithOptions(grpcotel.DialOption(otelOptions)),
+)
+```
+
+不要让 `Metrics` 保持 nil，也不要使用 `DefaultMetrics()`；两者都会启用 started、
+message size 指标，并可能在 grpc-go 升级后自动采用新的默认项。已有 tracing 时让
+`TraceOptions` 保持零值，否则可能产生重复 span。
+
+旧 API 对应关系如下：
+
+| Kratos API | OpenKratos 替代方式 |
+| --- | --- |
+| `metrics.Server(...)` | HTTP 使用 `metrics.NewHTTPServerFilter(provider, ...)`；gRPC 使用 `grpcotel.ServerOption` |
+| `metrics.Client(...)` | HTTP 使用 `metrics.NewHTTPClientWrapper(provider, ...)`；gRPC 使用 `grpcotel.DialOption` |
+| `Option`、`WithRequests`、`WithSeconds` | 已移除；各 transport constructor 拥有固定 instrument 集合 |
+| `DefaultRequestsCounter` | 使用 duration histogram 的 count |
+| `DefaultSecondsHistogram` 与各 `Default*` 名称 | 固定的 HTTP semconv 或 gRPC A66 instrument |
+| `DefaultSecondsHistogramView` | 应用 SDK View |
+| `EnableOTELExemplar` | 应用配置中的 `sdkmetric.WithExemplarFilter(...)` 或 `OTEL_METRICS_EXEMPLAR_FILTER` |
+
+旧通用 stream 按 transport 拆分；应根据旧 `kind` 的值选择对应行：
+
+| 旧 instrument | HTTP 替代 | gRPC 替代 |
+| --- | --- | --- |
+| `server_requests_seconds` | `http.server.request.duration` | `grpc.server.call.duration` |
+| `client_requests_seconds` | `http.client.request.duration` | `grpc.client.call.duration` |
+| `server_requests_code_total` | `http.server.request.duration` count | `grpc.server.call.duration` count |
+| `client_requests_code_total` | `http.client.request.duration` count | `grpc.client.call.duration` count |
+
+旧 gRPC client middleware 每个逻辑 unary call 只执行一次，因此 rate、错误率与
+延迟 SLO 应迁移到 `grpc.client.call.duration`。A66 的
+`grpc.client.attempt.duration` 是新增的 retry/hedging 诊断信号：一个逻辑
+call 可以产生多个 attempt，因此 attempt count 不是等价替代。A66 还新增了
+旧 unary middleware 没有的完整 stream 生命周期覆盖。
+
+使用标准 Prometheus 名称转换时，duration stream 通常导出为：
+
+| OTel instrument | Prometheus histogram 基础名称 |
+| --- | --- |
+| `http.server.request.duration` | `http_server_request_duration_seconds` |
+| `http.client.request.duration` | `http_client_request_duration_seconds` |
+| `grpc.server.call.duration` | `grpc_server_call_duration_seconds` |
+| `grpc.client.call.duration` | `grpc_client_call_duration_seconds` |
+| `grpc.client.attempt.duration` | `grpc_client_attempt_duration_seconds` |
+
+Prometheus histogram 会为基础名称增加 `_bucket`、`_sum` 与 `_count` 后缀。原
+counter rate 查询应改为对应的 `_count` 时序，并且只保留有界的 semantic
+attributes。Exporter 或 Collector 的转换配置可能改变最终名称，因此修改 dashboard
+和 alert 前必须检查实际 scrape 输出。
+
+旧 `kind`、`operation`、`code` 与 `reason` 不会整体迁移。请使用各协议的标准
+method、route/target、status 与 `error.type` 属性。`reason` 没有指标替代项；详细
+业务失败原因应保留在 trace 和 log。自定义 histogram bucket 应由 SDK View 配置，
+exemplar 策略应配置在 SDK MeterProvider 上。
+
+HTTP 计时边界也发生变化。Server duration 覆盖完整 `ServeHTTP` 调用；Client
+duration 在收到 response header 或 transport 失败时结束，不再包含 response body
+读取和 Kratos decoder。Redirect 的每次 `RoundTrip` 独立计量。迁移 latency SLO
+时不能把新旧 client 时序视为等价数据。
+
+完整的属性、状态、路由、基数与生命周期合同见
+[`docs/design/otel-metrics.md`](../design/otel-metrics.md)。
+
+## 11. 验证迁移
 
 先生成代码，再运行测试，避免生成文件中残留旧导入路径：
 
@@ -370,5 +480,8 @@ go vet ./...
 - [ ] 动态模板继续使用 `BuildPath`；重复使用的固定模板只编译一次。
 - [ ] 检查 body/query 分类、ProtoJSON wire value 和 `%2F` 路径。
 - [ ] 为 HTTP stream 定义显式生命周期策略。
+- [ ] 用 HTTP filter/wrapper 与显式 gRPC A66 metric set 替换通用 metrics middleware。
+- [ ] 将 counter 查询改为 histogram `_count`，并移除依赖 `reason` 的指标维度。
+- [ ] 根据实际 exporter 输出验证 Prometheus 名称、bucket、exemplar、dashboard 与 alert。
 - [ ] 运行 race test、vet 和服务集成测试。
 - [ ] 发布前再次检查 `COMPATIBILITY.md`。

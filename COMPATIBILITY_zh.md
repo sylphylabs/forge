@@ -2,7 +2,7 @@
 
 状态：预发布
 
-最后核对：2026 年 7 月 23 日
+最后核对：2026 年 7 月 25 日
 
 本文是 [`COMPATIBILITY.md`](COMPATIBILITY.md) 的中文翻译；如果两份文档存在
 歧义，以英文规范版本为准。
@@ -52,6 +52,7 @@ OpenKratos 也不会仅为了兼容 Kratos 而保留 API。如果已有更清晰
 | App shutdown | 重复 stop 与阶段错误语义不完整 | 幂等 stop、合并错误、受限 after-stop | API 与行为变化 |
 | Config watch | reload 期间可能观察到部分新旧值 | 原子发布完整、已解析的 snapshot | 行为变化 |
 | OTel 属性 | 旧 semconv，transport 属性混用 | semconv v1.41，按 transport 区分 | 遥测 schema 变化 |
+| OTel Metrics | 使用自定义名称、`code` 与 `reason` 的通用 unary middleware | HTTP semconv v1.41 duration histogram 与 grpc-go A66 duration metrics | 源码与遥测 schema 不兼容 |
 
 ## 仓库身份与版本
 
@@ -78,7 +79,7 @@ module tag 不会自动发布嵌套 module。
 OpenKratos 要求 Go 1.27。在 final 工具链发布前，开发与 CI 使用 Go 1.27 RC2。
 上游基线要求 Go 1.25，因此仍需停留在 Go 1.25 或 Go 1.26 的项目无法直接迁移。
 
-仓库当前包含 26 个 Go module。根目录的 `go test ./...` 不会覆盖嵌套 module，
+仓库当前包含 27 个 Go module。根目录的 `go test ./...` 不会覆盖嵌套 module，
 完整验证方式见 [`DEVELOPMENT.md`](DEVELOPMENT.md)。
 
 ## 项目 CLI 与代码生成
@@ -275,6 +276,20 @@ OpenTelemetry tracing 使用 semantic conventions v1.41。HTTP 与 gRPC 属性�
 发出，peer port 使用整数，gRPC method 会被严格校验，同时保留非法原始 method
 便于诊断。原自定义 `rpc.status_code` 字段改为 `kratos.error.code`，避免与标准
 RPC semantic attribute 冲突。
+
+Metrics 改为按 transport 区分且首版只提供 duration histogram。HTTP 使用 v1.41
+Stable `http.server.request.duration` 与 `http.client.request.duration`；gRPC 直接
+使用 grpc-go 的 gRFC A66 `grpc.client.call.duration`、
+`grpc.client.attempt.duration` 与 `grpc.server.call.duration`，不会同时发送 RC
+`rpc.*` 或旧通用指标。Provider 是必填的实例依赖；SDK reader、exporter、
+resource、View、cardinality limit 与 exemplar 策略仍由应用拥有。
+
+继承的 `metrics.Server`、`metrics.Client`、通用 instrument option、默认
+instrument/View helper 与修改进程环境的 exemplar helper 均直接移除，不保留兼容
+shim。HTTP instrumentation 覆盖原生 `ServeHTTP` 与 `RoundTrip` 生命周期，不再
+位于 unary middleware；gRPC 的 unary、stream、retry 与 hedging 生命周期由
+grpc-go 官方实现负责。完整合同与基数策略见
+[`docs/design/otel-metrics.md`](docs/design/otel-metrics.md)。
 
 ## 继承自 Kratos v3 的行为
 
