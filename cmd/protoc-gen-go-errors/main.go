@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/openkratos/kratos/cmd/internal/generator"
+	"github.com/sylphylabs/forge/cmd/internal/generator"
 	"google.golang.org/protobuf/compiler/protogen"
 )
 

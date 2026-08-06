@@ -10,8 +10,8 @@ import (
 
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"github.com/openkratos/kratos/internal/testdata/binding"
-	"github.com/openkratos/kratos/middleware"
+	"github.com/sylphylabs/forge/internal/testdata/binding"
+	"github.com/sylphylabs/forge/middleware"
 )
 
 type benchmarkResponseWriter struct {

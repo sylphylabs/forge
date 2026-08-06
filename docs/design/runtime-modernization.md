@@ -6,13 +6,13 @@ Last reviewed: July 28, 2026
 
 ## Purpose
 
-This document defines the next modernization boundary for OpenKratos. It is a
+This document defines the next modernization boundary for Forge. It is a
 design contract for later implementation, not a statement of current behavior
-and not a speculative feature list. A workstream becomes an OpenKratos
+and not a speculative feature list. A workstream becomes an Forge
 compatibility fact only after its acceptance gates pass and
 [`COMPATIBILITY.md`](../../COMPATIBILITY.md) is updated.
 
-OpenKratos is positioned as a standard-library-first, protocol-correct,
+Forge is positioned as a standard-library-first, protocol-correct,
 embeddable, and verifiable protobuf service runtime. Lower request cost matters,
 but "faster Kratos" is not a sufficient product boundary. A router can be much
 faster in isolation while producing only a small end-to-end improvement once
@@ -33,7 +33,7 @@ replace those focused contracts.
 
 ## Goals
 
-- Allow multiple independent OpenKratos applications to run in one process
+- Allow multiple independent Forge applications to run in one process
   without sharing codecs, logging, telemetry providers, signals, or mutable
   framework state.
 - Make context cancellation, readiness, shutdown, and background goroutine
@@ -53,7 +53,7 @@ replace those focused contracts.
 ## Non-goals
 
 - Replacing `net/http`, gRPC-Go, protobuf reflection, or OpenTelemetry with
-  OpenKratos-owned implementations.
+  Forge-owned implementations.
 - Introducing a dependency-injection container, service locator, or implicit
   process-wide runtime.
 - Rewriting every middleware with generics. Cross-cutting middleware still
@@ -65,7 +65,7 @@ replace those focused contracts.
 - Adding Connect, gRPC-Web, or OpenAPI behavior directly to the root module
   before the shared operation contract is stable.
 - Preserving every Kratos v3 source behavior through permanent compatibility
-  shims. OpenKratos is pre-v1 and may make documented, migratable breaks.
+  shims. Forge is pre-v1 and may make documented, migratable breaks.
 
 ## Design Principles
 
@@ -73,7 +73,7 @@ replace those focused contracts.
    listener, creates a watcher, or installs a provider owns its cancellation and
    waits for its termination.
 2. **No hidden globals on the primary path.** Migration tooling may explain or
-   rewrite legacy global helpers, but OpenKratos core internals use
+   rewrite legacy global helpers, but Forge core internals use
    instance-scoped dependencies.
 3. **Generate facts and wiring points, configure behavior.** Protobuf descriptors
    and HTTP rules determine operation shape at build time. Generated Go RPC
@@ -81,7 +81,7 @@ replace those focused contracts.
    not enter descriptors. Implementations, timeouts, limits, telemetry, and
    deployment policy remain application configuration.
 4. **Standard library first.** Use current Go primitives when they provide the
-   required semantics. Add an abstraction only when OpenKratos must express a
+   required semantics. Add an abstraction only when Forge must express a
    cross-transport contract or isolate an optional dependency.
 5. **Correctness before hot-path work.** Generated and construction-time work
    may remove steady-state reflection or parsing only after wire behavior is
@@ -94,7 +94,7 @@ replace those focused contracts.
 
 ## Current Baseline
 
-OpenKratos already differs materially from its Kratos v3 baseline:
+Forge already differs materially from its Kratos v3 baseline:
 
 - `net/http.ServeMux` owns the HTTP routing tree while a shared parser preserves
   Google path-template behavior.
@@ -147,7 +147,7 @@ Required outcomes:
 - Publish a machine-readable inventory of every module, owner, support tier,
   dependency order, and tag prefix.
 - Remove local `replace` directives from published artifacts.
-- Publish and consume pinned `buf.build/openkratos/go-errors`, `go-http`, and
+- Publish and consume pinned `buf.build/forge/go-errors`, `go-http`, and
   `go-middleware` plugin revisions outside the repository.
 - Build and test a minimal external consumer using only published versions.
 - Record the root, generator, and supported contrib version relationship.
@@ -157,7 +157,7 @@ with the typed operation redesign.
 
 ## Workstream 1: Explicit Runtime Dependencies
 
-OpenKratos must provide a fully instance-scoped path for codecs, logging, and
+Forge must provide a fully instance-scoped path for codecs, logging, and
 telemetry. An application must be able to construct all transports without
 mutating `slog.Default`, the OpenTelemetry globals, or a package codec map.
 
@@ -272,7 +272,7 @@ Acceptance gates:
 
 ## Workstream 4: HTTP Safety and Request Budgets
 
-OpenKratos should make a safe HTTP service straightforward without imposing
+Forge should make a safe HTTP service straightforward without imposing
 incorrect deadlines on streams. Exact default values require a separate table
 and behavior/migration review before implementation.
 
@@ -341,7 +341,7 @@ Each integration requires its own approved design and nested module.
 Candidate boundaries:
 
 - A Connect adapter may expose Connect, gRPC, or gRPC-Web-compatible handlers
-  using an established upstream implementation. OpenKratos must not implement
+  using an established upstream implementation. Forge must not implement
   those wire protocols from scratch.
 - Asynchronous message adapters implement the small
   [`transport/message`](../../transport/message) contract. Broker SDKs,
@@ -352,7 +352,7 @@ Candidate boundaries:
   descriptors, `google.api.HttpRule`, validation annotations, and the shared
   operation model. It is not runtime reflection over registered handlers.
 - Generated schemas and handlers use the same path, body, response projection,
-  and custom-method semantics as OpenKratos HTTP transcoding.
+  and custom-method semantics as Forge HTTP transcoding.
 - Adapter dependencies do not enter the root module dependency graph.
 - Unsupported streaming, metadata, error, or content-type behavior fails
   explicitly rather than degrading silently.
@@ -371,7 +371,7 @@ No adapter is a blocker for the root runtime release.
 
 ## Workstream 7: Stable Telemetry Contract
 
-Telemetry is part of the public operational surface. OpenKratos must define
+Telemetry is part of the public operational surface. Forge must define
 stable operation naming and bounded attributes before adding more instruments.
 
 Required semantics:
@@ -409,7 +409,7 @@ Required policy:
   integration, with an owner and support level.
 - Maintain one release manifest that records module paths, dependency order,
   compatible root versions, and required external smoke tests.
-- Automate checks for stale local replacements, mismatched OpenKratos versions,
+- Automate checks for stale local replacements, mismatched Forge versions,
   missing tags, and modules skipped by root-only tests.
 - Consolidate modules only when they share lifecycle and release cadence and
   doing so does not force large provider SDKs into unrelated dependency graphs.
@@ -505,7 +505,7 @@ must separately cover:
 
 Report throughput and latency percentiles only with the load model, connection
 reuse, concurrency, payload, duration, warmup, and resource limits stated.
-Compare against the previous OpenKratos commit on identical hardware. Upstream
+Compare against the previous Forge commit on identical hardware. Upstream
 Kratos, plain `net/http`, Echo, Connect, or other frameworks may be informative
 comparisons, but they are not acceptance baselines unless behavior and enabled
 features are equivalent.
@@ -529,6 +529,6 @@ A modernization workstream is complete only when:
 - No temporary global fallback, local replacement, experimental dependency, or
   unowned goroutine is left undocumented.
 
-This definition keeps OpenKratos differentiation grounded in observable
+This definition keeps Forge differentiation grounded in observable
 runtime properties: explicit isolation, protocol correctness, safe defaults,
 predictable lifecycle, optional integrations, and evidence-backed cost.

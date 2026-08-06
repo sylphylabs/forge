@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/openkratos/kratos/internal/httprule"
+	"github.com/sylphylabs/forge/internal/httprule"
 	"google.golang.org/genproto/googleapis/api/annotations"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"

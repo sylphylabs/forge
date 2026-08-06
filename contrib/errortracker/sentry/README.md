@@ -18,8 +18,8 @@ sentry.Init(sentry.ClientOptions{
 import (
 	"context"
 
-	ksentry "github.com/openkratos/kratos/contrib/errortracker/sentry"
-	"github.com/openkratos/kratos/contrib/otel/tracing"
+	ksentry "github.com/sylphylabs/forge/contrib/errortracker/sentry"
+	"github.com/sylphylabs/forge/contrib/otel/tracing"
 )
 
 // Build one generated service plan for HTTP and gRPC.

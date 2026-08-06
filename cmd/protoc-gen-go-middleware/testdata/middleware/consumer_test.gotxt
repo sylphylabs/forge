@@ -9,7 +9,7 @@ import (
 
 	"google.golang.org/grpc/metadata"
 
-	"github.com/openkratos/kratos/middleware"
+	"github.com/sylphylabs/forge/middleware"
 )
 
 type testContextKey struct{}

@@ -12,14 +12,14 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"github.com/openkratos/kratos/encoding"
-	bdtest "github.com/openkratos/kratos/internal/testdata/binding"
-	"github.com/openkratos/kratos/internal/testdata/complex"
-	ectest "github.com/openkratos/kratos/internal/testdata/encoding"
+	"github.com/sylphylabs/forge/encoding"
+	bdtest "github.com/sylphylabs/forge/internal/testdata/binding"
+	"github.com/sylphylabs/forge/internal/testdata/complex"
+	ectest "github.com/sylphylabs/forge/internal/testdata/encoding"
 )
 
 // This variable can be replaced with -ldflags like below:
-// go test "-ldflags=-X github.com/openkratos/kratos/encoding/form.tagNameTest=form"
+// go test "-ldflags=-X github.com/sylphylabs/forge/encoding/form.tagNameTest=form"
 var tagNameTest string
 
 func init() {

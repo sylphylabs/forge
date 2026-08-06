@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-zookeeper/zk"
 
-	"github.com/openkratos/kratos/registry"
+	"github.com/sylphylabs/forge/registry"
 )
 
 func TestRegistry_GetService(t *testing.T) {

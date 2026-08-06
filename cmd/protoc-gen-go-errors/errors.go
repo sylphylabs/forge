@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"strings"
 
-	errorapi "github.com/openkratos/api/errors/v1"
-	"github.com/openkratos/kratos/cmd/internal/generator"
+	errorapi "github.com/sylphylabs/forge/api/errors/v1"
+	"github.com/sylphylabs/forge/cmd/internal/generator"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 )
 
 const (
-	errorsPackage = protogen.GoImportPath("github.com/openkratos/kratos/errors")
+	errorsPackage = protogen.GoImportPath("github.com/sylphylabs/forge/errors")
 	fmtPackage    = protogen.GoImportPath("fmt")
 )
 
@@ -91,7 +91,7 @@ func emitErrorFile(gen *protogen.Plugin, file *protogen.File, facts *errorFile) 
 	g.P()
 	g.QualifiedGoIdent(fmtPackage.Ident(""))
 	g.P("// This is a compile-time assertion to ensure that this generated file")
-	g.P("// is compatible with the OpenKratos package it is being compiled against.")
+	g.P("// is compatible with the Forge package it is being compiled against.")
 	g.P("const _ = ", errorsPackage.Ident("SupportPackageIsVersion1"))
 	g.P()
 	for _, wrapper := range facts.wrappers {

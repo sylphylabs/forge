@@ -13,12 +13,12 @@ import (
 	"sync/atomic"
 	"unicode"
 
-	kratoserrors "github.com/openkratos/kratos/errors"
-	"github.com/openkratos/kratos/internal/httprule"
-	"github.com/openkratos/kratos/transport"
+	kratoserrors "github.com/sylphylabs/forge/errors"
+	"github.com/sylphylabs/forge/internal/httprule"
+	"github.com/sylphylabs/forge/transport"
 )
 
-const internalPathValuePrefix = "__openkratos"
+const internalPathValuePrefix = "__forge"
 
 type routeContextKey struct{}
 

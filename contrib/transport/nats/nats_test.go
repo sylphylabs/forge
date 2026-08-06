@@ -11,8 +11,8 @@ import (
 	server "github.com/nats-io/nats-server/v2/server"
 	natsgo "github.com/nats-io/nats.go"
 
-	"github.com/openkratos/kratos/metadata"
-	"github.com/openkratos/kratos/transport/message"
+	"github.com/sylphylabs/forge/metadata"
+	"github.com/sylphylabs/forge/transport/message"
 )
 
 func TestPublishSubscribeWithHeaders(t *testing.T) {

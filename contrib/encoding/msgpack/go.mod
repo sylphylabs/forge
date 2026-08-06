@@ -1,9 +1,9 @@
-module github.com/openkratos/kratos/contrib/encoding/msgpack
+module github.com/sylphylabs/forge/contrib/encoding/msgpack
 
 go 1.27rc2
 
 require (
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 )
 
@@ -12,6 +12,5 @@ require (
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 )
 
-replace github.com/openkratos/kratos => ../../../
+replace github.com/sylphylabs/forge => ../../../
 
-replace github.com/openkratos/api => ../../../../OpenKratos-api

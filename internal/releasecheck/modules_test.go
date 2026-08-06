@@ -249,25 +249,7 @@ func validateManifest(t *testing.T, root string, entries []moduleEntry, discover
 		}
 
 		replacements := make(map[string]bool, len(mod.Replace))
-		apiReplaced := false
 		for _, replacement := range mod.Replace {
-			if replacement.Old.Path == "github.com/openkratos/api" {
-				apiReplaced = true
-				if filepath.IsAbs(replacement.New.Path) {
-					t.Errorf("module %q has machine-specific OpenKratos API replace", entry.Module)
-					continue
-				}
-				got, err := filepath.Abs(filepath.Join(root, entry.Path, replacement.New.Path))
-				if err != nil {
-					t.Errorf("resolve OpenKratos API replace in %q: %v", entry.Module, err)
-					continue
-				}
-				want := filepath.Join(filepath.Dir(root), "OpenKratos-api")
-				if filepath.Clean(got) != filepath.Clean(want) {
-					t.Errorf("module %q OpenKratos API replace resolves to %q, want %q", entry.Module, got, want)
-				}
-				continue
-			}
 			target, ok := byModule[replacement.Old.Path]
 			if !ok {
 				continue
@@ -294,9 +276,6 @@ func validateManifest(t *testing.T, root string, entries []moduleEntry, discover
 			if !replacements[dependency] {
 				t.Errorf("module %q has no local replace for internal dependency %q", entry.Module, dependency)
 			}
-		}
-		if !apiReplaced {
-			t.Errorf("module %q has no local pre-publication replace for github.com/openkratos/api", entry.Module)
 		}
 	}
 

@@ -1,20 +1,20 @@
-# OpenKratos Compatibility with Kratos
+# Forge Compatibility with Kratos
 
 Status: pre-release
 
 Last verified: July 25, 2026
 
-OpenKratos is an independent fork of `go-kratos/kratos`. It is not a drop-in
+Forge is an independent fork of `go-kratos/kratos`. It is not a drop-in
 replacement for Kratos v3 and does not promise source, behavior, or release
 compatibility with future Kratos versions.
 
-OpenKratos also does not retain a Kratos API solely for compatibility. An API
+Forge also does not retain a Kratos API solely for compatibility. An API
 may be removed when a clearer or more efficient replacement is available and
 the change is technically justified. Such removals are intentional breaking
 changes and must ship with executable migration guidance.
 
 This document is the source of truth for intentional differences that have
-been accepted and validated in OpenKratos. Work in progress is not a
+been accepted and validated in Forge. Work in progress is not a
 compatibility fact. Proposed and rejected differences belong in
 [`docs/upstream-adoptions.md`](docs/upstream-adoptions.md).
 
@@ -23,7 +23,7 @@ compatibility fact. Proposed and rejected differences belong in
 - Upstream repository: `https://github.com/go-kratos/kratos`
 - Initial upstream commit: `668db92c2c001e9552594ba5a8aede8456af6d7e`
 - Initial upstream release line: Kratos v3
-- OpenKratos release line: v0, currently unreleased
+- Forge release line: v0, currently unreleased
 
 The baseline commit matters because upstream `main` continues to change. An
 entry below describes a difference from that baseline unless it links a newer
@@ -31,15 +31,15 @@ upstream revision explicitly.
 
 ## Compatibility Summary
 
-| Area | Kratos v3 baseline | OpenKratos | Impact |
+| Area | Kratos v3 baseline | Forge | Impact |
 | --- | --- | --- | --- |
-| Root module | `github.com/go-kratos/kratos/v3` | `github.com/openkratos/kratos` | Source breaking |
+| Root module | `github.com/go-kratos/kratos/v3` | `github.com/sylphylabs/forge` | Source breaking |
 | Release line | v3 | v0 pre-release | Release breaking |
 | Minimum Go version | Go 1.25 | Go 1.27 | Build requirement |
 | Module count | 28, including `cmd/kratos` | 27 | Release and tooling change |
 | Asynchronous message transport | No protocol-neutral async contract | Root module exposes `transport/message`; broker SDK adapters remain optional nested modules | New API; no broker wire compatibility claim |
 | Project CLI | `cmd/kratos` | Removed | Workflow breaking |
-| Protobuf generators | Kratos module paths | OpenKratos module paths | Install path change |
+| Protobuf generators | Kratos module paths | Forge module paths | Install path change |
 | Contrib provider SDKs | Older provider majors and archived direct dependencies | Current stable majors and standard maintained replacements | Source and dependency graph change |
 | UUID generation | `google/uuid` and `gofrs/uuid` | Standard-library `uuid` | Source and generated-ID behavior change |
 | HTTP protobuf generation | Open API field access | Editions 2023 Open and Opaque API accessors | New generated-code capability |
@@ -58,18 +58,18 @@ upstream revision explicitly.
 
 ## Repository Identity and Versions
 
-Every OpenKratos module and generated package uses the
-`github.com/openkratos/kratos` prefix. OpenKratos is on the v0 release line, so
+Every Forge module and generated package uses the
+`github.com/sylphylabs/forge` prefix. Forge is on the v0 release line, so
 its module paths do not carry the upstream `/v3` suffix.
 
 Nested contrib and generator modules follow the same rule. For example:
 
 ```text
 github.com/go-kratos/kratos/contrib/middleware/jwt/v3
-github.com/openkratos/kratos/contrib/middleware/jwt
+github.com/sylphylabs/forge/contrib/middleware/jwt
 
 github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v3
-github.com/openkratos/kratos/cmd
+github.com/sylphylabs/forge/cmd
 ```
 
 Until the first release, local development uses `v0.0.0` requirements and
@@ -79,9 +79,9 @@ does not release nested modules.
 
 ## Toolchain
 
-OpenKratos requires Go 1.27. Until the final toolchain is published, development
+Forge requires Go 1.27. Until the final toolchain is published, development
 and CI use Go 1.27 RC2. The upstream baseline requires Go 1.25. Projects that
-must remain on Go 1.25 or Go 1.26 cannot migrate to OpenKratos without upgrading
+must remain on Go 1.25 or Go 1.26 cannot migrate to Forge without upgrading
 their toolchain.
 
 The repository currently contains 27 Go modules. Running `go test ./...` at the
@@ -90,14 +90,14 @@ root does not test nested modules; use the repository commands documented in
 
 ## Project CLI and Code Generation
 
-OpenKratos does not ship the general `kratos` CLI. The removed module included
+Forge does not ship the general `kratos` CLI. The removed module included
 project scaffolding, source generation wrappers, an application runner, an
 upgrader, and a changelog helper.
 
 The removal is intentional. The upstream scaffold copied a template and
 performed unrestricted byte replacement across copied files. That replacement
 could mutate an embedded protobuf raw descriptor without updating its encoded
-length, producing an initialization panic. OpenKratos does not preserve or
+length, producing an initialization panic. Forge does not preserve or
 repair that implicit source rewriting workflow.
 
 Use explicit tools instead:
@@ -110,17 +110,17 @@ Use explicit tools instead:
 | `kratos upgrade` | `go get`, `go install`, and `go mod tidy` |
 | `kratos changelog` | Git history and GitHub release notes |
 
-Three atomic OpenKratos Protobuf commands share one deterministic source module:
+Three atomic Forge Protobuf commands share one deterministic source module:
 
 ```text
-github.com/openkratos/kratos/cmd/protoc-gen-go-errors
-github.com/openkratos/kratos/cmd/protoc-gen-go-http
-github.com/openkratos/kratos/cmd/protoc-gen-go-middleware
+github.com/sylphylabs/forge/cmd/protoc-gen-go-errors
+github.com/sylphylabs/forge/cmd/protoc-gen-go-http
+github.com/sylphylabs/forge/cmd/protoc-gen-go-middleware
 ```
 
 Each command declares protobuf Editions support through Edition 2024 and emits
 only its owned `_errors.pb.go`, `_http.pb.go`, or `_middleware.pb.go` artifact.
-There is no `protoc-gen-go-openkratos` forwarding command. Real `protoc`
+There is no `protoc-gen-go-forge` forwarding command. Real `protoc`
 fixtures compile and execute Edition 2023 Open and Opaque APIs for message,
 scalar, repeated, map, explicit-presence, and oneof fields.
 
@@ -196,7 +196,7 @@ The isolated before-and-after measurements are recorded in
 
 ## Contrib Provider Dependencies
 
-OpenKratos contrib modules use the current stable Apollo v5, Consul API v2, and
+Forge contrib modules use the current stable Apollo v5, Consul API v2, and
 Nacos SDK v2 module paths. This is source breaking for applications that
 construct the Consul or Nacos providers with SDK types:
 
@@ -215,12 +215,12 @@ do not require the PGV runtime module.
 
 Some current provider SDKs still compile archived transitive packages. Their
 ownership and replacement conditions are documented in
-[`docs/dependency-maintenance.md`](docs/dependency-maintenance.md); OpenKratos
+[`docs/dependency-maintenance.md`](docs/dependency-maintenance.md); Forge
 does not claim that all transitive repositories are maintained.
 
 ## UUID Generation
 
-OpenKratos uses Go 1.27's standard-library `uuid` package for all UUIDs it
+Forge uses Go 1.27's standard-library `uuid` package for all UUIDs it
 generates directly. The root module and contrib providers no longer directly
 depend on `github.com/google/uuid` or `github.com/gofrs/uuid`.
 
@@ -230,13 +230,13 @@ the standard package default (`uuid.New`), which is UUIDv4 in Go 1.27. Services
 that require a stable ID or a specific UUID version must continue to provide an
 explicit application ID.
 
-Provider SDKs may still carry their own UUID packages transitively. OpenKratos
+Provider SDKs may still carry their own UUID packages transitively. Forge
 does not expose those types or add a second direct UUID implementation to hide
 that upstream dependency.
 
 ## HTTP Routing
 
-OpenKratos replaces `github.com/gorilla/mux` with a routing tree built on the
+Forge replaces `github.com/gorilla/mux` with a routing tree built on the
 standard library's `http.ServeMux`. Generated Google AIP paths are compiled to
 standard-library method and path patterns. Matched variables remain available
 through both `transport/http.Context.Vars()` and `http.Request.PathValue()`.
@@ -324,7 +324,7 @@ with standard RPC semantic attributes.
 Metrics are transport-native and duration-only. HTTP uses the stable v1.41
 `http.server.request.duration` and `http.client.request.duration` histograms.
 gRPC uses grpc-go's gRFC A66 `grpc.client.call.duration`,
-`grpc.client.attempt.duration`, and `grpc.server.call.duration`; OpenKratos does
+`grpc.client.attempt.duration`, and `grpc.server.call.duration`; Forge does
 not also emit RC `rpc.*` or legacy generic metrics. Providers are mandatory,
 instance-scoped dependencies. SDK readers, exporters, resources, Views,
 cardinality limits, and exemplar policy remain application-owned.
@@ -339,7 +339,7 @@ contract and cardinality policy are defined in
 
 ## Inherited Kratos v3 Behavior
 
-The following are important Kratos v3 behaviors but are not OpenKratos
+The following are important Kratos v3 behaviors but are not Forge
 differences:
 
 - Logging uses `log/slog`.
@@ -347,14 +347,14 @@ differences:
 - `encoding/json` and `encoding/protojson` are separate codecs.
 - Generated HTTP handlers bind request data before service middleware runs.
 
-These items only move into the difference sections after OpenKratos changes
+These items only move into the difference sections after Forge changes
 their behavior and completes validation.
 
 ## Migration
 
-Follow [`docs/migration/kratos-to-openkratos.md`](docs/migration/kratos-to-openkratos.md)
+Follow [`docs/migration/kratos-to-forge.md`](docs/migration/kratos-to-forge.md)
 for an executable migration checklist. Existing Kratos v2 applications should
-first account for the Kratos v2-to-v3 API changes because OpenKratos starts from
+first account for the Kratos v2-to-v3 API changes because Forge starts from
 the v3 design rather than providing a direct v2 compatibility layer.
 
 ## Maintenance Rules

@@ -1,4 +1,4 @@
-package kratos
+package forge
 
 import (
 	"context"
@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openkratos/kratos/registry"
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/registry"
+	"github.com/sylphylabs/forge/transport"
 )
 
 func TestID(t *testing.T) {

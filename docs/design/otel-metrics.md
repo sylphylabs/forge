@@ -6,10 +6,10 @@ Last reviewed: July 25, 2026
 
 ## Decision
 
-OpenKratos exposes transport-native, duration-only OpenTelemetry metrics. HTTP
+Forge exposes transport-native, duration-only OpenTelemetry metrics. HTTP
 instrumentation follows the stable OpenTelemetry HTTP semantic conventions
 v1.41. gRPC instrumentation is delegated to grpc-go's gRFC A66 implementation.
-The two protocols do not share names or attributes, and OpenKratos does not
+The two protocols do not share names or attributes, and Forge does not
 emit a second compatibility metric stream.
 
 This document is normative for the public API, instrument identity, request
@@ -69,7 +69,7 @@ providers without observing or resetting shared telemetry state.
 ## HTTP API
 
 The HTTP package is
-`github.com/openkratos/kratos/contrib/otel/metrics`:
+`github.com/sylphylabs/forge/contrib/otel/metrics`:
 
 ```go
 func NewHTTPServerFilter(
@@ -143,7 +143,7 @@ The instruments use the OpenTelemetry-recommended advisory boundaries:
  0.5, 0.75, 1, 2.5, 5, 7.5, 10]
 ```
 
-An application may replace these through an SDK View. OpenKratos does not
+An application may replace these through an SDK View. Forge does not
 expose a View helper because Views are an SDK deployment decision, not an
 instrumentation-library API.
 
@@ -195,7 +195,7 @@ clears the standard `http.ServeMux` scratch pattern on entry and sets the
 canonical template on the same request only after a successful final match.
 
 404, 405, route errors, and candidates rejected by path constraints have no
-`http.route`. Internal `ServeMux` templates such as `{__openkratos0}`, raw URL
+`http.route`. Internal `ServeMux` templates such as `{__forge0}`, raw URL
 paths, and query strings MUST NOT be used as fallbacks.
 
 ### Client Lifecycle
@@ -203,7 +203,7 @@ paths, and query strings MUST NOT be used as fallbacks.
 `http.client.request.duration` starts immediately before calling the selected
 base `RoundTripper.RoundTrip`. It ends when response headers are returned or a
 transport error is returned. It includes request upload time but excludes
-response-body reads, OpenKratos response/error decoding, and redirect work
+response-body reads, Forge response/error decoding, and redirect work
 performed by other `RoundTrip` calls. The request context, method, address, and
 port attributes are snapshotted before invoking the base transport, so an inner
 wrapper cannot mutate the recorded identity of the attempt.
@@ -228,7 +228,7 @@ attributes. A panic uses `_OTHER`. Successful requests have no `error.type`.
 
 ## gRPC A66 Integration
 
-OpenKratos does not add a gRPC metrics wrapper. Applications pass grpc-go's
+Forge does not add a gRPC metrics wrapper. Applications pass grpc-go's
 official OpenTelemetry stats options through the existing native option hooks:
 
 ```go
@@ -261,7 +261,7 @@ The metric set MUST be explicit and contain exactly:
 
 Leaving `Metrics` nil or using `DefaultMetrics()` is non-conforming because it
 enables started and message-size instruments and can enable new defaults after
-a grpc-go upgrade. `TraceOptions` remains its zero value. Existing OpenKratos
+a grpc-go upgrade. `TraceOptions` remains its zero value. Existing Forge
 tracing may be installed independently and MUST NOT be duplicated through the
 stats option.
 
@@ -272,7 +272,7 @@ is reported through its official `grpc.OnFinish` integration.
 
 Only grpc-go's A66 attributes `grpc.method`, `grpc.target`, and `grpc.status`
 are emitted. Unregistered or dynamic methods are normalized to `other` by the
-official implementation. OpenKratos does not emit RC `rpc.*` metrics or a
+official implementation. Forge does not emit RC `rpc.*` metrics or a
 second set of gRPC instruments.
 
 ## Cardinality and Data Policy

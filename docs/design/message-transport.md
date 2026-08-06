@@ -7,7 +7,7 @@ Last reviewed: July 24, 2026
 
 ## Decision
 
-OpenKratos adopts a small protocol-neutral asynchronous message contract in
+Forge adopts a small protocol-neutral asynchronous message contract in
 [`transport/message`](../../transport/message). It absorbs the useful parts of
 `tx7do/kratos-transport` without copying its broker abstraction or SDK
 implementations.
@@ -49,7 +49,7 @@ broker API also exposes `any` payloads, arbitrary metadata, raw SDK messages,
 and broker-specific delivery fields. Those fields make a portable contract
 look simpler while moving type and acknowledgement errors to runtime.
 
-OpenKratos therefore keeps the portable envelope deliberately small:
+Forge therefore keeps the portable envelope deliberately small:
 
 ```go
 type Publisher interface {
@@ -135,7 +135,7 @@ existing `any` request ABI. Middleware receives the concrete delivery
 destination. The chain preserves declaration order and leaves
 acknowledgement, retry, dead-letter, and negative-ack policy to the adapter.
 A handler error is therefore an outcome for the adapter to classify, not an
-implicit acknowledgement decision made by OpenKratos.
+implicit acknowledgement decision made by Forge.
 
 Generated protobuf operation metadata may later add a typed codec/handler
 adapter. It must reuse this message lifecycle and operation identity instead

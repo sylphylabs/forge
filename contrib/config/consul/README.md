@@ -4,7 +4,7 @@
 import (
 	"github.com/hashicorp/consul/api/v2"
 
-    "github.com/openkratos/kratos/contrib/config/consul"
+    "github.com/sylphylabs/forge/contrib/config/consul"
 )
 
 func main() {

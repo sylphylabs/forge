@@ -12,8 +12,8 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 
-	"github.com/openkratos/kratos/contrib/registry/nacos"
-	"github.com/openkratos/kratos"
+	"github.com/sylphylabs/forge/contrib/registry/nacos"
+	"github.com/sylphylabs/forge"
 )
 
 func main() {
@@ -34,9 +34,9 @@ func main() {
 	r := nacos.New(client)
 
 	// server
-	app := kratos.New(
-		kratos.Name("helloworld"),
-		kratos.Registrar(r),
+	app := forge.New(
+		forge.Name("helloworld"),
+		forge.Registrar(r),
 	)
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
@@ -55,8 +55,8 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 
-	"github.com/openkratos/kratos/contrib/registry/nacos"
-	"github.com/openkratos/kratos/transport/grpc"
+	"github.com/sylphylabs/forge/contrib/registry/nacos"
+	"github.com/sylphylabs/forge/transport/grpc"
 )
 
 func main() {

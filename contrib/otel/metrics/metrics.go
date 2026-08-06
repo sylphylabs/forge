@@ -1,4 +1,4 @@
-// Package metrics instruments OpenKratos HTTP transports with OpenTelemetry
+// Package metrics instruments Forge HTTP transports with OpenTelemetry
 // semantic-convention metrics.
 package metrics
 
@@ -24,12 +24,12 @@ import (
 	"go.opentelemetry.io/otel/semconv/v1.41.0/httpconv"
 	"golang.org/x/net/http/httpguts"
 
-	kratostransport "github.com/openkratos/kratos/transport"
-	kratoshttp "github.com/openkratos/kratos/transport/http"
+	kratostransport "github.com/sylphylabs/forge/transport"
+	kratoshttp "github.com/sylphylabs/forge/transport/http"
 )
 
 const (
-	instrumentationName = "github.com/openkratos/kratos/contrib/otel/metrics"
+	instrumentationName = "github.com/sylphylabs/forge/contrib/otel/metrics"
 	httpScheme          = "http"
 	httpsScheme         = "https"
 	defaultHTTPPort     = 80
@@ -449,7 +449,7 @@ func requestMethod(known map[string]httpconv.RequestMethodAttr, method string) h
 }
 
 func requestRoute(pattern string) string {
-	if strings.Contains(pattern, "{__openkratos") {
+	if strings.Contains(pattern, "{__forge") {
 		return ""
 	}
 	start := strings.IndexByte(pattern, '/')
@@ -498,7 +498,7 @@ func serverAddressPort(request *http.Request) (string, int) {
 func discoveryLogicalAuthority(request *http.Request) (string, bool) {
 	// Redirect requests inherit their parent's context. Their own URL is the
 	// logical target for that RoundTrip, so only the initial request may use the
-	// OpenKratos discovery endpoint.
+	// Forge discovery endpoint.
 	if request.Response != nil {
 		return "", false
 	}

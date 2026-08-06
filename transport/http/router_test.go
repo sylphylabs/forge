@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openkratos/kratos/internal/host"
+	"github.com/sylphylabs/forge/internal/host"
 )
 
 const appJSONStr = "application/json"

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openkratos/kratos/registry"
+	"github.com/sylphylabs/forge/registry"
 )
 
 var errNodeNotMatch = errors.New("node is not match")

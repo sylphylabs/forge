@@ -6,8 +6,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/openkratos/kratos/errors"
-	"github.com/openkratos/kratos/middleware"
+	"github.com/sylphylabs/forge/errors"
+	"github.com/sylphylabs/forge/middleware"
 )
 
 // Latency is recovery latency context key

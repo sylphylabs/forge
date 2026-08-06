@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/openkratos/kratos/selector"
-	"github.com/openkratos/kratos/selector/node/direct"
+	"github.com/sylphylabs/forge/selector"
+	"github.com/sylphylabs/forge/selector/node/direct"
 )
 
 const (

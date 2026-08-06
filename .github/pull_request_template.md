@@ -1,7 +1,7 @@
 ## Summary
 
 Describe the problem, the chosen design, and why this change belongs in
-OpenKratos.
+Forge.
 
 ## Compatibility
 

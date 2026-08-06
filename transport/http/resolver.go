@@ -8,11 +8,11 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/openkratos/kratos/internal/endpoint"
-	"github.com/openkratos/kratos/internal/subset"
-	"github.com/openkratos/kratos/log"
-	"github.com/openkratos/kratos/registry"
-	"github.com/openkratos/kratos/selector"
+	"github.com/sylphylabs/forge/internal/endpoint"
+	"github.com/sylphylabs/forge/internal/subset"
+	"github.com/sylphylabs/forge/log"
+	"github.com/sylphylabs/forge/registry"
+	"github.com/sylphylabs/forge/selector"
 )
 
 // Target is resolver target

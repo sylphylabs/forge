@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openkratos/kratos/registry"
-	"github.com/openkratos/kratos/selector"
-	"github.com/openkratos/kratos/selector/filter"
+	"github.com/sylphylabs/forge/registry"
+	"github.com/sylphylabs/forge/selector"
+	"github.com/sylphylabs/forge/selector/filter"
 )
 
 func TestWrr(t *testing.T) {

@@ -26,9 +26,9 @@ import (
 	grpcotel "google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/status"
 
-	kratostracing "github.com/openkratos/kratos/contrib/otel/tracing"
-	pb "github.com/openkratos/kratos/internal/testdata/helloworld"
-	kratosgrpc "github.com/openkratos/kratos/transport/grpc"
+	kratostracing "github.com/sylphylabs/forge/contrib/otel/tracing"
+	pb "github.com/sylphylabs/forge/internal/testdata/helloworld"
+	kratosgrpc "github.com/sylphylabs/forge/transport/grpc"
 )
 
 const a66RetryServiceConfig = `{
@@ -45,10 +45,10 @@ const a66RetryServiceConfig = `{
 }`
 
 const (
-	a66ClientStreamingFullMethodName = "/openkratos.metrics.v1.StreamService/ClientStreaming"
-	a66ServerStreamingFullMethodName = "/openkratos.metrics.v1.StreamService/ServerStreaming"
-	a66FullDuplexFullMethodName      = "/openkratos.metrics.v1.StreamService/FullDuplex"
-	a66HalfDuplexFullMethodName      = "/openkratos.metrics.v1.StreamService/HalfDuplex"
+	a66ClientStreamingFullMethodName = "/sylphy.metrics.v1.StreamService/ClientStreaming"
+	a66ServerStreamingFullMethodName = "/sylphy.metrics.v1.StreamService/ServerStreaming"
+	a66FullDuplexFullMethodName      = "/sylphy.metrics.v1.StreamService/FullDuplex"
+	a66HalfDuplexFullMethodName      = "/sylphy.metrics.v1.StreamService/HalfDuplex"
 )
 
 const (
@@ -508,7 +508,7 @@ type a66StreamServiceServer interface {
 }
 
 var a66StreamServiceDesc = grpc.ServiceDesc{
-	ServiceName: "openkratos.metrics.v1.StreamService",
+	ServiceName: "sylphy.metrics.v1.StreamService",
 	HandlerType: (*a66StreamServiceServer)(nil),
 	Streams: []grpc.StreamDesc{
 		{

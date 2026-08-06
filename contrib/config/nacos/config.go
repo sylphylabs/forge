@@ -8,7 +8,7 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/clients/config_client"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 
-	"github.com/openkratos/kratos/config"
+	"github.com/sylphylabs/forge/config"
 )
 
 type Option func(*options)

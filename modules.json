@@ -3,246 +3,326 @@
   "modules": [
     {
       "path": ".",
-      "module": "github.com/openkratos/kratos",
+      "module": "github.com/sylphylabs/forge",
       "kind": "core",
       "support": "core",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "",
+      "dependsOn": [
+        "github.com/sylphylabs/forge/api"
+      ]
+    },
+    {
+      "path": "api",
+      "module": "github.com/sylphylabs/forge/api",
+      "kind": "core",
+      "support": "core",
+      "owner": "sylphylabs-maintainers",
+      "tagPrefix": "api",
       "dependsOn": []
     },
     {
+      "path": "api/testdata/consumer",
+      "module": "example.com/sylphy/api-consumer",
+      "kind": "integration",
+      "support": "core",
+      "owner": "sylphylabs-maintainers",
+      "tagPrefix": "api/testdata/consumer",
+      "dependsOn": [
+        "github.com/sylphylabs/forge/api"
+      ]
+    },
+    {
       "path": "cmd",
-      "module": "github.com/openkratos/kratos/cmd",
+      "module": "github.com/sylphylabs/forge/cmd",
       "kind": "tool",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "cmd",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge",
+        "github.com/sylphylabs/forge/api"
+      ]
     },
     {
       "path": "contrib/config/apollo",
-      "module": "github.com/openkratos/kratos/contrib/config/apollo",
+      "module": "github.com/sylphylabs/forge/contrib/config/apollo",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/config/apollo",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/config/consul",
-      "module": "github.com/openkratos/kratos/contrib/config/consul",
+      "module": "github.com/sylphylabs/forge/contrib/config/consul",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/config/consul",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/config/etcd",
-      "module": "github.com/openkratos/kratos/contrib/config/etcd",
+      "module": "github.com/sylphylabs/forge/contrib/config/etcd",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/config/etcd",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/config/kubernetes",
-      "module": "github.com/openkratos/kratos/contrib/config/kubernetes",
+      "module": "github.com/sylphylabs/forge/contrib/config/kubernetes",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/config/kubernetes",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/config/nacos",
-      "module": "github.com/openkratos/kratos/contrib/config/nacos",
+      "module": "github.com/sylphylabs/forge/contrib/config/nacos",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/config/nacos",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/config/polaris",
-      "module": "github.com/openkratos/kratos/contrib/config/polaris",
+      "module": "github.com/sylphylabs/forge/contrib/config/polaris",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/config/polaris",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/encoding/json",
-      "module": "github.com/openkratos/kratos/contrib/encoding/json",
+      "module": "github.com/sylphylabs/forge/contrib/encoding/json",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/encoding/json",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/encoding/msgpack",
-      "module": "github.com/openkratos/kratos/contrib/encoding/msgpack",
+      "module": "github.com/sylphylabs/forge/contrib/encoding/msgpack",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/encoding/msgpack",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/errortracker/sentry",
-      "module": "github.com/openkratos/kratos/contrib/errortracker/sentry",
+      "module": "github.com/sylphylabs/forge/contrib/errortracker/sentry",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/errortracker/sentry",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge",
+        "github.com/sylphylabs/forge/api"
+      ]
     },
     {
       "path": "contrib/middleware/jwt",
-      "module": "github.com/openkratos/kratos/contrib/middleware/jwt",
+      "module": "github.com/sylphylabs/forge/contrib/middleware/jwt",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/middleware/jwt",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge",
+        "github.com/sylphylabs/forge/api"
+      ]
     },
     {
       "path": "contrib/middleware/validate",
-      "module": "github.com/openkratos/kratos/contrib/middleware/validate",
+      "module": "github.com/sylphylabs/forge/contrib/middleware/validate",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/middleware/validate",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge",
+        "github.com/sylphylabs/forge/api"
+      ]
     },
     {
       "path": "contrib/opensergo",
-      "module": "github.com/openkratos/kratos/contrib/opensergo",
+      "module": "github.com/sylphylabs/forge/contrib/opensergo",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/opensergo",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/otel",
-      "module": "github.com/openkratos/kratos/contrib/otel",
+      "module": "github.com/sylphylabs/forge/contrib/otel",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/otel",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge",
+        "github.com/sylphylabs/forge/api"
+      ]
     },
     {
       "path": "contrib/polaris",
-      "module": "github.com/openkratos/kratos/contrib/polaris",
+      "module": "github.com/sylphylabs/forge/contrib/polaris",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/polaris",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge",
+        "github.com/sylphylabs/forge/api"
+      ]
     },
     {
       "path": "contrib/registry/consul",
-      "module": "github.com/openkratos/kratos/contrib/registry/consul",
+      "module": "github.com/sylphylabs/forge/contrib/registry/consul",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/registry/consul",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/registry/discovery",
-      "module": "github.com/openkratos/kratos/contrib/registry/discovery",
+      "module": "github.com/sylphylabs/forge/contrib/registry/discovery",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/registry/discovery",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/registry/etcd",
-      "module": "github.com/openkratos/kratos/contrib/registry/etcd",
+      "module": "github.com/sylphylabs/forge/contrib/registry/etcd",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/registry/etcd",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/registry/eureka",
-      "module": "github.com/openkratos/kratos/contrib/registry/eureka",
+      "module": "github.com/sylphylabs/forge/contrib/registry/eureka",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/registry/eureka",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/registry/kubernetes",
-      "module": "github.com/openkratos/kratos/contrib/registry/kubernetes",
+      "module": "github.com/sylphylabs/forge/contrib/registry/kubernetes",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/registry/kubernetes",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/registry/nacos",
-      "module": "github.com/openkratos/kratos/contrib/registry/nacos",
+      "module": "github.com/sylphylabs/forge/contrib/registry/nacos",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/registry/nacos",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/registry/polaris",
-      "module": "github.com/openkratos/kratos/contrib/registry/polaris",
+      "module": "github.com/sylphylabs/forge/contrib/registry/polaris",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/registry/polaris",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/registry/servicecomb",
-      "module": "github.com/openkratos/kratos/contrib/registry/servicecomb",
+      "module": "github.com/sylphylabs/forge/contrib/registry/servicecomb",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/registry/servicecomb",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/registry/zookeeper",
-      "module": "github.com/openkratos/kratos/contrib/registry/zookeeper",
+      "module": "github.com/sylphylabs/forge/contrib/registry/zookeeper",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/registry/zookeeper",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/transport/mcp",
-      "module": "github.com/openkratos/kratos/contrib/transport/mcp",
+      "module": "github.com/sylphylabs/forge/contrib/transport/mcp",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/transport/mcp",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     },
     {
       "path": "contrib/transport/nats",
-      "module": "github.com/openkratos/kratos/contrib/transport/nats",
+      "module": "github.com/sylphylabs/forge/contrib/transport/nats",
       "kind": "integration",
       "support": "official",
-      "owner": "openkratos-maintainers",
+      "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/transport/nats",
-      "dependsOn": ["github.com/openkratos/kratos"]
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
     }
   ]
 }

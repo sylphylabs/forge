@@ -6,7 +6,7 @@ import (
 
 	"github.com/polarismesh/polaris-go"
 
-	"github.com/openkratos/kratos/contrib/config/polaris"
+	"github.com/sylphylabs/forge/contrib/config/polaris"
 )
 
 func main() {

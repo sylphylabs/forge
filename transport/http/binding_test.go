@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	kratoserror "github.com/openkratos/kratos/errors"
+	kratoserror "github.com/sylphylabs/forge/errors"
 )
 
 type (

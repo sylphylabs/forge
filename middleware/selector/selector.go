@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/openkratos/kratos/middleware"
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/middleware"
+	"github.com/sylphylabs/forge/transport"
 )
 
 type (

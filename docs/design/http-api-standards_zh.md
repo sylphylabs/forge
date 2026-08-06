@@ -6,12 +6,12 @@ Last reviewed: July 24, 2026
 
 ## Purpose
 
-本文档记录 OpenKratos 设计 HTTP、gRPC、OpenAPI、错误、路由、middleware
+本文档记录 Forge 设计 HTTP、gRPC、OpenAPI、错误、路由、middleware
 和生成器时应参考的公开标准。它不是当前行为声明，也不是一次性功能列表。
-某个标准只有在对应实现、测试和兼容性文档落地后，才成为 OpenKratos 的
+某个标准只有在对应实现、测试和兼容性文档落地后，才成为 Forge 的
 兼容性承诺。
 
-OpenKratos 的目标不是重新实现 HTTP 协议栈。Go 标准库、gRPC-Go、浏览器、
+Forge 的目标不是重新实现 HTTP 协议栈。Go 标准库、gRPC-Go、浏览器、
 代理和网关已经承担大量 wire-level 行为。框架需要做的是：
 
 - 不破坏底层协议语义。
@@ -23,27 +23,27 @@ OpenKratos 的目标不是重新实现 HTTP 协议栈。Go 标准库、gRPC-Go�
 
 本文档将规范分成三档：
 
-- Core：影响 OpenKratos HTTP/gRPC runtime、生成器或兼容性声明的基础规范。
+- Core：影响 Forge HTTP/gRPC runtime、生成器或兼容性声明的基础规范。
 - Optional：适合提供 middleware、helper、contrib package 或生成器选项。
 - Experimental：有产品价值，但规范、生态或代理支持仍需单独确认。
 
 ## Core Standards
 
-| Area | Reference | OpenKratos impact |
+| Area | Reference | Forge impact |
 | --- | --- | --- |
 | HTTP semantics | [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html) | 方法语义、状态码、header、content negotiation、条件请求、range、safe/idempotent/cacheable 是 HTTP runtime 的基础词汇。 |
 | HTTP caching | [RFC 9111](https://www.rfc-editor.org/rfc/rfc9111.html) | Cache-Control、Vary、ETag、Last-Modified、304、412、代理缓存语义会影响 cache/conditional middleware 和文档生成。 |
 | HTTP/1.1 | [RFC 9112](https://www.rfc-editor.org/rfc/rfc9112.html) | Go 标准库处理 wire-level 解析，但框架不能破坏 connection、message framing、trailers 和安全边界。 |
 | HTTP/2 | [RFC 9113](https://www.rfc-editor.org/rfc/rfc9113.html) | gRPC 运行在 HTTP/2 上；stream、header、trailer、cancellation 行为必须保留。 |
-| HTTP/3 | [RFC 9114](https://www.rfc-editor.org/rfc/rfc9114.html) | OpenKratos core 不需要拥有 QUIC 实现，但 API 设计不能假设 HTTP/1.1-only 行为。 |
+| HTTP/3 | [RFC 9114](https://www.rfc-editor.org/rfc/rfc9114.html) | Forge core 不需要拥有 QUIC 实现，但 API 设计不能假设 HTTP/1.1-only 行为。 |
 | URI syntax | [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986.html) | 路由匹配、path escaping、query parsing、reserved characters 和代理转发路径必须以 URI 语义为底线。 |
 | URI templates | [RFC 6570](https://www.rfc-editor.org/rfc/rfc6570.html) | 生成客户端 path expansion、HTTP transcoding 和文档输出时，需要明确模板变量展开规则。 |
-| Problem Details | [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html) | 可作为通用 HTTP API 错误体的互操作参考，但不能无迁移地替换 OpenKratos 现有 {code, reason, message, metadata} 错误契约。 |
+| Problem Details | [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457.html) | 可作为通用 HTTP API 错误体的互操作参考，但不能无迁移地替换 Forge 现有 {code, reason, message, metadata} 错误契约。 |
 | QUERY method | [RFC 10008](https://www.rfc-editor.org/rfc/rfc10008.html) | QUERY 是 safe/idempotent、允许请求体的查询方法。可作为未来路由、OpenAPI 和客户端生成的 opt-in 能力。 |
 
 ## Patch and Partial Update
 
-| Area | Reference | OpenKratos impact |
+| Area | Reference | Forge impact |
 | --- | --- | --- |
 | PATCH method | [RFC 5789](https://www.rfc-editor.org/rfc/rfc5789.html) | 如果框架声明支持标准 PATCH，应明确支持的 patch document media type，而不是仅把 PATCH 当成任意 HTTP verb。 |
 | JSON Pointer | [RFC 6901](https://www.rfc-editor.org/rfc/rfc6901.html) | 适合用于 validation error 字段路径、JSON Patch path、OpenAPI schema error 定位。 |
@@ -52,7 +52,7 @@ OpenKratos 的目标不是重新实现 HTTP 协议栈。Go 标准库、gRPC-Go�
 
 ## Optional Middleware and Helpers
 
-| Area | Reference | OpenKratos impact |
+| Area | Reference | Forge impact |
 | --- | --- | --- |
 | Structured Fields | [RFC 9651](https://www.rfc-editor.org/rfc/rfc9651.html) | 新设计 HTTP header 时优先采用 structured fields，避免自定义逗号、分号和 quoted-string 解析。 |
 | Web Linking | [RFC 8288](https://www.rfc-editor.org/rfc/rfc8288.html) | Pagination、schema discovery、alternate representation、deprecation docs 可通过 Link 表达。 |
@@ -67,7 +67,7 @@ OpenKratos 的目标不是重新实现 HTTP 协议栈。Go 标准库、gRPC-Go�
 
 ## Proxy and Deployment Boundary
 
-| Area | Reference | OpenKratos impact |
+| Area | Reference | Forge impact |
 | --- | --- | --- |
 | Forwarded header | [RFC 7239](https://www.rfc-editor.org/rfc/rfc7239.html) | 真实 client IP、scheme、host 应通过可信代理配置解析；框架不能默认信任所有 forwarded headers。 |
 | Proxy-Status | [RFC 9209](https://www.rfc-editor.org/rfc/rfc9209.html) | 网关、反向代理、service mesh 错误定位可通过 Proxy-Status 暴露，但应用 runtime 不应伪造代理链路事实。 |
@@ -80,7 +80,7 @@ Recommended rule:
 
 ## Security and Auth References
 
-| Area | Reference | OpenKratos impact |
+| Area | Reference | Forge impact |
 | --- | --- | --- |
 | Bearer token | [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750.html) | Authorization: Bearer、错误响应 header 和 token 使用方式应按该 RFC 设计。 |
 | OAuth 2.0 Security BCP | [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700.html) | 框架不应内置过时 OAuth 安全建议；认证 middleware 和示例应参考最新 BCP。 |
@@ -98,18 +98,18 @@ Recommended rule:
 README 和兼容性文档里保留 experimental 说明，并在 release 前重新检查 IETF
 Datatracker 状态。
 
-| Area | Reference | OpenKratos impact |
+| Area | Reference | Forge impact |
 | --- | --- | --- |
 | RateLimit fields | IETF HTTPAPI RateLimit draft | 适合限流 middleware 输出统一 header。429 状态码本身已由 RFC 6585 定义，但 RateLimit header 字段仍需在发布前复核草案状态。 |
 | Idempotency-Key | IETF HTTPAPI Idempotency-Key draft | 适合支付、创建资源、外部回调等场景；core 可以提供接口，但存储、过期和冲突策略应由应用或 contrib 实现。 |
 
 ## Important Non-RFC Standards
 
-| Area | Reference | OpenKratos impact |
+| Area | Reference | Forge impact |
 | --- | --- | --- |
-| OpenAPI | OpenAPI Specification | OpenAPI 不是 IETF RFC。OpenKratos 的 OpenAPI 生成器应按 OAS 3.1+ 的 JSON Schema 语义设计，而不是用 RFC 9457 或 Protobuf descriptor 替代 API 文档契约。 |
+| OpenAPI | OpenAPI Specification | OpenAPI 不是 IETF RFC。Forge 的 OpenAPI 生成器应按 OAS 3.1+ 的 JSON Schema 语义设计，而不是用 RFC 9457 或 Protobuf descriptor 替代 API 文档契约。 |
 | CORS | WHATWG Fetch | CORS 不是 RFC。preflight、credentials、exposed headers 和 browser enforcement 应参考 Fetch 标准。 |
-| gRPC protocol | gRPC HTTP/2 protocol | gRPC 不是 RFC。google.rpc.Status 是 gRPC/Google API 生态的错误模型，不等同于 OpenKratos HTTP JSON 错误体。 |
+| gRPC protocol | gRPC HTTP/2 protocol | gRPC 不是 RFC。google.rpc.Status 是 gRPC/Google API 生态的错误模型，不等同于 Forge HTTP JSON 错误体。 |
 | Google API HTTP annotations | google.api.HttpRule | HTTP transcoding 的 path、body、response_body 和 additional_bindings 应以 vendored proto contract 和 conformance tests 为准。 |
 | Protobuf JSON | Protobuf JSON Mapping | HTTP JSON 编解码应遵守 Protobuf JSON，而不是 Go encoding/json 的普通 struct 规则。 |
 
@@ -117,13 +117,13 @@ Datatracker 状态。
 
 ### Error model
 
-OpenKratos 当前保留 {code, reason, message, metadata} 四字段 HTTP JSON
+Forge 当前保留 {code, reason, message, metadata} 四字段 HTTP JSON
 错误契约。gRPC transport 可以映射为 google.rpc.Status 加
 google.rpc.ErrorInfo，但这不意味着 HTTP/OpenAPI 层可以忽略错误 schema。
 
 Guidance:
 
-- HTTP/OpenAPI 文档应描述 OpenKratos HTTP JSON 错误体。
+- HTTP/OpenAPI 文档应描述 Forge HTTP JSON 错误体。
 - gRPC 文档应描述 canonical gRPC code、message 和 ErrorInfo details。
 - RFC 9457 可以作为未来兼容扩展或替代格式的参考，但必须通过显式迁移文档落地。
 
@@ -163,7 +163,7 @@ Guidance:
 
 ## Acceptance Checklist
 
-新增或修改 OpenKratos HTTP/API 功能时，至少检查：
+新增或修改 Forge HTTP/API 功能时，至少检查：
 
 - 是否依赖某个 RFC 或非 RFC 生态规范。
 - 该规范属于 core、optional 还是 experimental。
@@ -176,7 +176,7 @@ Guidance:
 ## Current Open Questions
 
 - OpenAPI 生成器的长期目标版本应固定在 OAS 3.1，还是允许 OAS 3.2 作为可选输出。
-- 是否引入 OpenKratos 自有 annotation 来描述 error responses，或继续复用已有错误 enum 注解生成 response status/reason 文档。
+- 是否引入 Forge 自有 annotation 来描述 error responses，或继续复用已有错误 enum 注解生成 response status/reason 文档。
 - QUERY 是否应进入 core router 支持，还是只在生成器和文档层 opt-in。
 - RateLimit 和 Idempotency-Key 在标准稳定前是否只提供 contrib 实现。
 - 是否为 RFC 9651 structured fields 提供小型解析/格式化 helper，还是完全交给应用代码。

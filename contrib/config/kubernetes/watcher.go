@@ -8,7 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 
-	"github.com/openkratos/kratos/config"
+	"github.com/sylphylabs/forge/config"
 )
 
 type watcher struct {

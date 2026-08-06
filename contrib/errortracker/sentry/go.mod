@@ -1,10 +1,10 @@
-module github.com/openkratos/kratos/contrib/errortracker/sentry
+module github.com/sylphylabs/forge/contrib/errortracker/sentry
 
 go 1.27rc2
 
 require (
 	github.com/getsentry/sentry-go v0.48.0
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 )
 
 require (
@@ -12,7 +12,7 @@ require (
 	github.com/go-playground/form/v4 v4.3.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/kr/text v0.2.0 // indirect
-	github.com/openkratos/api v0.0.0 // indirect
+	github.com/sylphylabs/forge/api v0.0.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
@@ -23,6 +23,6 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/openkratos/kratos => ../../../
+replace github.com/sylphylabs/forge => ../../../
 
-replace github.com/openkratos/api => ../../../../OpenKratos-api
+replace github.com/sylphylabs/forge/api => ../../../api

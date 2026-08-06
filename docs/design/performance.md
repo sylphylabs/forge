@@ -6,10 +6,10 @@ Last verified: July 22, 2026
 
 ## Purpose
 
-This document records OpenKratos performance investigations, adoption decisions,
+This document records Forge performance investigations, adoption decisions,
 acceptance criteria, and follow-up work. Reported upstream benchmark results are
-inputs to our investigation, not OpenKratos release claims. A result becomes an
-OpenKratos result only after it is reproduced against an OpenKratos baseline on
+inputs to our investigation, not Forge release claims. A result becomes an
+Forge result only after it is reproduced against an Forge baseline on
 the same machine and Go toolchain.
 
 Individual upstream review outcomes and provenance are tracked in
@@ -33,7 +33,7 @@ Individual upstream review outcomes and provenance are tracked in
   end-to-end RPC latency.
 - WRR and P2C improvements are not added together. A request normally uses one
   balancing strategy, not both.
-- OpenKratos does not adopt an unreleased Go API only because it appears on a
+- Forge does not adopt an unreleased Go API only because it appears on a
   milestone. The final API and toolchain baseline must be reviewed first.
 
 ## Current Decisions
@@ -54,7 +54,7 @@ Individual upstream review outcomes and provenance are tracked in
 Upstream issue [go-kratos/kratos#3820](https://github.com/go-kratos/kratos/issues/3820)
 identified Gorilla mux routing as a candidate request-path cost. Go's
 `net/http.ServeMux` provides method patterns, path wildcards, precedence rules,
-and `Request.PathValue`. OpenKratos can use it for the routing tree while keeping
+and `Request.PathValue`. Forge can use it for the routing tree while keeping
 Google AIP template expansion in a small internal adapter.
 
 ### Compatibility boundary
@@ -83,7 +83,7 @@ recorded in `DEVELOPMENT.md`.
 The implementation and focused benchmarks are present in
 `transport/http/routing.go` and `transport/http/routing_benchmark_test.go`.
 
-### OpenKratos result
+### Forge result
 
 Ten-sample Apple M5 Pro measurements on Go 1.26.4 cover static hits, parameter
 hits, public parameter reads, misses, and parallel dispatch with 1, 100, and
@@ -106,8 +106,8 @@ environment details, and statistical results are in the
 
 - Upstream PR: [go-kratos/kratos#3831](https://github.com/go-kratos/kratos/pull/3831)
 - Upstream commit: `15639816e6a0d0f7f05bbcc865bd0f70e996e15e`
-- OpenKratos adoption commit: `42b647be57a1cff372346c42aceb0bfba2e1e99c`
-- OpenKratos acceptance-test commit: `4fa25d1bc3d68a45d0da97e01c82c8785b93d01d`
+- Forge adoption commit: `42b647be57a1cff372346c42aceb0bfba2e1e99c`
+- Forge acceptance-test commit: `4fa25d1bc3d68a45d0da97e01c82c8785b93d01d`
 - Upstream status when verified: open
 
 ### Finding
@@ -130,7 +130,7 @@ has disappeared. WRR selection itself remains O(n).
 ### Upstream-reported result
 
 The upstream PR reports the following Apple M1 Pro, Go 1.26 measurements. They
-remain upstream evidence; the controlled OpenKratos results are recorded below.
+remain upstream evidence; the controlled Forge results are recorded below.
 
 | Benchmark | Before | After | Reported change |
 | --- | ---: | ---: | ---: |
@@ -138,7 +138,7 @@ remain upstream evidence; the controlled OpenKratos results are recorded below.
 | Changing nodes | 232.7 ns/op | 209.2 ns/op | -10.1% |
 | Changing-node allocation | 32 B, 1 alloc | 0 B, 0 alloc | allocation removed |
 
-### OpenKratos result
+### Forge result
 
 Ten-sample Apple M5 Pro measurements on Go 1.26.4 show stable picks improving
 40.1% to 49.6% from 5 to 100 nodes and shared parallel picks improving 45.5%.
@@ -150,7 +150,7 @@ and accepted trade-off are in the
 ### Adoption record
 
 - Upstream authorship and the source SHA are preserved in the local commit.
-- Imports use the OpenKratos module path.
+- Imports use the Forge module path.
 - Equal-length replacement, partial-overlap, and randomized churn invariants are
   retained.
 - Stable, add-only, removal, replacement, and parallel benchmarks are present at
@@ -164,8 +164,8 @@ and accepted trade-off are in the
 
 - Upstream PR: [go-kratos/kratos#3832](https://github.com/go-kratos/kratos/pull/3832)
 - Upstream commit: `584de99479d3c45ec61701a3d51a0ee84473d9c2`
-- OpenKratos adoption commit: `f1246466a2df872e7a4fa05b7e18a212e064fc63`
-- OpenKratos acceptance-test commit: `4fa25d1bc3d68a45d0da97e01c82c8785b93d01d`
+- Forge adoption commit: `f1246466a2df872e7a4fa05b7e18a212e064fc63`
+- Forge acceptance-test commit: `4fa25d1bc3d68a45d0da97e01c82c8785b93d01d`
 - Upstream status when verified: open
 
 ### Finding
@@ -188,14 +188,14 @@ contract, so this is not considered an API compatibility break.
 
 The upstream PR reports the following Apple M1 Pro, Go 1.26,
 `GOMAXPROCS=8` measurements. They remain upstream evidence; the controlled
-OpenKratos results are recorded below.
+Forge results are recorded below.
 
 | Benchmark | Before | After | Reported change |
 | --- | ---: | ---: | ---: |
 | Parallel selection | 329.5 ns/op | 128.1 ns/op | -61.1% |
 | Serial selection | 274.3 ns/op | 273.4 ns/op | no significant change |
 
-### OpenKratos result
+### Forge result
 
 Ten-sample Apple M5 Pro measurements on Go 1.26.4 show parallel improvements of
 17.6%, 38.5%, 54.8%, and 68.6% at GOMAXPROCS 2, 4, 8, and 16 respectively.
@@ -210,7 +210,7 @@ result for a single request.
 ### Adoption record
 
 - Upstream authorship and the source SHA are preserved in the local commit.
-- Imports use the OpenKratos module path.
+- Imports use the Forge module path.
 - Comments rely on the standard library's concurrency-safety contract rather
   than promising an implementation detail.
 - Concurrent sampling, distinct-node selection, and distribution tolerance have
@@ -224,15 +224,15 @@ result for a single request.
 
 - Upstream PR: [go-kratos/kratos#3659](https://github.com/go-kratos/kratos/pull/3659)
 - Upstream commit: `ebe5cf9a26749fc2467e3cf1584b539f0112dcbe`
-- OpenKratos baseline: `4c3d353eac847f9647990b945477add6aca0dec1`
-- OpenKratos implementation: `5a4fea3c01f5853e82be5edda6b41e5e98f0b88c`
+- Forge baseline: `4c3d353eac847f9647990b945477add6aca0dec1`
+- Forge implementation: `5a4fea3c01f5853e82be5edda6b41e5e98f0b88c`
 
 `ContentSubtype` runs while selecting request and response codecs. The adopted
 change adds an exact `application/json` fast path and uses `strings.IndexByte`
 for the remaining delimiter scans. This is a function-level microbenchmark; it
 is not an end-to-end HTTP or RPC latency claim.
 
-### OpenKratos result
+### Forge result
 
 Ten samples were collected on Apple M5 Pro, macOS 27.0, Go 1.26.4,
 `darwin/arm64`, and `GOMAXPROCS=1`. Baseline and current functions were compiled

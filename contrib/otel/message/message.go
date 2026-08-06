@@ -15,11 +15,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/openkratos/kratos/metadata"
-	transportmessage "github.com/openkratos/kratos/transport/message"
+	"github.com/sylphylabs/forge/metadata"
+	transportmessage "github.com/sylphylabs/forge/transport/message"
 )
 
-const instrumentationName = "github.com/openkratos/kratos/contrib/otel/message"
+const instrumentationName = "github.com/sylphylabs/forge/contrib/otel/message"
 
 // ErrNilPublisher reports an instrumentation wrapper without a publisher.
 var ErrNilPublisher = errors.New("otel/message: nil publisher")

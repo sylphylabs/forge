@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	testData "github.com/openkratos/kratos/internal/testdata/encoding"
+	testData "github.com/sylphylabs/forge/internal/testdata/encoding"
 )
 
 func TestName(t *testing.T) {

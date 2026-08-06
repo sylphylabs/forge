@@ -5,8 +5,8 @@ import (
 	"google.golang.org/grpc"
 	grpcmd "google.golang.org/grpc/metadata"
 
-	ic "github.com/openkratos/kratos/internal/context"
-	"github.com/openkratos/kratos/transport"
+	ic "github.com/sylphylabs/forge/internal/context"
+	"github.com/sylphylabs/forge/transport"
 )
 
 // unaryServerInterceptor is a gRPC unary server interceptor

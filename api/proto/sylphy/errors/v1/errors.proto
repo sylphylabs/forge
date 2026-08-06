@@ -1,14 +1,14 @@
 syntax = "proto3";
 
-package openkratos.errors.v1;
+package sylphy.errors.v1;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/openkratos/api/errors/v1;errors";
+option go_package = "github.com/sylphylabs/forge/api/errors/v1;errors";
 option java_multiple_files = true;
-option java_package = "com.github.openkratos.errors.v1";
+option java_package = "com.github.sylphy.errors.v1";
 
-// Status is the portable error representation used by OpenKratos transports.
+// Status is the portable error representation used by Forge transports.
 message Status {
   int32 code = 1;
   string reason = 2;

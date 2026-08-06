@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/openkratos/kratos/selector"
+	"github.com/sylphylabs/forge/selector"
 )
 
 const (

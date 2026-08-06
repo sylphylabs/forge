@@ -3,8 +3,8 @@ package validate
 import (
 	"context"
 
-	"github.com/openkratos/kratos/errors"
-	"github.com/openkratos/kratos/middleware"
+	"github.com/sylphylabs/forge/errors"
+	"github.com/sylphylabs/forge/middleware"
 
 	"buf.build/go/protovalidate"
 	"google.golang.org/protobuf/proto"

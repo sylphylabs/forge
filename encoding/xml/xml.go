@@ -3,7 +3,7 @@ package xml
 import (
 	"encoding/xml"
 
-	"github.com/openkratos/kratos/encoding"
+	"github.com/sylphylabs/forge/encoding"
 )
 
 // Name is the name registered for the xml codec.

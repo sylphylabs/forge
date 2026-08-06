@@ -7,5 +7,5 @@ plugins:
     out: .
     opt:
       - paths=import
-      - module=github.com/openkratos/api
+      - module=github.com/sylphylabs/forge/api
 

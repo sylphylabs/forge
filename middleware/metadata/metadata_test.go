@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/openkratos/kratos/metadata"
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/metadata"
+	"github.com/sylphylabs/forge/transport"
 )
 
 type headerCarrier http.Header

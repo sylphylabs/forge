@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/openkratos/kratos/middleware"
-	kratoshttp "github.com/openkratos/kratos/transport/http"
+	"github.com/sylphylabs/forge/middleware"
+	kratoshttp "github.com/sylphylabs/forge/transport/http"
 )
 
 type middlewareContextKey struct{}
@@ -47,7 +47,7 @@ func TestGeneratedUnaryMiddlewareIsPrecomposed(t *testing.T) {
 	RegisterGreeterHTTPServer(srv, service)
 	for range 2 {
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest(http.MethodGet, "/helloworld/openkratos", nil)
+		request := httptest.NewRequest(http.MethodGet, "/helloworld/forge", nil)
 		srv.ServeHTTP(response, request)
 		if response.Code != http.StatusOK {
 			t.Fatalf("status = %d, body = %q", response.Code, response.Body.String())

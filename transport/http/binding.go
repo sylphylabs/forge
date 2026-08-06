@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/openkratos/kratos/encoding/form"
-	"github.com/openkratos/kratos/errors"
+	"github.com/sylphylabs/forge/encoding/form"
+	"github.com/sylphylabs/forge/errors"
 )
 
 func bindQuery(vars url.Values, target any) error {

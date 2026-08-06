@@ -3,8 +3,8 @@ package grpc
 import (
 	"google.golang.org/grpc/metadata"
 
-	"github.com/openkratos/kratos/selector"
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/selector"
+	"github.com/sylphylabs/forge/transport"
 )
 
 var _ transport.Transporter = (*Transport)(nil)

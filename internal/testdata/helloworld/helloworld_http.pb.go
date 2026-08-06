@@ -8,7 +8,7 @@ package helloworld
 
 import (
 	context "context"
-	http "github.com/openkratos/kratos/transport/http"
+	http "github.com/sylphylabs/forge/transport/http"
 )
 
 // This is a compile-time assertion to ensure that this generated file

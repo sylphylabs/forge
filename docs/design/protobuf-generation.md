@@ -7,10 +7,10 @@ Last reviewed: July 23, 2026
 ## Purpose
 
 This document defines the target ownership, packaging, diagnostics, release,
-and compatibility contract for OpenKratos-owned Go Protobuf generators.
+and compatibility contract for Forge-owned Go Protobuf generators.
 
 The current checkout ships the three atomic commands and no transitional
-`protoc-gen-go-openkratos` executable. The intended Buf plugins are not yet
+`protoc-gen-go-forge` executable. The intended Buf plugins are not yet
 published; local command and fixture evidence must not be presented as public
 BSR acceptance.
 
@@ -23,15 +23,15 @@ behavior is defined by
 
 ## Decision
 
-OpenKratos publishes three independently selectable Buf plugins:
+Forge publishes three independently selectable Buf plugins:
 
 | Buf plugin | Executable | Protoc flag | Responsibility |
 | --- | --- | --- | --- |
-| `buf.build/openkratos/go-errors` | `protoc-gen-go-errors` | `--go-errors_out` | Business error helpers |
-| `buf.build/openkratos/go-http` | `protoc-gen-go-http` | `--go-http_out` | HTTP bindings and Google HTTP transcoding |
-| `buf.build/openkratos/go-middleware` | `protoc-gen-go-middleware` | `--go-middleware_out` | Service middleware plans and HTTP/gRPC wrappers |
+| `buf.build/forge/go-errors` | `protoc-gen-go-errors` | `--go-errors_out` | Business error helpers |
+| `buf.build/forge/go-http` | `protoc-gen-go-http` | `--go-http_out` | HTTP bindings and Google HTTP transcoding |
+| `buf.build/forge/go-middleware` | `protoc-gen-go-middleware` | `--go-middleware_out` | Service middleware plans and HTTP/gRPC wrappers |
 
-The executable names deliberately omit `openkratos`. The Buf owner namespace
+The executable names deliberately omit `forge`. The Buf owner namespace
 already supplies project identity, and repeating it in every plugin and binary
 adds no disambiguating information.
 
@@ -41,7 +41,7 @@ The upstream generators remain independent:
 - `protoc-gen-go-grpc` owns gRPC clients, servers, stream interfaces, handlers,
   and `grpc.ServiceDesc`.
 
-OpenKratos does not wrap, fork, or republish those upstream generators.
+Forge does not wrap, fork, or republish those upstream generators.
 
 ## Why Atomic Plugins
 
@@ -88,7 +88,7 @@ generic plugin framework is introduced.
 The source module identity is fixed as:
 
 ```text
-module github.com/openkratos/kratos/cmd
+module github.com/sylphylabs/forge/cmd
 tag prefix: cmd
 ```
 
@@ -192,15 +192,15 @@ plugins:
     out: gen/go
     opt: paths=source_relative
 
-  - remote: buf.build/openkratos/go-errors:<version>
+  - remote: buf.build/forge/go-errors:<version>
     out: gen/go
     opt: paths=source_relative
 
-  - remote: buf.build/openkratos/go-http:<version>
+  - remote: buf.build/forge/go-http:<version>
     out: gen/go
     opt: paths=source_relative,omitempty=true
 
-  - remote: buf.build/openkratos/go-middleware:<version>
+  - remote: buf.build/forge/go-middleware:<version>
     out: gen/go
     opt: paths=source_relative,http=annotated,grpc=true
 ```
@@ -215,7 +215,7 @@ lock schema module dependencies and is not treated as the plugin-version lock.
 Each plugin independently follows an analyze-then-emit pipeline:
 
 1. Read every file selected for that plugin invocation.
-2. Resolve the public OpenKratos and upstream descriptors it owns.
+2. Resolve the public Forge and upstream descriptors it owns.
 3. Build immutable per-file and per-service facts.
 4. Validate annotations, identifiers, output collisions, and required generated
    contracts.
@@ -235,18 +235,18 @@ error ownership.
 Splitting executables does not remove generated API dependencies. It makes them
 explicit:
 
-- generated error helpers consume the published OpenKratos error descriptor and
+- generated error helpers consume the published Forge error descriptor and
   runtime errors API;
 - generated HTTP bindings consume the documented `transport/http` support
   version;
 - HTTP middleware wrappers compile against the interface emitted by `go-http`;
 - gRPC middleware wrappers compile against interfaces emitted by
   `protoc-gen-go-grpc`;
-- every middleware wrapper consumes the public OpenKratos middleware ABI.
+- every middleware wrapper consumes the public Forge middleware ABI.
 
 Each generated file carries the narrowest compile-time support assertion for
 the runtime package it consumes. The compatibility matrix records plugin,
-OpenKratos API, runtime, `protoc-gen-go`, and `protoc-gen-go-grpc` versions.
+Forge API, runtime, `protoc-gen-go`, and `protoc-gen-go-grpc` versions.
 
 A missing companion plugin or incompatible generated interface must fail at
 generation or Go compilation with an actionable diagnostic. No runtime
@@ -264,7 +264,7 @@ Every plugin release records:
 
 - plugin identity, version, and source commit;
 - supported Protobuf Editions and API levels;
-- compatible OpenKratos API and runtime versions;
+- compatible Forge API and runtime versions;
 - compatible upstream Go and gRPC generator versions where applicable;
 - deterministic generation and external-consumer evidence.
 
@@ -274,8 +274,8 @@ installation contract.
 
 ## Local Cutover
 
-The cutover is intentionally breaking. OpenKratos does not retain a forwarding
-`protoc-gen-go-openkratos` binary.
+The cutover is intentionally breaking. Forge does not retain a forwarding
+`protoc-gen-go-forge` binary.
 
 Implementation proceeds in this order:
 
@@ -340,12 +340,12 @@ The local atomic generation cutover is complete only when:
 - errors, HTTP, and middleware output can be selected independently;
 - shared source code does not create a runtime pass registry or output coupling;
 - generated compatibility failures are explicit and actionable;
-- no active configuration invokes `protoc-gen-go-openkratos` or
-  `--go-openkratos_out`;
+- no active configuration invokes `protoc-gen-go-forge` or
+  `--go-forge_out`;
 - current-behavior and migration documentation names the atomic plugins.
 
 Public release acceptance additionally requires:
 
-- all three intended `buf.build/openkratos/*` plugins are published and pinned;
+- all three intended `buf.build/forge/*` plugins are published and pinned;
 - external generation and compilation pass using published Buf artifacts and
   released Go modules, with no local repository dependency.

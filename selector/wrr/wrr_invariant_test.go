@@ -6,7 +6,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
-	"github.com/openkratos/kratos/selector"
+	"github.com/sylphylabs/forge/selector"
 )
 
 // TestNoStaleEntriesUnderRandomChurn is a differential/property check: after any

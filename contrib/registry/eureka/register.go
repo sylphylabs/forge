@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openkratos/kratos/registry"
+	"github.com/sylphylabs/forge/registry"
 )
 
 var (

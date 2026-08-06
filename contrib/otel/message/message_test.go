@@ -13,7 +13,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
-	transportmessage "github.com/openkratos/kratos/transport/message"
+	transportmessage "github.com/sylphylabs/forge/transport/message"
 )
 
 type recordingPublisher struct {

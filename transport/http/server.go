@@ -9,10 +9,10 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/openkratos/kratos/internal/endpoint"
-	"github.com/openkratos/kratos/internal/host"
-	"github.com/openkratos/kratos/log"
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/internal/endpoint"
+	"github.com/sylphylabs/forge/internal/host"
+	"github.com/sylphylabs/forge/log"
+	"github.com/sylphylabs/forge/transport"
 )
 
 var (

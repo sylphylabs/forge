@@ -17,11 +17,11 @@ import (
 	v1 "github.com/polarismesh/specification/source/go/api/v1/service_manage"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"github.com/openkratos/kratos"
-	"github.com/openkratos/kratos/log"
-	"github.com/openkratos/kratos/selector"
-	"github.com/openkratos/kratos/transport"
-	"github.com/openkratos/kratos/transport/http"
+	"github.com/sylphylabs/forge"
+	"github.com/sylphylabs/forge/log"
+	"github.com/sylphylabs/forge/selector"
+	"github.com/sylphylabs/forge/transport"
+	"github.com/sylphylabs/forge/transport/http"
 )
 
 type router struct {
@@ -52,7 +52,7 @@ func (p *Polaris) NodeFilter(opts ...RouterOption) selector.NodeFilter {
 			Service:   o.service,
 			Metadata:  map[string]string{},
 		}
-		if appInfo, ok := kratos.FromContext(ctx); ok {
+		if appInfo, ok := forge.FromContext(ctx); ok {
 			sourceService.Service = appInfo.Name()
 		}
 

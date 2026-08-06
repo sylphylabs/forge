@@ -1,6 +1,6 @@
-# Contributing to OpenKratos
+# Contributing to Forge
 
-OpenKratos accepts focused bug fixes, performance work, standard-library
+Forge accepts focused bug fixes, performance work, standard-library
 modernization, and carefully justified compatibility changes. It is maintained
 independently from `go-kratos/kratos`.
 
@@ -16,7 +16,7 @@ independently from `go-kratos/kratos`.
    broad compatibility break.
 
 Use the issue templates. A bug report needs a minimal reproduction and exact
-OpenKratos commit or module version. A proposal must define compatibility,
+Forge commit or module version. A proposal must define compatibility,
 migration, and validation before implementation.
 
 ## Design Expectations
@@ -33,7 +33,7 @@ migration, and validation before implementation.
 
 ## Development
 
-OpenKratos requires Go 1.27. The repository contains nested Go modules, so a
+Forge requires Go 1.27. The repository contains nested Go modules, so a
 root-only test does not cover the entire tree.
 
 ```shell

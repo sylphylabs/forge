@@ -18,10 +18,10 @@ import (
 	"testing"
 	"time"
 
-	kratoserrors "github.com/openkratos/kratos/errors"
-	"github.com/openkratos/kratos/internal/host"
-	"github.com/openkratos/kratos/log"
-	"github.com/openkratos/kratos/transport"
+	kratoserrors "github.com/sylphylabs/forge/errors"
+	"github.com/sylphylabs/forge/internal/host"
+	"github.com/sylphylabs/forge/log"
+	"github.com/sylphylabs/forge/transport"
 )
 
 var h = func(w http.ResponseWriter, r *http.Request) {
@@ -353,7 +353,7 @@ func TestMatchedRoutePreservesRequestSemantics(t *testing.T) {
 		if got := request.PathValue("name"); got != "kratos" {
 			t.Fatalf("path value = %q", got)
 		}
-		if got := request.PathValue("__openkratos0"); got != "" {
+		if got := request.PathValue("__forge0"); got != "" {
 			t.Fatalf("internal path value = %q", got)
 		}
 		if got := ctx.Value(contextKey{}); got != "value" {

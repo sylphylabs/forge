@@ -1,7 +1,7 @@
-# OpenKratos NATS Transport
+# Forge NATS Transport
 
 `contrib/transport/nats` adapts core NATS pub/sub to
-`github.com/openkratos/kratos/transport/message`.
+`github.com/sylphylabs/forge/transport/message`.
 
 Example:
 
@@ -16,11 +16,11 @@ Example:
         return err
     }
 
-    app := kratos.New(kratos.Server(server))
+    app := forge.New(forge.Server(server))
     return app.Run()
 
 The adapter implements `message.Publisher` and `message.Subscriber`. It does
-not add NATS to the root OpenKratos module.
+not add NATS to the root Forge module.
 
 ## Semantics
 
@@ -35,7 +35,7 @@ not add NATS to the root OpenKratos module.
   acknowledgement decision to return to the server.
 - `Request` is provided as a NATS-specific helper. Request/reply is not part of
   the broker-neutral `transport/message` contract.
-- `Message.ID` and `Message.Key` are carried in OpenKratos-owned NATS headers.
+- `Message.ID` and `Message.Key` are carried in Forge-owned NATS headers.
   Other headers use the normalized multi-value `metadata.Metadata` model.
 
 This package remains the ephemeral core NATS adapter. Applications that need

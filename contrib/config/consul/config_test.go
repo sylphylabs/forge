@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/consul/api/v2"
 
-	"github.com/openkratos/kratos/config"
+	"github.com/sylphylabs/forge/config"
 )
 
 const testPath = "kratos/test/config"

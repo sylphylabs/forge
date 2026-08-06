@@ -1,4 +1,4 @@
-module github.com/openkratos/api
+module github.com/sylphylabs/forge/api
 
 go 1.23.0
 

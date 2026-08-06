@@ -4,11 +4,11 @@ import (
 	"context"
 	"strings"
 
-	"github.com/openkratos/kratos/errors"
-	"github.com/openkratos/kratos/middleware"
-	"github.com/openkratos/kratos/middleware/ratelimit"
-	"github.com/openkratos/kratos/transport"
-	"github.com/openkratos/kratos/transport/http"
+	"github.com/sylphylabs/forge/errors"
+	"github.com/sylphylabs/forge/middleware"
+	"github.com/sylphylabs/forge/middleware/ratelimit"
+	"github.com/sylphylabs/forge/transport"
+	"github.com/sylphylabs/forge/transport/http"
 
 	"github.com/polarismesh/polaris-go/pkg/model"
 )

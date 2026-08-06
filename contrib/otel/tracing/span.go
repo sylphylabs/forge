@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openkratos/kratos/metadata"
-	"github.com/openkratos/kratos/transport"
-	"github.com/openkratos/kratos/transport/http"
+	"github.com/sylphylabs/forge/metadata"
+	"github.com/sylphylabs/forge/transport"
+	"github.com/sylphylabs/forge/transport/http"
 
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"

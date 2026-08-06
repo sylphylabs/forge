@@ -8,7 +8,7 @@ import (
 
 	clientv3 "go.etcd.io/etcd/client/v3"
 
-	"github.com/openkratos/kratos/config"
+	"github.com/sylphylabs/forge/config"
 )
 
 // Option is etcd config option.

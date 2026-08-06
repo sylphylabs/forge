@@ -1,10 +1,10 @@
-module github.com/openkratos/kratos/contrib/registry/nacos
+module github.com/sylphylabs/forge/contrib/registry/nacos
 
 go 1.27rc2
 
 require (
 	github.com/nacos-group/nacos-sdk-go/v2 v2.3.5
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 	go.uber.org/mock v0.6.0
 )
 
@@ -57,6 +57,5 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace github.com/openkratos/kratos => ../../../
+replace github.com/sylphylabs/forge => ../../../
 
-replace github.com/openkratos/api => ../../../../OpenKratos-api

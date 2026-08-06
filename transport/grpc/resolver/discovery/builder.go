@@ -9,7 +9,7 @@ import (
 
 	"google.golang.org/grpc/resolver"
 
-	"github.com/openkratos/kratos/registry"
+	"github.com/sylphylabs/forge/registry"
 )
 
 const name = "discovery"

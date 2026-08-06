@@ -9,7 +9,7 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 	"github.com/nacos-group/nacos-sdk-go/v2/vo"
 
-	"github.com/openkratos/kratos/config"
+	"github.com/sylphylabs/forge/config"
 )
 
 func TestConfig_Load(t *testing.T) {

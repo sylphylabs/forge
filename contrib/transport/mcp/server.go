@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/transport"
 
 	"github.com/mark3labs/mcp-go/server"
 )

@@ -1,11 +1,11 @@
-module github.com/openkratos/kratos/contrib/registry/servicecomb
+module github.com/sylphylabs/forge/contrib/registry/servicecomb
 
 go 1.27rc2
 
 require (
 	github.com/go-chassis/cari v0.9.0
 	github.com/go-chassis/sc-client v0.7.0
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 )
 
 require (
@@ -21,6 +21,5 @@ require (
 	github.com/stretchr/testify v1.11.1 // indirect
 )
 
-replace github.com/openkratos/kratos => ../../../
+replace github.com/sylphylabs/forge => ../../../
 
-replace github.com/openkratos/api => ../../../../OpenKratos-api

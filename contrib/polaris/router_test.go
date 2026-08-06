@@ -10,9 +10,9 @@ import (
 
 	"github.com/polarismesh/polaris-go"
 
-	"github.com/openkratos/kratos"
-	"github.com/openkratos/kratos/registry"
-	"github.com/openkratos/kratos/selector"
+	"github.com/sylphylabs/forge"
+	"github.com/sylphylabs/forge/registry"
+	"github.com/sylphylabs/forge/selector"
 )
 
 func TestRouter(t *testing.T) {
@@ -169,7 +169,7 @@ func TestRouter(t *testing.T) {
 	}
 
 	f := p.NodeFilter()
-	ctx := kratos.NewContext(context.Background(), &mockApp{})
+	ctx := forge.NewContext(context.Background(), &mockApp{})
 	n := f(ctx, nodes)
 	for _, node := range n {
 		if node.Metadata()["az"] != "1" {

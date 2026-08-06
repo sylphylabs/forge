@@ -141,7 +141,7 @@ proposal must freeze the exact interface, but it must support:
 
 During migration, third-party implementations of the existing
 `transport.Server` interface may use the legacy start-entry barrier. Standard
-OpenKratos transports must use explicit readiness, and the fallback must be
+Forge transports must use explicit readiness, and the fallback must be
 observable so it cannot be mistaken for a strong guarantee.
 
 Service registration begins only after every required transport reports ready.

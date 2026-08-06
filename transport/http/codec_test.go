@@ -11,10 +11,10 @@ import (
 
 	"google.golang.org/genproto/googleapis/api/httpbody"
 
-	"github.com/openkratos/kratos/encoding"
-	_ "github.com/openkratos/kratos/encoding/protojson"
-	"github.com/openkratos/kratos/errors"
-	"github.com/openkratos/kratos/internal/testdata/binding"
+	"github.com/sylphylabs/forge/encoding"
+	_ "github.com/sylphylabs/forge/encoding/protojson"
+	"github.com/sylphylabs/forge/errors"
+	"github.com/sylphylabs/forge/internal/testdata/binding"
 )
 
 func TestDefaultRequestDecoder(t *testing.T) {
@@ -49,7 +49,7 @@ func TestDefaultRequestDecoder(t *testing.T) {
 }
 
 func BenchmarkDefaultRequestDecoder(b *testing.B) {
-	body := []byte(`{"name":"openkratos"}`)
+	body := []byte(`{"name":"forge"}`)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/protojson")
 	var target binding.HelloRequest

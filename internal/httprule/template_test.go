@@ -18,21 +18,21 @@ func TestParse(t *testing.T) {
 		{pattern: "/v1/books", serveMux: "/v1/books"},
 		{
 			pattern:  "/v1/{name}",
-			serveMux: "/v1/{__openkratos0}",
+			serveMux: "/v1/{__forge0}",
 			vars:     []Variable{{FieldPath: "name", Template: "*"}},
 		},
 		{
 			pattern:  "/v1/{name=publishers/*/books/*}",
-			serveMux: "/v1/publishers/{__openkratos0}/books/{__openkratos1}",
+			serveMux: "/v1/publishers/{__forge0}/books/{__forge1}",
 			vars:     []Variable{{FieldPath: "name", Template: "publishers/*/books/*", Multi: true}},
 		},
 		{
 			pattern:  "/v1/{name=**}:archive",
-			serveMux: "/v1/{__openkratos0...}",
+			serveMux: "/v1/{__forge0...}",
 			vars:     []Variable{{FieldPath: "name", Template: "**", Multi: true}},
 		},
-		{pattern: "/v1/*", serveMux: "/v1/{__openkratos0}"},
-		{pattern: "/v1/**", serveMux: "/v1/{__openkratos0...}"},
+		{pattern: "/v1/*", serveMux: "/v1/{__forge0}"},
+		{pattern: "/v1/**", serveMux: "/v1/{__forge0...}"},
 		{pattern: "/v1/books:archive", serveMux: "/v1/books:archive"},
 		{pattern: "/v1/a%2Fb", serveMux: "/v1/a%2Fb"},
 	}
@@ -60,7 +60,7 @@ func TestParseRejectsInvalidTemplates(t *testing.T) {
 		"", "v1/books", "/v1/", "/v1//books", "/v1/{name", "/v1/name}",
 		"/v1/x{name}", "/v1/{name=}", "/v1/{name=foo/**/bar}",
 		"/v1/{name=**}/books", "/v1/{name}/{name}", "/v1/{9name}",
-		"/v1/{__openkratos0}",
+		"/v1/{__forge0}",
 		"/v1/{name=foo:bar}", "/v1/books:", "/v1/books:archive/more",
 		"/v1/a b", "/v1/a%2", "/v1/{name={nested}}",
 	}

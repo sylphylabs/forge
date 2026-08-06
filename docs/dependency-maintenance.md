@@ -6,7 +6,7 @@ Last verified: July 23, 2026
 
 ## Policy
 
-OpenKratos keeps every module on the latest compatible release within its
+Forge keeps every module on the latest compatible release within its
 selected module path. Stable major-version migrations are evaluated separately;
 pre-release majors are not adopted as routine dependency maintenance.
 
@@ -59,7 +59,7 @@ are present in actual `go list -deps` output:
 
 Top-level version forcing cannot remove these imports. Eliminating them requires
 an upstream SDK release or replacing the provider SDK with a narrower client.
-OpenKratos should not fork a complete service SDK merely to hide an archived
+Forge should not fork a complete service SDK merely to hide an archived
 transitive dependency; migration becomes actionable when a maintained
 replacement preserves the provider contract and has executable integration
 coverage.

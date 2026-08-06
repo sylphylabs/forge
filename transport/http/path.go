@@ -13,8 +13,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	"github.com/openkratos/kratos/encoding/form"
-	"github.com/openkratos/kratos/internal/httprule"
+	"github.com/sylphylabs/forge/encoding/form"
+	"github.com/sylphylabs/forge/internal/httprule"
 )
 
 var (

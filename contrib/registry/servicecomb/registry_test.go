@@ -8,7 +8,7 @@ import (
 	pb "github.com/go-chassis/cari/discovery"
 	"github.com/go-chassis/sc-client"
 
-	"github.com/openkratos/kratos/registry"
+	"github.com/sylphylabs/forge/registry"
 )
 
 var r *Registry

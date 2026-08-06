@@ -1,9 +1,9 @@
-module github.com/openkratos/kratos/contrib/config/kubernetes
+module github.com/sylphylabs/forge/contrib/config/kubernetes
 
 go 1.27rc2
 
 require (
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 	k8s.io/api v0.36.2
 	k8s.io/apimachinery v0.36.2
 	k8s.io/client-go v0.36.2
@@ -58,6 +58,5 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-replace github.com/openkratos/kratos => ../../../
+replace github.com/sylphylabs/forge => ../../../
 
-replace github.com/openkratos/api => ../../../../OpenKratos-api

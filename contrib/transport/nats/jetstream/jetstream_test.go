@@ -11,8 +11,8 @@ import (
 	natsgo "github.com/nats-io/nats.go"
 	natsjs "github.com/nats-io/nats.go/jetstream"
 
-	"github.com/openkratos/kratos/metadata"
-	"github.com/openkratos/kratos/transport/message"
+	"github.com/sylphylabs/forge/metadata"
+	"github.com/sylphylabs/forge/transport/message"
 )
 
 const (

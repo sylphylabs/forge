@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/openkratos/kratos/errors"
+	"github.com/sylphylabs/forge/errors"
 )
 
 func TestOnce(t *testing.T) {

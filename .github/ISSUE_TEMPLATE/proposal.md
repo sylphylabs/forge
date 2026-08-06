@@ -17,7 +17,7 @@ behavior. Keep the smallest interface that solves the problem.
 
 ### Compatibility and migration
 
-Compare current Kratos and OpenKratos behavior. Describe source, behavior,
+Compare current Kratos and Forge behavior. Describe source, behavior,
 wire, toolchain, and release impact together with an executable migration path.
 
 ### Validation
@@ -27,5 +27,5 @@ acceptance criteria before implementation begins.
 
 ### Alternatives
 
-Explain why the standard library, an existing OpenKratos API, upstream Kratos,
+Explain why the standard library, an existing Forge API, upstream Kratos,
 or a smaller change does not already solve the problem.

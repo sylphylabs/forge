@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	// external nacos client creation removed; tests use fake client
-	"github.com/openkratos/kratos/registry"
+	"github.com/sylphylabs/forge/registry"
 )
 
 func TestRegistry_Register(t *testing.T) {

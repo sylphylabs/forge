@@ -1,7 +1,7 @@
 version: v2
 modules:
   - path: proto
-    name: buf.build/openkratos/api
+    name: buf.build/sylphylabs/forge
 lint:
   use:
     - STANDARD

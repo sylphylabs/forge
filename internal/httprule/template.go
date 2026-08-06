@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const pathValuePrefix = "__openkratos"
+const pathValuePrefix = "__forge"
 
 var (
 	ErrPathMismatch    = errors.New("http rule path does not match template")

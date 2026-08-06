@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Describe a user problem that OpenKratos should solve.
+about: Describe a user problem that Forge should solve.
 title: "[Feature] "
 labels: feature
 assignees: ''

@@ -1,10 +1,10 @@
-module github.com/openkratos/kratos/contrib/config/nacos
+module github.com/sylphylabs/forge/contrib/config/nacos
 
 go 1.27rc2
 
 require (
 	github.com/nacos-group/nacos-sdk-go/v2 v2.3.5
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 )
 
 require (
@@ -66,6 +66,5 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
 
-replace github.com/openkratos/kratos => ../../../
+replace github.com/sylphylabs/forge => ../../../
 
-replace github.com/openkratos/api => ../../../../OpenKratos-api

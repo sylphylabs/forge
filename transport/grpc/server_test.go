@@ -17,11 +17,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/openkratos/kratos/errors"
-	pb "github.com/openkratos/kratos/internal/testdata/helloworld"
-	"github.com/openkratos/kratos/log"
-	"github.com/openkratos/kratos/middleware"
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/errors"
+	pb "github.com/sylphylabs/forge/internal/testdata/helloworld"
+	"github.com/sylphylabs/forge/log"
+	"github.com/sylphylabs/forge/middleware"
+	"github.com/sylphylabs/forge/transport"
 )
 
 // server is used to implement helloworld.GreeterServer.

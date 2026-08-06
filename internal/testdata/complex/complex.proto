@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/openkratos/kratos/internal/testdata/complex;complex";
+option go_package = "github.com/sylphylabs/forge/internal/testdata/complex;complex";
 
 package testproto;
 

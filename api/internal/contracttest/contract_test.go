@@ -9,7 +9,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
 
-	"github.com/openkratos/api/errors/v1"
+	"github.com/sylphylabs/forge/api/errors/v1"
 )
 
 func TestErrorStatusRoundTrip(t *testing.T) {
@@ -60,8 +60,8 @@ func TestExtensionAllocations(t *testing.T) {
 		number  protoreflect.FieldNumber
 		name    protoreflect.FullName
 	}{
-		{"google.protobuf.EnumOptions", 500101, "openkratos.errors.v1.default_code"},
-		{"google.protobuf.EnumValueOptions", 500102, "openkratos.errors.v1.code"},
+		{"google.protobuf.EnumOptions", 500101, "sylphy.errors.v1.default_code"},
+		{"google.protobuf.EnumValueOptions", 500102, "sylphy.errors.v1.code"},
 	}
 	for _, test := range tests {
 		extension, err := protoregistry.GlobalTypes.FindExtensionByNumber(test.message, test.number)

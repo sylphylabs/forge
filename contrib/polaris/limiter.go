@@ -3,7 +3,7 @@ package polaris
 import (
 	"time"
 
-	"github.com/openkratos/kratos/middleware/ratelimit"
+	"github.com/sylphylabs/forge/middleware/ratelimit"
 
 	"github.com/polarismesh/polaris-go"
 	"github.com/polarismesh/polaris-go/pkg/model"

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/transport"
 )
 
 func TestTransport_Kind(t *testing.T) {

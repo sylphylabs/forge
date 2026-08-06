@@ -1,9 +1,8 @@
-module github.com/openkratos/kratos/contrib/registry/discovery
+module github.com/sylphylabs/forge/contrib/registry/discovery
 
 go 1.27rc2
 
-require github.com/openkratos/kratos v0.0.0
+require github.com/sylphylabs/forge v0.0.0
 
-replace github.com/openkratos/kratos => ../../../
+replace github.com/sylphylabs/forge => ../../../
 
-replace github.com/openkratos/api => ../../../../OpenKratos-api

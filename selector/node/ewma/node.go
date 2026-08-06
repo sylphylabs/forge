@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/openkratos/kratos/errors"
-	"github.com/openkratos/kratos/selector"
+	"github.com/sylphylabs/forge/errors"
+	"github.com/sylphylabs/forge/selector"
 )
 
 const (

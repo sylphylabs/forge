@@ -14,8 +14,8 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/openkratos/kratos/metadata"
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/metadata"
+	"github.com/sylphylabs/forge/transport"
 )
 
 func Test_parseFullMethod(t *testing.T) {

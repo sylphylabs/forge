@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	v3 "github.com/google/gnostic/openapiv3"
-	"github.com/openkratos/kratos/cmd/internal/generator"
-	openapigen "github.com/openkratos/kratos/cmd/internal/openapi/generator"
+	"github.com/sylphylabs/forge/cmd/internal/generator"
+	openapigen "github.com/sylphylabs/forge/cmd/internal/openapi/generator"
 	"github.com/pb33f/libopenapi"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"google.golang.org/genproto/googleapis/api/annotations"
@@ -21,7 +21,7 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
-func TestGenerateOpenAPI32UsesOpenKratosErrorEnvelope(t *testing.T) {
+func TestGenerateOpenAPI32UsesForgeErrorEnvelope(t *testing.T) {
 	plugin := newOpenAPIPlugin(t)
 	generator.Configure(plugin)
 	if err := generateOpenAPI(plugin, testConfig()); err != nil {
@@ -38,9 +38,9 @@ func TestGenerateOpenAPI32UsesOpenKratosErrorEnvelope(t *testing.T) {
 	content := response.File[0].GetContent()
 	for _, want := range []string{
 		"openapi: 3.2.0",
-		"openkratos.errors.v1.Status:",
-		"description: OpenKratos HTTP JSON error envelope",
-		"$ref: '#/components/schemas/openkratos.errors.v1.Status'",
+		"sylphy.errors.v1.Status:",
+		"description: Forge HTTP JSON error envelope",
+		"$ref: '#/components/schemas/sylphy.errors.v1.Status'",
 		"reason:",
 		"metadata:",
 	} {
@@ -68,8 +68,8 @@ func TestGenerateOpenAPIPatchesAnnotatedErrorResponses(t *testing.T) {
 	if strings.Contains(content, "default:") {
 		t.Fatalf("default response should be disabled:\n%s", content)
 	}
-	if !strings.Contains(content, "\"401\":") || !strings.Contains(content, "$ref: '#/components/schemas/openkratos.errors.v1.Status'") {
-		t.Fatalf("annotated 401 response did not receive OpenKratos error content:\n%s", content)
+	if !strings.Contains(content, "\"401\":") || !strings.Contains(content, "$ref: '#/components/schemas/sylphy.errors.v1.Status'") {
+		t.Fatalf("annotated 401 response did not receive Forge error content:\n%s", content)
 	}
 
 	document, err := v3.ParseDocument([]byte(content))

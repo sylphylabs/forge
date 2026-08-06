@@ -1,9 +1,9 @@
-module github.com/openkratos/kratos/contrib/config/polaris
+module github.com/sylphylabs/forge/contrib/config/polaris
 
 go 1.27rc2
 
 require (
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 	github.com/polarismesh/polaris-go v1.7.1
 )
 
@@ -39,6 +39,5 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace github.com/openkratos/kratos => ../../../
+replace github.com/sylphylabs/forge => ../../../
 
-replace github.com/openkratos/api => ../../../../OpenKratos-api

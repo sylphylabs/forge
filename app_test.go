@@ -1,4 +1,4 @@
-package kratos
+package forge
 
 import (
 	"context"
@@ -11,9 +11,9 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/openkratos/kratos/registry"
-	"github.com/openkratos/kratos/transport/grpc"
-	"github.com/openkratos/kratos/transport/http"
+	"github.com/sylphylabs/forge/registry"
+	"github.com/sylphylabs/forge/transport/grpc"
+	"github.com/sylphylabs/forge/transport/http"
 )
 
 type mockRegistry struct {

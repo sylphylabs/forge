@@ -5,20 +5,20 @@ schema-validated; advanced 3.2 features pending
 
 ## Decision
 
-OpenKratos provides `protoc-gen-openapi` as a fourth atomic build-time
-plugin in the `github.com/openkratos/kratos/cmd` module. It derives an
+Forge provides `protoc-gen-openapi` as a fourth atomic build-time
+plugin in the `github.com/sylphylabs/forge/cmd` module. It derives an
 OpenAPI document from protobuf descriptors and `google.api.HttpRule`; it does
 not inspect registered runtime handlers or generated Go source.
 
 The plugin is based on the Apache-2.0 Google gnostic generator at `v0.7.1`, so existing
 `gnostic.openapi.v3` document, operation, schema, and property annotations
-continue to work. OpenKratos owns the fork because its HTTP error envelope and
+continue to work. Forge owns the fork because its HTTP error envelope and
 transcoding behavior differ from gnostic's grpc-gateway defaults.
 
 ## Phase 1 Contract
 
 The default output declares `openapi: 3.2.0` and supports the OpenAPI subset
-needed by current OpenKratos unary HTTP transcoding:
+needed by current Forge unary HTTP transcoding:
 
 - protobuf request and response schemas;
 - Google HTTP paths, query parameters, bodies, and additional bindings;
@@ -27,9 +27,9 @@ needed by current OpenKratos unary HTTP transcoding:
 - existing gnostic OpenAPI v3 annotations;
 - merged or source-relative YAML output;
 - deterministic component references;
-- the OpenKratos HTTP JSON error envelope.
+- the Forge HTTP JSON error envelope.
 
-The canonical HTTP error schema is `openkratos.errors.v1.Status`:
+The canonical HTTP error schema is `sylphy.errors.v1.Status`:
 
 ```json
 {
@@ -44,9 +44,9 @@ The canonical HTTP error schema is `openkratos.errors.v1.Status`:
 the default JSON codec omits protobuf zero values. The generator does not claim
 that an absent optional field is present on the wire.
 
-This is not `google.rpc.Status`. The gRPC transport projects an OpenKratos
+This is not `google.rpc.Status`. The gRPC transport projects an Forge
 error into `google.rpc.Status` plus `google.rpc.ErrorInfo`; OpenAPI describes
-the HTTP/JSON surface and therefore references the four-field OpenKratos
+the HTTP/JSON surface and therefore references the four-field Forge
 schema.
 
 When `default_response=true`, every operation receives a `default` response
@@ -57,7 +57,7 @@ response content is never overwritten.
 
 ## Options
 
-The plugin accepts the inherited gnostic options plus OpenKratos-specific
+The plugin accepts the inherited gnostic options plus Forge-specific
 defaults:
 
 | Option | Default | Meaning |
@@ -68,8 +68,8 @@ defaults:
 | `fq_schema_naming` | `false` | Prefix message schemas with the proto package |
 | `enum_type` | `integer` | Integer or string enum representation |
 | `depth` | `2` | Recursive query-message expansion depth |
-| `default_response` | `true` | Add the shared OpenKratos default error response |
-| `error_schema_name` | `openkratos.errors.v1.Status` | Error component name |
+| `default_response` | `true` | Add the shared Forge default error response |
+| `error_schema_name` | `sylphy.errors.v1.Status` | Error component name |
 | `output_mode` | `merged` | One merged document or source-relative documents |
 
 Example Buf configuration:
@@ -87,14 +87,14 @@ plugins:
 ```
 
 Applications migrating from Google's gnostic plugin should remove
-`default_response=false` if they want the shared OpenKratos default response.
+`default_response=false` if they want the shared Forge default response.
 Existing explicit error responses can remain; the plugin fills missing content
 schemas automatically.
 
 Generated fixtures are parsed independently with `libopenapi` and validated
 with `jsonschema/v6` against libopenapi's embedded official OpenAPI 3.2 schema.
 These dependencies are confined to the generator module and do not enter the
-OpenKratos runtime module.
+Forge runtime module.
 
 ## Shared HTTP Binding Semantics
 

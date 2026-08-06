@@ -1,9 +1,9 @@
-# Migrating from Kratos v3 to OpenKratos
+# Migrating from Kratos v3 to Forge
 
-OpenKratos is a pre-release fork, not an in-place Kratos upgrade. Perform the
+Forge is a pre-release fork, not an in-place Kratos upgrade. Perform the
 migration on a branch and review the current differences in
 [`COMPATIBILITY.md`](../../COMPATIBILITY.md) before changing dependencies.
-OpenKratos may replace Kratos APIs instead of retaining compatibility shims;
+Forge may replace Kratos APIs instead of retaining compatibility shims;
 each accepted removal is documented here with its replacement and validation
 steps.
 
@@ -19,7 +19,7 @@ go vet ./...
 Commit or otherwise preserve generated code and `go.mod` so the migration diff
 can be reviewed independently from unrelated changes.
 
-OpenKratos requires Go 1.27. Upgrade the project toolchain before changing the
+Forge requires Go 1.27. Upgrade the project toolchain before changing the
 module path.
 
 ## 2. Replace Module Paths
@@ -28,25 +28,25 @@ Replace the root import prefix:
 
 ```text
 github.com/go-kratos/kratos/v3
-github.com/openkratos/kratos
+github.com/sylphylabs/forge
 ```
 
-Replace each used contrib module separately. OpenKratos is on v0, so remove the
+Replace each used contrib module separately. Forge is on v0, so remove the
 upstream `/v3` suffix:
 
 ```text
 github.com/go-kratos/kratos/contrib/middleware/jwt/v3
-github.com/openkratos/kratos/contrib/middleware/jwt
+github.com/sylphylabs/forge/contrib/middleware/jwt
 ```
 
 During pre-release development, resolve the root module from `main`:
 
 ```shell
-go get github.com/openkratos/kratos@main
+go get github.com/sylphylabs/forge@main
 go mod tidy
 ```
 
-Use released versions rather than `main` after OpenKratos publishes tags.
+Use released versions rather than `main` after Forge publishes tags.
 
 Update provider SDK imports when constructing contrib adapters directly:
 
@@ -58,15 +58,15 @@ github.com/nacos-group/nacos-sdk-go/clients/config_client
 github.com/nacos-group/nacos-sdk-go/v2/clients/config_client
 ```
 
-Apollo integrations use `github.com/apolloconfig/agollo/v5`. OpenKratos uses
+Apollo integrations use `github.com/apolloconfig/agollo/v5`. Forge uses
 the Go 1.27 standard-library `uuid` package rather than Google or gofrs UUID
 types. The default application ID is now UUIDv4 rather than UUIDv1; configure an
 explicit ID if its value or version is part of an operational contract.
 
 ## 3. Update Code Generators
 
-OpenKratos owns its public error descriptor in the separate
-`github.com/openkratos/api` module. The runtime still emits and accepts the
+Forge owns its public error descriptor in the separate
+`github.com/sylphylabs/forge/api` module. The runtime still emits and accepts the
 four-field `{code, reason, message, metadata}` error envelope; it does not use
 `google.rpc.Status` as a replacement.
 
@@ -76,14 +76,14 @@ names the old generated message must update its import and type:
 
 ```text
 github.com/go-kratos/kratos/v3/errors.Status
-github.com/openkratos/api/errors/v1.Status
+github.com/sylphylabs/forge/api/errors/v1.Status
 ```
 
-The API import path `github.com/openkratos/api/errors/v1` declares package
+The API import path `github.com/sylphylabs/forge/api/errors/v1` declares package
 `errors`. The runtime aliases that package as `errorapi` and embeds
 `errorapi.Status` in `errors.Error`, so field selectors such as `err.Code`,
 `err.Reason`, `err.Message`, and `err.Metadata` remain unchanged. Update
-`.proto` imports and enum annotations when the OpenKratos API module is
+`.proto` imports and enum annotations when the Forge API module is
 published; do not retain or vendor one of the inherited `errors/errors.proto`
 copies.
 
@@ -97,24 +97,24 @@ enum ErrorReason {
   ERROR_REASON_UNSPECIFIED = 0;
 }
 
-// OpenKratos
-import "openkratos/errors/v1/errors.proto";
+// Forge
+import "sylphy/errors/v1/errors.proto";
 enum ErrorReason {
-  option (openkratos.errors.v1.default_code) = 500;
+  option (sylphy.errors.v1.default_code) = 500;
   ERROR_REASON_UNSPECIFIED = 0;
 }
 ```
 
 Enum-value overrides similarly change from `(errors.code)` to
-`(openkratos.errors.v1.code)`. Regenerate helpers after changing the source;
+`(sylphy.errors.v1.code)`. Regenerate helpers after changing the source;
 the generator no longer carries a private fallback descriptor for the old
 annotations.
 
-Replace the inherited generator modules with the three atomic OpenKratos
+Replace the inherited generator modules with the three atomic Forge
 commands. During local development they share one source module:
 
 ```text
-github.com/openkratos/kratos/cmd
+github.com/sylphylabs/forge/cmd
 ```
 
 Keep errors and HTTP generation independently selectable, and add middleware
@@ -130,7 +130,7 @@ plugins:
     out: gen/go
     opt: paths=source_relative
 
-# OpenKratos local cutover
+# Forge local cutover
 plugins:
   - local: protoc-gen-go-errors
     out: gen/go
@@ -154,12 +154,12 @@ must match the HTTP binding policy:
 Omit the middleware `http` option when no HTTP wrapper is required. Set
 `grpc=true` only when the same generation pipeline runs
 `protoc-gen-go-grpc`. The three outputs are `_errors.pb.go`, `_http.pb.go`, and
-`_middleware.pb.go`; delete obsolete `_openkratos.pb.go` files before checking
-the regenerated diff. No forwarding `protoc-gen-go-openkratos` command or
-`--go-openkratos_out` flag is retained.
+`_middleware.pb.go`; delete obsolete `_forge.pb.go` files before checking
+the regenerated diff. No forwarding `protoc-gen-go-forge` command or
+`--go-forge_out` flag is retained.
 
 Published projects will replace these local entries with pinned
-`buf.build/openkratos/go-errors`, `go-http`, and `go-middleware` revisions after
+`buf.build/forge/go-errors`, `go-http`, and `go-middleware` revisions after
 those plugins are public. Do not use an unpinned development revision.
 
 ```shell
@@ -180,9 +180,9 @@ generated code.
 
 ## 4. Replace Kratos CLI Workflows
 
-OpenKratos does not provide the general `kratos` executable.
+Forge does not provide the general `kratos` executable.
 
-| Previous workflow | OpenKratos workflow |
+| Previous workflow | Forge workflow |
 | --- | --- |
 | `kratos new` | Create a normal Go module or use a reviewed repository template |
 | `kratos run` | Run the service with `go run` |
@@ -197,7 +197,7 @@ go run ./cmd/server -conf ./configs
 
 ## 5. Review HTTP Routes
 
-OpenKratos uses standard-library `http.ServeMux` precedence instead of Gorilla
+Forge uses standard-library `http.ServeMux` precedence instead of Gorilla
 mux registration order. Review every hand-written route and add tests for:
 
 - overlapping literal and variable patterns;
@@ -208,17 +208,17 @@ mux registration order. Review every hand-written route and add tests for:
 - expected 404 and 405 responses.
 
 Replace multi-segment Gorilla regular expressions with Google AIP templates.
-Remove `http.StrictSlash(...)` from server construction; OpenKratos uses
+Remove `http.StrictSlash(...)` from server construction; Forge uses
 `http.ServeMux` path cleaning and trailing-slash behavior. If the service
 intentionally used `http.DefaultServeMux` as a fallback, pass it explicitly
 through `NotFoundHandler`.
 
 ## 6. Migrate Server Middleware
 
-OpenKratos removes the server-side selector API instead of retaining a runtime
+Forge removes the server-side selector API instead of retaining a runtime
 compatibility path. Apply these mechanical renames first:
 
-| Kratos name | OpenKratos name |
+| Kratos name | Forge name |
 | --- | --- |
 | `middleware.Handler` | `middleware.UnaryHandler` |
 | `middleware.Middleware` | `middleware.UnaryMiddleware` |
@@ -276,7 +276,7 @@ selection.
 
 ## 7. Review Google HTTP Transcoding
 
-Regenerate every HTTP client and server. OpenKratos validates inline unary
+Regenerate every HTTP client and server. Forge validates inline unary
 `google.api.HttpRule` declarations more strictly and may reject schemas that the
 previous generator accepted with a warning or deferred until runtime.
 
@@ -349,7 +349,7 @@ service requires them.
 
 ## 9. Keep Inherited v3 Migrations
 
-OpenKratos retains the Kratos v3 `log/slog` logging model, standard-compatible
+Forge retains the Kratos v3 `log/slog` logging model, standard-compatible
 errors, and the separate `json` and `protojson` codecs. A service already on
 Kratos v3 should not undo those migrations.
 
@@ -358,7 +358,7 @@ the schema rather than retaining code produced by the upstream generator.
 
 ## 10. Replace Legacy Metrics Middleware
 
-OpenKratos removes the inherited generic metrics middleware without a
+Forge removes the inherited generic metrics middleware without a
 compatibility shim or a second metric stream. Instrument HTTP at its native
 filter and `RoundTripper` boundaries:
 
@@ -415,7 +415,7 @@ the service can create duplicate spans.
 
 Replace the old API as follows:
 
-| Kratos API | OpenKratos replacement |
+| Kratos API | Forge replacement |
 | --- | --- |
 | `metrics.Server(...)` | `metrics.NewHTTPServerFilter(provider, ...)` for HTTP; `grpcotel.ServerOption` for gRPC |
 | `metrics.Client(...)` | `metrics.NewHTTPClientWrapper(provider, ...)` for HTTP; `grpcotel.DialOption` for gRPC |
@@ -495,7 +495,7 @@ graceful shutdown in integration tests used by the service.
 - [ ] Replace every used contrib module path and remove `/v3`.
 - [ ] Update Consul, Nacos, and Apollo provider SDK import paths.
 - [ ] Replace direct Google/gofrs UUID imports and review the application ID version change.
-- [ ] Pin the OpenKratos generator revisions.
+- [ ] Pin the Forge generator revisions.
 - [ ] Regenerate all generated Go files from source.
 - [ ] Confirm generated HTTP files assert `SupportPackageIsVersion5`.
 - [ ] Replace `kratos` CLI commands with Go and Buf commands.

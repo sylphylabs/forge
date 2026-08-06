@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/openkratos/kratos/registry"
-	"github.com/openkratos/kratos/selector"
+	"github.com/sylphylabs/forge/registry"
+	"github.com/sylphylabs/forge/selector"
 )
 
 func benchSelector(nodeCount int) selector.Selector {

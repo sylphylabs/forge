@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/transport"
 )
 
 var _ Transporter = (*Transport)(nil)

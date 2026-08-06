@@ -1,8 +1,8 @@
 Translations: [English](README.md) | [简体中文](README_zh.md)
 
-# OpenKratos
+# Forge
 
-OpenKratos is an independent, pre-release fork of [go-kratos/kratos](https://github.com/go-kratos/kratos). It explores deliberate breaking changes, faster standard-library-based internals, and a smaller long-term dependency surface. It is not affiliated with or endorsed by the go-kratos maintainers.
+Forge is an independent, pre-release fork of [go-kratos/kratos](https://github.com/go-kratos/kratos). It explores deliberate breaking changes, faster standard-library-based internals, and a smaller long-term dependency surface. It is not affiliated with or endorsed by the go-kratos maintainers.
 
 The project currently tracks `v0` development and does not provide a stable API or compatibility guarantee. Read [COMPATIBILITY.md](COMPATIBILITY.md) before migrating and [UPSTREAM.md](UPSTREAM.md) for the source baseline and synchronization policy.
 
@@ -27,16 +27,16 @@ The project currently tracks `v0` development and does not provide a stable API 
 - [protoc-gen-go](https://github.com/protocolbuffers/protobuf-go)
 - [Buf](https://buf.build/) or an equivalent `protoc` workflow
 
-### Add OpenKratos
+### Add Forge
 
 ```shell
-go get github.com/openkratos/kratos@main
+go get github.com/sylphylabs/forge@main
 ```
 
-OpenKratos intentionally does not ship a project-scaffolding CLI. Project
+Forge intentionally does not ship a project-scaffolding CLI. Project
 creation, dependency upgrades, and execution use the standard Go toolchain.
 
-Build the atomic OpenKratos Protobuf generators from this checkout while their
+Build the atomic Forge Protobuf generators from this checkout while their
 public Buf plugins are pending publication:
 
 ```shell
@@ -61,19 +61,19 @@ go run ./cmd/server -conf ./configs
 package main
 
 import (
-	"github.com/openkratos/kratos"
-	"github.com/openkratos/kratos/transport/grpc"
-	"github.com/openkratos/kratos/transport/http"
+	"github.com/sylphylabs/forge"
+	"github.com/sylphylabs/forge/transport/grpc"
+	"github.com/sylphylabs/forge/transport/http"
 )
 
 func main() {
 	httpSrv := http.NewServer(http.Address(":8000"))
 	grpcSrv := grpc.NewServer(grpc.Address(":9000"))
 
-	app := kratos.New(
-		kratos.Name("helloworld"),
-		kratos.Version("v1.0.0"),
-		kratos.Server(httpSrv, grpcSrv),
+	app := forge.New(
+		forge.Name("helloworld"),
+		forge.Version("v1.0.0"),
+		forge.Server(httpSrv, grpcSrv),
 	)
 	if err := app.Run(); err != nil {
 		panic(err)
@@ -83,12 +83,12 @@ func main() {
 
 ## Upstream Baseline
 
-OpenKratos started from Kratos v3. Existing Kratos users should treat the module-path change and all future OpenKratos releases as an explicit migration, not as an in-place Kratos upgrade.
+Forge started from Kratos v3. Existing Kratos users should treat the module-path change and all future Forge releases as an explicit migration, not as an in-place Kratos upgrade.
 
 ## Further Reading
 
 - [Compatibility contract](COMPATIBILITY.md)
-- [Migration from Kratos v3](docs/migration/kratos-to-openkratos.md)
+- [Migration from Kratos v3](docs/migration/kratos-to-forge.md)
 - [Documentation index](docs/README.md)
 - [Upstream baseline and synchronization policy](UPSTREAM.md)
 - [Performance modernization](docs/design/performance.md)
@@ -107,11 +107,11 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for multi-module checks and Go 1.27 RC vali
 
 ## Security
 
-Use a private GitHub security advisory in the OpenKratos repository. Do not report OpenKratos-specific vulnerabilities to the upstream Kratos project.
+Use a private GitHub security advisory in the Forge repository. Do not report Forge-specific vulnerabilities to the upstream Kratos project.
 
 ## Acknowledgments
 
-OpenKratos preserves the complete Kratos Git history and original MIT copyright notice. The upstream Kratos project and its contributors created the foundation of this codebase.
+Forge preserves the complete Kratos Git history and original MIT copyright notice. The upstream Kratos project and its contributors created the foundation of this codebase.
 
 The following projects influenced the original Kratos design:
 
@@ -123,4 +123,4 @@ The following projects influenced the original Kratos design:
 
 ## License
 
-OpenKratos is open-sourced software licensed under the [MIT license](./LICENSE).
+Forge is open-sourced software licensed under the [MIT license](./LICENSE).

@@ -5,14 +5,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/openkratos/kratos/cmd/internal/generator"
-	openapigen "github.com/openkratos/kratos/cmd/internal/openapi/generator"
+	"github.com/sylphylabs/forge/cmd/internal/generator"
+	openapigen "github.com/sylphylabs/forge/cmd/internal/openapi/generator"
 	"google.golang.org/protobuf/compiler/protogen"
 )
 
 const (
 	defaultOpenAPIVersion  = "3.2.0"
-	defaultErrorSchemaName = "openkratos.errors.v1.Status"
+	defaultErrorSchemaName = "sylphy.errors.v1.Status"
 )
 
 var flags flag.FlagSet
@@ -27,8 +27,8 @@ func main() {
 		FQSchemaNaming:  flags.Bool("fq_schema_naming", false, "prefix schema names with the proto package"),
 		EnumType:        flags.String("enum_type", "integer", "enum serialization. Use string for string-based serialization"),
 		CircularDepth:   flags.Int("depth", 2, "query-parameter recursion depth for circular messages"),
-		DefaultResponse: flags.Bool("default_response", true, "add an OpenKratos default error response"),
-		ErrorSchemaName: flags.String("error_schema_name", defaultErrorSchemaName, "OpenKratos error schema component name"),
+		DefaultResponse: flags.Bool("default_response", true, "add an Forge default error response"),
+		ErrorSchemaName: flags.String("error_schema_name", defaultErrorSchemaName, "Forge error schema component name"),
 		OutputMode:      flags.String("output_mode", "merged", "output mode: merged or source_relative"),
 	}
 

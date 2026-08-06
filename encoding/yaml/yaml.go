@@ -3,7 +3,7 @@ package yaml
 import (
 	"go.yaml.in/yaml/v3"
 
-	"github.com/openkratos/kratos/encoding"
+	"github.com/sylphylabs/forge/encoding"
 )
 
 // Name is the name registered for the yaml codec.

@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/openkratos/kratos/selector"
-	"github.com/openkratos/kratos/selector/node/ewma"
+	"github.com/sylphylabs/forge/selector"
+	"github.com/sylphylabs/forge/selector/node/ewma"
 )
 
 func p2cWeightedNodes(count int) []selector.WeightedNode {

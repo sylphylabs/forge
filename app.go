@@ -1,4 +1,4 @@
-package kratos
+package forge
 
 import (
 	"context"
@@ -14,9 +14,9 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/openkratos/kratos/log"
-	"github.com/openkratos/kratos/registry"
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/log"
+	"github.com/sylphylabs/forge/registry"
+	"github.com/sylphylabs/forge/transport"
 )
 
 // AppInfo is application context value.

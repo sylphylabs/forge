@@ -10,9 +10,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/openkratos/kratos/middleware"
-	"github.com/openkratos/kratos/registry"
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/middleware"
+	"github.com/sylphylabs/forge/registry"
+	"github.com/sylphylabs/forge/transport"
 )
 
 func TestWithEndpoint(t *testing.T) {

@@ -1,12 +1,11 @@
-module github.com/openkratos/kratos/contrib/encoding/json
+module github.com/sylphylabs/forge/contrib/encoding/json
 
 go 1.27rc2
 
 require (
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 	google.golang.org/protobuf v1.36.11
 )
 
-replace github.com/openkratos/kratos => ../../../
+replace github.com/sylphylabs/forge => ../../../
 
-replace github.com/openkratos/api => ../../../../OpenKratos-api

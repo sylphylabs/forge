@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-chassis/sc-client"
 
-	"github.com/openkratos/kratos/registry"
+	"github.com/sylphylabs/forge/registry"
 )
 
 var _ registry.Watcher = (*Watcher)(nil)

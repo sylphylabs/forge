@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/openkratos/kratos/contrib/middleware/validate/internal/testdata"
-	kerrors "github.com/openkratos/kratos/errors"
-	"github.com/openkratos/kratos/middleware"
+	"github.com/sylphylabs/forge/contrib/middleware/validate/internal/testdata"
+	kerrors "github.com/sylphylabs/forge/errors"
+	"github.com/sylphylabs/forge/middleware"
 )
 
 type testcase struct {

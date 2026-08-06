@@ -5,8 +5,8 @@ import (
 	stderrors "errors"
 	"testing"
 
-	kratoserrors "github.com/openkratos/kratos/errors"
-	"github.com/openkratos/kratos/transport"
+	kratoserrors "github.com/sylphylabs/forge/errors"
+	"github.com/sylphylabs/forge/transport"
 )
 
 type transportMock struct {

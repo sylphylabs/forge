@@ -1,27 +1,27 @@
-# OpenKratos API
+# Forge API
 
-This repository is the canonical source for portable OpenKratos Protobuf
+This repository is the canonical source for portable Forge Protobuf
 contracts. It is currently a local release prototype and has not been
 published to GitHub or the Buf Schema Registry.
 
 ## Modules
 
-- Go: `github.com/openkratos/api`
-- Buf: `buf.build/openkratos/api`
+- Go: `github.com/sylphylabs/forge/api`
+- Buf: `buf.build/forge/api`
 
-Public schemas live below `proto/openkratos`. Generated Go bindings are
+Public schemas live below `proto/forge`. Generated Go bindings are
 committed under the corresponding module-root package so Go consumers do not
 need Protobuf tooling.
 
 ## Contracts
 
-- `openkratos/errors/v1/errors.proto` defines the portable error status and
+- `sylphy/errors/v1/errors.proto` defines the portable error status and
   enum annotations.
 
 Middleware wiring belongs in generated Go service plans rather than Protobuf.
 The API module publishes no operation-policy or middleware-naming schema.
 
-`openkratos.errors.v1.Status` deliberately preserves the OpenKratos error
+`sylphy.errors.v1.Status` deliberately preserves the Forge error
 envelope `{code, reason, message, metadata}`. It is not replaced by
 `google.rpc.Status`, which cannot represent the stable `reason` and string
 metadata map as the same contract.

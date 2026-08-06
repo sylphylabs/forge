@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	errorapi "github.com/openkratos/api/errors/v1"
+	errorapi "github.com/sylphylabs/forge/api/errors/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"

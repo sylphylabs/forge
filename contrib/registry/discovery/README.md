@@ -2,7 +2,7 @@
 
 This module implements a `registry.Registrar` and `registry.Discovery` interface in kratos based `bilibili/discovery`.
 
-[![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/openkratos/kratos/contrib/registry/discovery)
+[![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/sylphylabs/forge/contrib/registry/discovery)
 
 ### Quick Start
 
@@ -10,7 +10,7 @@ This module implements a `registry.Registrar` and `registry.Discovery` interface
 
 ```go
 import (
-	"github.com/openkratos/kratos/contrib/registry/discovery"
+	"github.com/sylphylabs/forge/contrib/registry/discovery"
 )
 
 func main() {
@@ -26,15 +26,15 @@ func main() {
 	// construct srv instance
 	// ...
 
-	app := kratos.New(
-		kratos.Name("helloworld"),
-		kratos.Server(
+	app := forge.New(
+		forge.Name("helloworld"),
+		forge.Server(
 			httpSrv,
 			grpcSrv,
 		),
-		kratos.Metadata(map[string]string{"color": "gray"}),
+		forge.Metadata(map[string]string{"color": "gray"}),
 		// use Registrar
-		kratos.Registrar(r),
+		forge.Registrar(r),
 	)
 
 	if err := app.Run(); err != nil {
@@ -47,8 +47,8 @@ func main() {
 
 ```go
 import (
-	"github.com/openkratos/kratos/contrib/registry/discovery"
-	"github.com/openkratos/kratos/transport/grpc"
+	"github.com/sylphylabs/forge/contrib/registry/discovery"
+	"github.com/sylphylabs/forge/transport/grpc"
 )
 
 func main() {

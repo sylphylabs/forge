@@ -1,9 +1,9 @@
-module github.com/openkratos/kratos/contrib/polaris
+module github.com/sylphylabs/forge/contrib/polaris
 
 go 1.27rc2
 
 require (
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 	github.com/polarismesh/polaris-go v1.7.1
 	github.com/polarismesh/specification v1.8.0
 	google.golang.org/protobuf v1.36.11
@@ -24,7 +24,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/natefinch/lumberjack v2.0.0+incompatible // indirect
-	github.com/openkratos/api v0.0.0 // indirect
+	github.com/sylphylabs/forge/api v0.0.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.24.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
@@ -44,6 +44,6 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
-replace github.com/openkratos/kratos => ../../
+replace github.com/sylphylabs/forge => ../../
 
-replace github.com/openkratos/api => ../../../OpenKratos-api
+replace github.com/sylphylabs/forge/api => ../../api

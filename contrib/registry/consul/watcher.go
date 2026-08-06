@@ -3,7 +3,7 @@ package consul
 import (
 	"context"
 
-	"github.com/openkratos/kratos/registry"
+	"github.com/sylphylabs/forge/registry"
 )
 
 type watcher struct {

@@ -1,6 +1,6 @@
 edition = "2023";
 
-package openkratos.open.v1;
+package sylphy.open.v1;
 
 import "google/api/annotations.proto";
 import "google/protobuf/go_features.proto";

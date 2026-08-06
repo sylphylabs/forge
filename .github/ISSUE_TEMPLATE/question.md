@@ -1,6 +1,6 @@
 ---
 name: Question
-about: Ask about current OpenKratos behavior or migration.
+about: Ask about current Forge behavior or migration.
 title: "[Question] "
 labels: question
 assignees: ''
@@ -15,6 +15,6 @@ possible.
 
 ### Environment
 
-- OpenKratos version or commit:
+- Forge version or commit:
 - Go version:
 - Relevant transport or module:

@@ -7,7 +7,7 @@
 package testv1
 
 import (
-	_ "github.com/openkratos/api/errors/v1"
+	_ "github.com/sylphylabs/forge/api/errors/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -160,16 +160,16 @@ var File_test_v1_consumer_proto protoreflect.FileDescriptor
 
 const file_test_v1_consumer_proto_rawDesc = "" +
 	"\n" +
-	"\x16test/v1/consumer.proto\x12\x12openkratos.test.v1\x1a!openkratos/errors/v1/errors.proto\"(\n" +
+	"\x16test/v1/consumer.proto\x12\x0esylphy.test.v1\x1a\x1dsylphy/errors/v1/errors.proto\"(\n" +
 	"\x12GetDocumentRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"&\n" +
 	"\x10GetDocumentReply\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name*]\n" +
 	"\rFailureReason\x12\x1e\n" +
 	"\x1aFAILURE_REASON_UNSPECIFIED\x10\x00\x12$\n" +
-	"\x18FAILURE_REASON_NOT_FOUND\x10\x01\x1a\x06\xb0\x98\xf4\x01\x94\x03\x1a\x06\xa8\x98\xf4\x01\xf4\x032s\n" +
-	"\x0fDocumentService\x12`\n" +
-	"\vGetDocument\x12&.openkratos.test.v1.GetDocumentRequest\x1a$.openkratos.test.v1.GetDocumentReply\"\x03\x90\x02\x02B4Z2example.com/openkratos/api-consumer/test/v1;testv1b\x06proto3"
+	"\x18FAILURE_REASON_NOT_FOUND\x10\x01\x1a\x06\xb0\x98\xf4\x01\x94\x03\x1a\x06\xa8\x98\xf4\x01\xf4\x032k\n" +
+	"\x0fDocumentService\x12X\n" +
+	"\vGetDocument\x12\".sylphy.test.v1.GetDocumentRequest\x1a .sylphy.test.v1.GetDocumentReply\"\x03\x90\x02\x02B0Z.example.com/sylphy/api-consumer/test/v1;testv1b\x06proto3"
 
 var (
 	file_test_v1_consumer_proto_rawDescOnce sync.Once
@@ -186,13 +186,13 @@ func file_test_v1_consumer_proto_rawDescGZIP() []byte {
 var file_test_v1_consumer_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_test_v1_consumer_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_test_v1_consumer_proto_goTypes = []any{
-	(FailureReason)(0),         // 0: openkratos.test.v1.FailureReason
-	(*GetDocumentRequest)(nil), // 1: openkratos.test.v1.GetDocumentRequest
-	(*GetDocumentReply)(nil),   // 2: openkratos.test.v1.GetDocumentReply
+	(FailureReason)(0),         // 0: sylphy.test.v1.FailureReason
+	(*GetDocumentRequest)(nil), // 1: sylphy.test.v1.GetDocumentRequest
+	(*GetDocumentReply)(nil),   // 2: sylphy.test.v1.GetDocumentReply
 }
 var file_test_v1_consumer_proto_depIdxs = []int32{
-	1, // 0: openkratos.test.v1.DocumentService.GetDocument:input_type -> openkratos.test.v1.GetDocumentRequest
-	2, // 1: openkratos.test.v1.DocumentService.GetDocument:output_type -> openkratos.test.v1.GetDocumentReply
+	1, // 0: sylphy.test.v1.DocumentService.GetDocument:input_type -> sylphy.test.v1.GetDocumentRequest
+	2, // 1: sylphy.test.v1.DocumentService.GetDocument:output_type -> sylphy.test.v1.GetDocumentReply
 	1, // [1:2] is the sub-list for method output_type
 	0, // [0:1] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name

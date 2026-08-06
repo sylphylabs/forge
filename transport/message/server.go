@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/transport"
 )
 
 var (

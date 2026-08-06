@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openkratos/kratos/cmd/internal/generator/testutil"
+	"github.com/sylphylabs/forge/cmd/internal/generator/testutil"
 )
 
 func TestGeneratedMiddlewareCompilesAndRuns(t *testing.T) {
@@ -27,7 +27,7 @@ func TestGeneratedMiddlewareCompilesAndRuns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	apiRoot := filepath.Join(filepath.Dir(root), "OpenKratos-api")
+	apiRoot := filepath.Join(root, "api")
 	protocPath, err := exec.LookPath("protoc")
 	if err != nil {
 		t.Fatal(err)
@@ -107,15 +107,15 @@ func TestGeneratedMiddlewareCompilesAndRuns(t *testing.T) {
 go 1.27rc2
 
 require (
-	github.com/openkratos/api v0.0.0
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge/api v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
 )
 
-replace github.com/openkratos/api => %s
+replace github.com/sylphylabs/forge/api => %s
 
-replace github.com/openkratos/kratos => %s
+replace github.com/sylphylabs/forge => %s
 `, apiRoot, root)
 	if err := os.WriteFile(filepath.Join(out, "go.mod"), []byte(goMod), 0o644); err != nil {
 		t.Fatal(err)
@@ -210,7 +210,7 @@ func TestHTTPMethodSetModesMustMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	apiRoot := filepath.Join(filepath.Dir(root), "OpenKratos-api")
+	apiRoot := filepath.Join(root, "api")
 	tmp := t.TempDir()
 	bin := filepath.Join(tmp, "bin")
 	if err := os.MkdirAll(bin, 0o755); err != nil {
@@ -265,14 +265,14 @@ func TestHTTPMethodSetModesMustMatch(t *testing.T) {
 go 1.27rc2
 
 require (
-	github.com/openkratos/api v0.0.0
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge/api v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 	google.golang.org/protobuf v1.36.11
 )
 
-replace github.com/openkratos/api => %s
+replace github.com/sylphylabs/forge/api => %s
 
-replace github.com/openkratos/kratos => %s
+replace github.com/sylphylabs/forge => %s
 `, apiRoot, root)
 			if err := os.WriteFile(filepath.Join(out, "go.mod"), []byte(goMod), 0o644); err != nil {
 				t.Fatal(err)

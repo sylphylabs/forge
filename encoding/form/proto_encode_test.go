@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"github.com/openkratos/kratos/internal/testdata/complex"
+	"github.com/sylphylabs/forge/internal/testdata/complex"
 )
 
 func TestEncodeValues(t *testing.T) {

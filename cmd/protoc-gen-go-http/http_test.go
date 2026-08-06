@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openkratos/kratos/cmd/internal/generator/testutil"
+	"github.com/sylphylabs/forge/cmd/internal/generator/testutil"
 )
 
 func TestHTTPTemplateClientUsesCompiledPathAndGoogleJSON(t *testing.T) {
@@ -312,19 +312,19 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 		t.Fatal("generated output changed between identical protoc runs")
 	}
 
-	apiRoot := filepath.Join(filepath.Dir(root), "OpenKratos-api")
+	apiRoot := filepath.Join(root, "api")
 	goMod := fmt.Sprintf(`module opaque.test
 
 go 1.27rc2
 
 require (
-	github.com/openkratos/api v0.0.0
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge/api v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 )
 
-replace github.com/openkratos/api => %s
+replace github.com/sylphylabs/forge/api => %s
 
-replace github.com/openkratos/kratos => %s
+replace github.com/sylphylabs/forge => %s
 `, apiRoot, root)
 	if err := os.WriteFile(filepath.Join(tmp, "go.mod"), []byte(goMod), 0o644); err != nil {
 		t.Fatal(err)
@@ -345,7 +345,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	kratoshttp "github.com/openkratos/kratos/transport/http"
+	kratoshttp "github.com/sylphylabs/forge/transport/http"
 	openpb "opaque.test/openpb"
 	testpb "opaque.test/testpb"
 )

@@ -3,35 +3,35 @@
 ## Consul
 
 ```shell
-go get -u github.com/openkratos/kratos/contrib/registry/consul
+go get -u github.com/sylphylabs/forge/contrib/registry/consul
 ```
 
 ## Etcd
 
 ```shell
-go get -u github.com/openkratos/kratos/contrib/registry/etcd
+go get -u github.com/sylphylabs/forge/contrib/registry/etcd
 ```
 
 ## zookeeper
 
 ```shell
-go get -u github.com/openkratos/kratos/contrib/registry/zookeeper
+go get -u github.com/sylphylabs/forge/contrib/registry/zookeeper
 ```
 
 ## Nacos
 
 ```shell
-go get -u github.com/openkratos/kratos/contrib/registry/nacos
+go get -u github.com/sylphylabs/forge/contrib/registry/nacos
 ```
 
 ## kubernetes
 
 ```shell
-go get -u github.com/openkratos/kratos/contrib/registry/kubernetes
+go get -u github.com/sylphylabs/forge/contrib/registry/kubernetes
 ```
 
 ## polaris
 
 ```shell
-go get -u github.com/openkratos/kratos/contrib/registry/polaris
+go get -u github.com/sylphylabs/forge/contrib/registry/polaris
 ```

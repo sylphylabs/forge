@@ -1,9 +1,9 @@
-module github.com/openkratos/kratos/contrib/config/etcd
+module github.com/sylphylabs/forge/contrib/config/etcd
 
 go 1.27rc2
 
 require (
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 	go.etcd.io/etcd/client/v3 v3.7.0
 )
 
@@ -26,6 +26,5 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/openkratos/kratos => ../../../
+replace github.com/sylphylabs/forge => ../../../
 
-replace github.com/openkratos/api => ../../../../OpenKratos-api

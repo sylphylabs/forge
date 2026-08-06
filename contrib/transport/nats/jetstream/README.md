@@ -1,4 +1,4 @@
-# OpenKratos JetStream Transport
+# Forge JetStream Transport
 
 `jetstream` adds durable NATS messaging without changing the protocol-neutral
 `transport/message` contract.
@@ -30,7 +30,7 @@ Example:
         return err
     }
 
-    app := kratos.New(kratos.Server(server))
+    app := forge.New(forge.Server(server))
     return app.Run()
 
 ## Semantics

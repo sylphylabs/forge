@@ -4,10 +4,10 @@ This module keeps OpenTelemetry integrations out of the core Kratos module.
 
 ## Packages
 
-- `github.com/openkratos/kratos/contrib/otel/log`: slog handler bridge, usually imported as `otel` for `otel.NewHandler`.
-- `github.com/openkratos/kratos/contrib/otel/tracing`: tracing middleware and trace slog attributes.
-- `github.com/openkratos/kratos/contrib/otel/metrics`: stable HTTP semantic-convention metrics; gRPC uses grpc-go's A66 integration directly.
-- `github.com/openkratos/kratos/contrib/otel/message`: producer/consumer spans and
+- `github.com/sylphylabs/forge/contrib/otel/log`: slog handler bridge, usually imported as `otel` for `otel.NewHandler`.
+- `github.com/sylphylabs/forge/contrib/otel/tracing`: tracing middleware and trace slog attributes.
+- `github.com/sylphylabs/forge/contrib/otel/metrics`: stable HTTP semantic-convention metrics; gRPC uses grpc-go's A66 integration directly.
+- `github.com/sylphylabs/forge/contrib/otel/message`: producer/consumer spans and
   trace-context propagation for the protocol-neutral `transport/message` API.
 
 ## Metrics
@@ -38,7 +38,7 @@ The package emits only `http.server.request.duration` and
 readers, exporters, resources, Views, bucket overrides, cardinality limits, and
 exemplar filtering are application configuration.
 
-For gRPC, pass grpc-go's official A66 stats options through OpenKratos native
+For gRPC, pass grpc-go's official A66 stats options through Forge native
 option hooks. Use an explicit metric set containing only
 `grpc.client.call.duration`, `grpc.client.attempt.duration`, and
 `grpc.server.call.duration`; do not use nil or default metrics:
@@ -76,8 +76,8 @@ wrapped implementation:
 
 ```go
 import (
-	messageotel "github.com/openkratos/kratos/contrib/otel/message"
-	"github.com/openkratos/kratos/transport/message"
+	messageotel "github.com/sylphylabs/forge/contrib/otel/message"
+	"github.com/sylphylabs/forge/transport/message"
 )
 
 publisher := messageotel.NewPublisher(
@@ -110,8 +110,8 @@ ID are recorded; payloads and arbitrary headers are never copied into spans.
 
 ```go
 import (
-	otel "github.com/openkratos/kratos/contrib/otel/log"
-	"github.com/openkratos/kratos/log"
+	otel "github.com/sylphylabs/forge/contrib/otel/log"
+	"github.com/sylphylabs/forge/log"
 )
 
 logger := log.NewLogger(otel.NewHandler("helloworld"))
@@ -124,8 +124,8 @@ filtering:
 import (
 	"log/slog"
 
-	otel "github.com/openkratos/kratos/contrib/otel/log"
-	"github.com/openkratos/kratos/log"
+	otel "github.com/sylphylabs/forge/contrib/otel/log"
+	"github.com/sylphylabs/forge/log"
 )
 
 logger := log.NewLogger(

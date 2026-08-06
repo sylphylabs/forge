@@ -12,15 +12,15 @@ import (
 
 	natsgo "github.com/nats-io/nats.go"
 
-	"github.com/openkratos/kratos/metadata"
-	"github.com/openkratos/kratos/transport/message"
+	"github.com/sylphylabs/forge/metadata"
+	"github.com/sylphylabs/forge/transport/message"
 )
 
 const (
 	// HeaderMessageID carries message.Message.ID through core NATS headers.
-	HeaderMessageID = "openkratos-message-id"
+	HeaderMessageID = "forge-message-id"
 	// HeaderMessageKey carries message.Message.Key through core NATS headers.
-	HeaderMessageKey = "openkratos-message-key"
+	HeaderMessageKey = "forge-message-key"
 )
 
 var (
@@ -111,7 +111,7 @@ func WithFlushTimeout(timeout time.Duration) Option {
 	}
 }
 
-// Client adapts one NATS connection to OpenKratos message transport.
+// Client adapts one NATS connection to Forge message transport.
 type Client struct {
 	conn         *natsgo.Conn
 	ownsConn     bool

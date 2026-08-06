@@ -3,7 +3,7 @@ package selector
 import (
 	"strconv"
 
-	"github.com/openkratos/kratos/registry"
+	"github.com/sylphylabs/forge/registry"
 )
 
 var _ Node = (*DefaultNode)(nil)

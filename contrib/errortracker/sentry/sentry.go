@@ -9,10 +9,10 @@ import (
 
 	"github.com/getsentry/sentry-go"
 
-	"github.com/openkratos/kratos/middleware"
-	"github.com/openkratos/kratos/transport"
-	"github.com/openkratos/kratos/transport/grpc"
-	"github.com/openkratos/kratos/transport/http"
+	"github.com/sylphylabs/forge/middleware"
+	"github.com/sylphylabs/forge/transport"
+	"github.com/sylphylabs/forge/transport/grpc"
+	"github.com/sylphylabs/forge/transport/http"
 )
 
 type ctxKey struct{}

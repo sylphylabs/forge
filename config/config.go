@@ -10,11 +10,11 @@ import (
 	"time"
 
 	// init encoding
-	_ "github.com/openkratos/kratos/encoding/json"
-	_ "github.com/openkratos/kratos/encoding/proto"
-	_ "github.com/openkratos/kratos/encoding/xml"
-	_ "github.com/openkratos/kratos/encoding/yaml"
-	"github.com/openkratos/kratos/log"
+	_ "github.com/sylphylabs/forge/encoding/json"
+	_ "github.com/sylphylabs/forge/encoding/proto"
+	_ "github.com/sylphylabs/forge/encoding/xml"
+	_ "github.com/sylphylabs/forge/encoding/yaml"
+	"github.com/sylphylabs/forge/log"
 )
 
 var _ Config = (*config)(nil)

@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 
-	"github.com/openkratos/kratos/selector"
+	"github.com/sylphylabs/forge/selector"
 )
 
 type testSubConn struct{ balancer.SubConn }

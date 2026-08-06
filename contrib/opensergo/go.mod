@@ -1,9 +1,9 @@
-module github.com/openkratos/kratos/contrib/opensergo
+module github.com/sylphylabs/forge/contrib/opensergo
 
 go 1.27rc2
 
 require (
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 	github.com/opensergo/opensergo-go v0.0.0-20230614145931-21a6d548466b
 	google.golang.org/genproto/googleapis/api v0.0.0-20260720211330-0afa2a65878a
 	google.golang.org/grpc v1.82.1
@@ -21,6 +21,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260720211330-0afa2a65878a // indirect
 )
 
-replace github.com/openkratos/kratos => ../../
+replace github.com/sylphylabs/forge => ../../
 
-replace github.com/openkratos/api => ../../../OpenKratos-api

@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/openkratos/kratos/encoding"
+	"github.com/sylphylabs/forge/encoding"
 )
 
 func TestReader_Merge(t *testing.T) {

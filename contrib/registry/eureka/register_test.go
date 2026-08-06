@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openkratos/kratos/registry"
+	"github.com/sylphylabs/forge/registry"
 )
 
 func TestRegistry(_ *testing.T) {

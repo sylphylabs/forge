@@ -6,7 +6,7 @@ Last reviewed: July 23, 2026
 
 ## Purpose
 
-This document defines the next performance work that OpenKratos can own on the
+This document defines the next performance work that Forge can own on the
 HTTP request path. It separates framework cost from application work, records
 the behavior that optimizations must preserve, and identifies decisions that
 must be approved before implementation.
@@ -35,7 +35,7 @@ client
   -> net/http and the operating system
 ```
 
-OpenKratos owns the routing, request adaptation, generated binding, middleware
+Forge owns the routing, request adaptation, generated binding, middleware
 dispatch, built-in middleware, response encoding, and error encoding stages.
 It does not own:
 
@@ -47,7 +47,7 @@ It does not own:
 - reverse proxies, load balancers, the kernel, or network latency; or
 - the internals of Go's `net/http` implementation.
 
-OpenKratos may improve how it invokes user filters and middleware, but it must
+Forge may improve how it invokes user filters and middleware, but it must
 not claim improvements from changing the work those components perform.
 
 ## Current Baseline
@@ -205,7 +205,7 @@ recoverable marshal error into a partial successful response.
 
 ### 5. Optimize Built-in Middleware Internals
 
-OpenKratos can optimize middleware it owns, but not custom middleware work.
+Forge can optimize middleware it owns, but not custom middleware work.
 Profile recovery, logging, metadata, validation, tracing, and metrics with each
 component disabled, enabled, and sampled out.
 

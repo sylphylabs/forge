@@ -5,12 +5,12 @@ import (
 	"net/url"
 
 	// init encoding
-	_ "github.com/openkratos/kratos/encoding/form"
-	_ "github.com/openkratos/kratos/encoding/json"
-	_ "github.com/openkratos/kratos/encoding/proto"
-	_ "github.com/openkratos/kratos/encoding/protojson"
-	_ "github.com/openkratos/kratos/encoding/xml"
-	_ "github.com/openkratos/kratos/encoding/yaml"
+	_ "github.com/sylphylabs/forge/encoding/form"
+	_ "github.com/sylphylabs/forge/encoding/json"
+	_ "github.com/sylphylabs/forge/encoding/proto"
+	_ "github.com/sylphylabs/forge/encoding/protojson"
+	_ "github.com/sylphylabs/forge/encoding/xml"
+	_ "github.com/sylphylabs/forge/encoding/yaml"
 )
 
 // Server is transport server.

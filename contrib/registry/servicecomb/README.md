@@ -10,8 +10,8 @@ import (
 	"log"
 
 	"github.com/go-chassis/sc-client"
-	"github.com/openkratos/kratos/contrib/registry/servicecomb"
-	"github.com/openkratos/kratos"
+	"github.com/sylphylabs/forge/contrib/registry/servicecomb"
+	"github.com/sylphylabs/forge"
 )
 
 func main() {
@@ -22,9 +22,9 @@ func main() {
 		log.Panic(err)
 	}
 	r := servicecomb.NewRegistry(c)
-	app := kratos.New(
-		kratos.Name("helloServicecomb"),
-		kratos.Registrar(r),
+	app := forge.New(
+		forge.Name("helloServicecomb"),
+		forge.Registrar(r),
 	)
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
@@ -41,8 +41,8 @@ import (
 	"log"
 
 	"github.com/go-chassis/sc-client"
-	"github.com/openkratos/kratos/contrib/registry/servicecomb"
-	"github.com/openkratos/kratos/transport/grpc"
+	"github.com/sylphylabs/forge/contrib/registry/servicecomb"
+	"github.com/sylphylabs/forge/transport/grpc"
 )
 
 func main() {

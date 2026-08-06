@@ -6,7 +6,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 
-	"github.com/openkratos/api/errors/v1"
+	"github.com/sylphylabs/forge/api/errors/v1"
 )
 
 func TestErrorAnnotations(t *testing.T) {

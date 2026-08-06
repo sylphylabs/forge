@@ -13,7 +13,7 @@ if err := server.Handle("accounts.created", handleAccountCreated); err != nil {
 	return err
 }
 
-app := kratos.New(kratos.Server(server))
+app := forge.New(forge.Server(server))
 return app.Run()
 ```
 

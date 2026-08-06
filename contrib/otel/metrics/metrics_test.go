@@ -24,8 +24,8 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
-	"github.com/openkratos/kratos/registry"
-	kratoshttp "github.com/openkratos/kratos/transport/http"
+	"github.com/sylphylabs/forge/registry"
+	kratoshttp "github.com/sylphylabs/forge/transport/http"
 )
 
 var durationBounds = []float64{
@@ -197,7 +197,7 @@ func TestHTTPServerDurationContract(t *testing.T) {
 				return httptest.NewRequest(http.MethodGet, "http://example.test/private/42", nil)
 			},
 			handler: func(_ http.ResponseWriter, request *http.Request) {
-				request.Pattern = "GET /private/{__openkratos0}"
+				request.Pattern = "GET /private/{__forge0}"
 			},
 			wantAttrs: []attribute.KeyValue{
 				attribute.String("http.request.method", "GET"),
@@ -227,7 +227,7 @@ func TestHTTPServerDurationContract(t *testing.T) {
 	}
 }
 
-func TestHTTPServerOpenKratosRouteIntegration(t *testing.T) {
+func TestHTTPServerForgeRouteIntegration(t *testing.T) {
 	tests := []struct {
 		name       string
 		method     string

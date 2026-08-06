@@ -2,12 +2,12 @@
 
 This module implements the MCP server in Kratos based on mcp-go.
 
-[![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/openkratos/kratos/contrib/transport/mcp)
+[![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/sylphylabs/forge/contrib/transport/mcp)
 
 ## Quick start
 ```go
 import(
-    tm "github.com/openkratos/kratos/contrib/transport/mcp"
+    tm "github.com/sylphylabs/forge/contrib/transport/mcp"
     mcp "github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -41,9 +41,9 @@ func main() {
     // Add tool handler
     srv.AddTool(tool, helloHandler)
     // creates a kratos application
-    app := kratos.New(
-        kratos.Name("kratos-app"),
-        kratos.Server(srv),
+    app := forge.New(
+        forge.Name("kratos-app"),
+        forge.Server(srv),
     )
     if err := app.Run(); err != nil {
         panic(err)

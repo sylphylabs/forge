@@ -59,8 +59,8 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported privately to the OpenKratos maintainers through
-https://github.com/openkratos/kratos/security/advisories/new. State clearly
+reported privately to the Forge maintainers through
+https://github.com/sylphylabs/forge/security/advisories/new. State clearly
 that the report concerns Code of Conduct enforcement rather than a software
 vulnerability.
 All complaints will be reviewed and investigated promptly and fairly.

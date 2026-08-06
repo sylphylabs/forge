@@ -1,4 +1,4 @@
-# OpenKratos Public Protobuf API Module
+# Forge Public Protobuf API Module
 
 Status: proposed implementation contract
 
@@ -7,11 +7,11 @@ Last reviewed: July 23, 2026
 ## Purpose
 
 This document defines the source, package, release, and dependency boundary for
-public OpenKratos Protobuf contracts. It also defines how the inherited Kratos
-error schemas are replaced by one OpenKratos-owned contract.
+public Forge Protobuf contracts. It also defines how the inherited Kratos
+error schemas are replaced by one Forge-owned contract.
 
-OpenKratos is treated as a new framework. Kratos source compatibility is not a
-constraint on the core API. Users that adopt OpenKratos from Kratos receive an
+Forge is treated as a new framework. Kratos source compatibility is not a
+constraint on the core API. Users that adopt Forge from Kratos receive an
 explicit migration path; legacy names and duplicate schemas do not remain in
 the new framework solely to make that migration invisible.
 
@@ -27,24 +27,24 @@ atomic packaging are defined in
 
 The following decisions are fixed for implementation planning:
 
-1. Public schemas live in a dedicated Git repository named `openkratos/api`.
-2. That repository publishes the Go module `github.com/openkratos/api`.
+1. Public schemas live in a dedicated Git repository named `forge/api`.
+2. That repository publishes the Go module `github.com/sylphylabs/forge/api`.
 3. The same source is published as the BSR module
-   `buf.build/openkratos/api`.
+   `buf.build/forge/api`.
 4. Public Protobuf packages and file paths are versioned from their first
-   OpenKratos release.
+   Forge release.
 5. Every public contract has exactly one hand-maintained `.proto` source.
-6. The OpenKratos runtime and atomic generators consume the same generated Go
+6. The Forge runtime and atomic generators consume the same generated Go
    API package. They do not generate private copies of public descriptors.
 7. The three inherited `errors.proto` sources are removed after consumers move
-   to the OpenKratos API module.
+   to the Forge API module.
 8. Compatibility code, source rewriting, and transition advice live in a
    migration tool or migration documentation, not in the core runtime.
 9. Third-party schemas remain dependencies owned by their publishers. They are
-   not copied into or republished from the OpenKratos API module.
+   not copied into or republished from the Forge API module.
 10. Middleware wiring and deployment policy are generated or configured in Go;
-    neither is published as an OpenKratos Protobuf contract.
-11. OpenKratos-owned Go generation is released as the independently selectable
+    neither is published as an Forge Protobuf contract.
+11. Forge-owned Go generation is released as the independently selectable
     `go-errors`, `go-http`, and `go-middleware` Buf plugins; upstream Go and
     gRPC generators remain independently owned plugins.
 
@@ -65,7 +65,7 @@ consumer:
 
 It does not own:
 
-- OpenKratos runtime middleware implementations;
+- Forge runtime middleware implementations;
 - HTTP or gRPC transport implementations;
 - application configuration, credentials, secrets, or provider SDKs;
 - generated service bindings for a business repository;
@@ -73,19 +73,19 @@ It does not own:
 - migration-only aliases for old Kratos packages.
 
 This boundary keeps the schema dependency small. A business repository can use
-OpenKratos annotations without importing the complete framework runtime.
+Forge annotations without importing the complete framework runtime.
 
 ## Artifact Topology
 
 | Artifact | Identity | Responsibility |
 | --- | --- | --- |
-| Git repository | `github.com/openkratos/api` | Canonical schema source, generated Go bindings, release automation |
-| Go module | `github.com/openkratos/api` | Versioned generated Go packages consumed by runtime, generators, and business code |
-| BSR module | `buf.build/openkratos/api` | Versioned Protobuf source and descriptor distribution |
-| Runtime module | `github.com/openkratos/kratos` | Error behavior, transports, middleware compilation, application runtime |
-| Error generator | `buf.build/openkratos/go-errors` | Emits business error helpers |
-| HTTP generator | `buf.build/openkratos/go-http` | Emits HTTP bindings and transcoding code |
-| Middleware generator | `buf.build/openkratos/go-middleware` | Emits service plans and transport wrappers |
+| Git repository | `github.com/sylphylabs/forge/api` | Canonical schema source, generated Go bindings, release automation |
+| Go module | `github.com/sylphylabs/forge/api` | Versioned generated Go packages consumed by runtime, generators, and business code |
+| BSR module | `buf.build/forge/api` | Versioned Protobuf source and descriptor distribution |
+| Runtime module | `github.com/sylphylabs/forge` | Error behavior, transports, middleware compilation, application runtime |
+| Error generator | `buf.build/forge/go-errors` | Emits business error helpers |
+| HTTP generator | `buf.build/forge/go-http` | Emits HTTP bindings and transcoding code |
+| Middleware generator | `buf.build/forge/go-middleware` | Emits service plans and transport wrappers |
 
 The Git repository, Go module, and BSR module are separate release artifacts
 even though the first two share a repository. Release evidence must identify
@@ -97,12 +97,12 @@ The intended layout is:
 
 ```text
 api/
-|-- go.mod                         # module github.com/openkratos/api
-|-- buf.yaml                       # buf.build/openkratos/api
+|-- go.mod                         # module github.com/sylphylabs/forge/api
+|-- buf.yaml                       # buf.build/forge/api
 |-- buf.lock
 |-- buf.gen.yaml
 |-- proto/
-|   `-- openkratos/
+|   `-- forge/
 |       `-- errors/
 |           `-- v1/
 |               `-- errors.proto
@@ -117,13 +117,13 @@ api/
 The `proto/` directory is the BSR source root. Consumers import:
 
 ```proto
-import "openkratos/errors/v1/errors.proto";
+import "sylphy/errors/v1/errors.proto";
 ```
 
 Generated Go code imports:
 
 ```go
-import "github.com/openkratos/api/errors/v1"
+import "github.com/sylphylabs/forge/api/errors/v1"
 ```
 
 Source files and generated files are kept in different directories. Generated
@@ -139,7 +139,7 @@ syntax must be verified against the pinned Buf CLI, but the semantic target is:
 version: v2
 modules:
   - path: proto
-    name: buf.build/openkratos/api
+    name: buf.build/forge/api
 lint:
   use:
     - STANDARD
@@ -161,21 +161,21 @@ larger dependency graph.
 
 ### Namespace
 
-The first OpenKratos error contract uses:
+The first Forge error contract uses:
 
 | Property | Value |
 | --- | --- |
-| File | `openkratos/errors/v1/errors.proto` |
-| Protobuf package | `openkratos.errors.v1` |
-| Go package | `github.com/openkratos/api/errors/v1;errors` |
-| BSR module | `buf.build/openkratos/api` |
+| File | `sylphy/errors/v1/errors.proto` |
+| Protobuf package | `sylphy.errors.v1` |
+| Go package | `github.com/sylphylabs/forge/api/errors/v1;errors` |
+| BSR module | `buf.build/forge/api` |
 
 The version belongs in the Protobuf package and file path. A future incompatible
 schema is introduced as `v2`; it does not silently redefine `v1`.
 
 ### Initial semantic scope
 
-The first OpenKratos schema keeps the mature parts of the existing error model
+The first Forge schema keeps the mature parts of the existing error model
 without inheriting its package identity:
 
 ```proto
@@ -187,16 +187,16 @@ message Status {
 }
 ```
 
-This is the canonical OpenKratos error envelope. It is not an alias for, a
+This is the canonical Forge error envelope. It is not an alias for, a
 subset of, or a migration toward `google.rpc.Status`. In particular,
-`google.rpc.Status` has no direct fields for the stable OpenKratos `reason` or
+`google.rpc.Status` has no direct fields for the stable Forge `reason` or
 the string `metadata` map and therefore cannot preserve this contract through a
-transparent substitution. Protocol adapters may map an OpenKratos error to a
-transport-native status, but the OpenKratos HTTP/JSON and runtime error model
+transparent substitution. Protocol adapters may map an Forge error to a
+transport-native status, but the Forge HTTP/JSON and runtime error model
 continue to expose all four fields above.
 
 It also defines enum-level default status annotation and enum-value status
-override annotation under the `openkratos.errors.v1` namespace. Their first
+override annotation under the `sylphy.errors.v1` namespace. Their first
 release preserves the current status-code meaning so module extraction is not
 combined with a separate error-semantics redesign.
 
@@ -205,9 +205,9 @@ The source shape is:
 ```proto
 syntax = "proto3";
 
-package openkratos.errors.v1;
+package sylphy.errors.v1;
 
-option go_package = "github.com/openkratos/api/errors/v1;errors";
+option go_package = "github.com/sylphylabs/forge/api/errors/v1;errors";
 
 import "google/protobuf/descriptor.proto";
 
@@ -235,12 +235,12 @@ Changing those semantics is a separate versioned error-contract decision.
 ### Local prototype evidence
 
 The contract currently exists in the sibling local repository
-`../OpenKratos-api` at commit `025d772`. It has not been published to GitHub or
+`api/` in this repository, merged at commit `025d772`. It has not been published to GitHub or
 the Buf Schema Registry. The local implementation uses these intended public
 identities so generation exercises the future import boundary:
 
-- Go module: `github.com/openkratos/api`;
-- Buf module: `buf.build/openkratos/api`.
+- Go module: `github.com/sylphylabs/forge/api`;
+- Buf module: `buf.build/forge/api`.
 
 The local `make all` gate passes and covers Buf lint/build/generate, Go tests
 and vet, descriptor-set construction, wire and ProtoJSON round trips, custom
@@ -249,12 +249,12 @@ consumer module. That consumer temporarily uses a local `replace`; publication
 acceptance still requires repeating the consumer test against released Go and
 BSR artifacts with no `replace` or `go.work` dependency.
 
-The OpenKratos v1 allocation is:
+The Forge v1 allocation is:
 
 | Extension | Extendee | Field number |
 | --- | --- | --- |
-| `openkratos.errors.v1.default_code` | `google.protobuf.EnumOptions` | `500101` |
-| `openkratos.errors.v1.code` | `google.protobuf.EnumValueOptions` | `500102` |
+| `sylphy.errors.v1.default_code` | `google.protobuf.EnumOptions` | `500101` |
+| `sylphy.errors.v1.code` | `google.protobuf.EnumValueOptions` | `500102` |
 
 These numbers are part of the proposed v1 contract. Before the schema is first
 published, implementation must:
@@ -269,11 +269,11 @@ published, implementation must:
 6. freeze the selected numbers for the lifetime of `v1`.
 
 The inherited numbers `1108` and `1109` are migration inputs, not required
-OpenKratos identities.
+Forge identities.
 
 ### Runtime ownership
 
-The runtime package `github.com/openkratos/kratos/errors` owns Go error behavior:
+The runtime package `github.com/sylphylabs/forge/errors` owns Go error behavior:
 
 - implementing `error`, `Unwrap`, `Is`, and conversion helpers;
 - mapping the portable status to HTTP and gRPC responses;
@@ -281,7 +281,7 @@ The runtime package `github.com/openkratos/kratos/errors` owns Go error behavior
 - preserving causes without serializing private Go implementation details.
 
 It does not own a second generated Protobuf message. Its error value wraps or
-embeds `errorapi.Status` from `github.com/openkratos/api/errors/v1`, using an
+embeds `errorapi.Status` from `github.com/sylphylabs/forge/api/errors/v1`, using an
 internal alias to distinguish the API contract from the runtime `errors`
 package.
 
@@ -289,10 +289,10 @@ The public API module must remain usable without the runtime module. The
 dependency direction is always:
 
 ```text
-github.com/openkratos/api
+github.com/sylphylabs/forge/api
         ^
         |
-        +-- github.com/openkratos/kratos
+        +-- github.com/sylphylabs/forge
         `-- protoc-gen-go-errors
 ```
 
@@ -300,12 +300,12 @@ The API module must never import the runtime or generator modules.
 
 ### Generator ownership
 
-`protoc-gen-go-errors` imports `github.com/openkratos/api/errors/v1` to read the
+`protoc-gen-go-errors` imports `github.com/sylphylabs/forge/api/errors/v1` to read the
 registered extension descriptors. It must not contain:
 
 - a private hand-maintained `errors.proto`;
 - a private generated binding for the same public file;
-- a dependency on `github.com/openkratos/kratos/errors` merely to read schema
+- a dependency on `github.com/sylphylabs/forge/errors` merely to read schema
   annotations.
 
 Generated business helpers may depend on the runtime error package for behavior
@@ -315,7 +315,7 @@ producing incomplete helpers.
 
 ## Removed Inherited Sources
 
-The OpenKratos repository previously contained three inherited sources:
+The Forge repository previously contained three inherited sources:
 
 ```text
 errors/errors.proto
@@ -331,7 +331,7 @@ an explicitly local pre-publication replacement. Historical names remain only
 in migration documentation, design records, tests that reject their return, and
 repository history.
 
-No OpenKratos release job publishes new content under a Kratos-owned BSR name.
+No Forge release job publishes new content under a Kratos-owned BSR name.
 
 ## Release Contract
 
@@ -344,7 +344,7 @@ Every API release records:
 - BSR immutable module commit and digest;
 - Buf and Protobuf generator versions;
 - generated-source clean-tree proof;
-- minimum compatible OpenKratos runtime and plugin versions.
+- minimum compatible Forge runtime and plugin versions.
 
 The Go module and BSR module are generated from the same Git commit. Their
 descriptors must be equivalent. A convenient BSR label may mirror the Go tag,
@@ -357,10 +357,10 @@ The required order is:
 1. Generate committed sources and run lint, build, tests, vet, descriptor, clean
    tree, and local consumer checks.
 2. Merge and tag the exact validated API repository commit.
-3. Publish `github.com/openkratos/api` from that commit.
-4. Publish `buf.build/openkratos/api` from the same commit.
+3. Publish `github.com/sylphylabs/forge/api` from that commit.
+4. Publish `buf.build/forge/api` from the same commit.
 5. Export the published BSR descriptor and compare it with the release build.
-6. Release OpenKratos runtime modules that depend on that API version.
+6. Release Forge runtime modules that depend on that API version.
 7. Publish compatible `go-errors`, `go-http`, and `go-middleware` Buf plugin
    revisions.
 8. Verify a clean external consumer using only published modules and pinned Buf
@@ -377,7 +377,7 @@ compatibility layer.
 Migration support may provide:
 
 - a source rewrite from `errors/errors.proto` to
-  `openkratos/errors/v1/errors.proto`;
+  `sylphy/errors/v1/errors.proto`;
 - package-qualified option rewrites;
 - `buf.yaml` and `buf.lock` dependency changes;
 - Go import rewrites where generated code or handwritten code names old
@@ -403,8 +403,8 @@ new contracts because its purpose is transition, not runtime execution.
 
 ### Phase 0: Repository and ownership
 
-- Create or confirm the `openkratos/api` Git repository.
-- Confirm the BSR organization and `buf.build/openkratos/api` name.
+- Create or confirm the `forge/api` Git repository.
+- Confirm the BSR organization and `buf.build/forge/api` name.
 - Establish maintainers, branch protection, release credentials, and
   least-privilege publication jobs.
 - Pin Buf, protoc plugins, Go, and `google.golang.org/protobuf` versions.
@@ -426,7 +426,7 @@ local repository state.
 
 - Change runtime error values to use `errorapi.Status`.
 - Preserve explicit Go error-chain and transport conversion behavior selected
-  for OpenKratos.
+  for Forge.
 - Remove the root generated error schema and update focused tests.
 - Record benchmark changes separately from semantic changes.
 
@@ -435,14 +435,14 @@ local repository state.
 - Change `protoc-gen-go-errors` to read extensions from the API module.
 - Remove its local schema and generated binding.
 - Verify Open and Opaque Protobuf APIs in the error generator.
-- Verify the published `buf.build/openkratos/go-errors` plugin from an external
+- Verify the published `buf.build/forge/go-errors` plugin from an external
   consumer.
 
 ### Phase 4: Repository cleanup
 
 - Remove the `third_party` error schema and inherited Buf module names.
 - Add duplicate-source and generated-drift CI checks.
-- Update examples to use the versioned OpenKratos import.
+- Update examples to use the versioned Forge import.
 - Confirm no active source, build file, or lockfile depends on legacy modules.
 
 ### Phase 5: Migration support
@@ -471,7 +471,7 @@ go vet ./...
 git diff --exit-code
 ```
 
-### OpenKratos runtime
+### Forge runtime
 
 ```bash
 go test ./errors ./transport/http ./transport/grpc
@@ -479,7 +479,7 @@ go test -race ./errors ./transport/http ./transport/grpc
 go vet ./errors ./transport/http ./transport/grpc
 ```
 
-### OpenKratos generators
+### Forge generators
 
 ```bash
 cd cmd
@@ -493,7 +493,7 @@ The acceptance consumer must:
 
 - use released API and runtime versions plus pinned published plugin revisions;
 - use the published BSR module by immutable commit or lockfile;
-- contain no `replace`, vendored OpenKratos schema, or repository-relative path;
+- contain no `replace`, vendored Forge schema, or repository-relative path;
 - import the versioned error schema;
 - use enum-level and enum-value annotations;
 - generate, compile, and execute error helper assertions;
@@ -515,11 +515,11 @@ The acceptance consumer must:
 
 This work is complete only when:
 
-- `github.com/openkratos/api` is independently installable;
-- `buf.build/openkratos/api` is independently consumable;
+- `github.com/sylphylabs/forge/api` is independently installable;
+- `buf.build/forge/api` is independently consumable;
 - both artifacts are reproducible from the same reviewed Git commit;
-- error contracts use the versioned OpenKratos namespace;
-- exactly one hand-maintained OpenKratos error schema exists;
+- error contracts use the versioned Forge namespace;
+- exactly one hand-maintained Forge error schema exists;
 - the runtime and `go-errors` plugin consume the same generated API package;
 - the three inherited local schemas and two inherited Buf module names are gone
   from active configuration;

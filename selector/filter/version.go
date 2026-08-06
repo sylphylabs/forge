@@ -3,7 +3,7 @@ package filter
 import (
 	"context"
 
-	"github.com/openkratos/kratos/selector"
+	"github.com/sylphylabs/forge/selector"
 )
 
 // Version is version filter.

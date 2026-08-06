@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/openkratos/kratos/log"
+	"github.com/sylphylabs/forge/log"
 )
 
 type Discovery struct {

@@ -32,8 +32,8 @@ import (
 	any_pb "google.golang.org/protobuf/types/known/anypb"
 
 	v3 "github.com/google/gnostic/openapiv3"
-	"github.com/openkratos/kratos/cmd/internal/httpbinding"
-	wk "github.com/openkratos/kratos/cmd/internal/openapi/generator/wellknown"
+	"github.com/sylphylabs/forge/cmd/internal/httpbinding"
+	wk "github.com/sylphylabs/forge/cmd/internal/openapi/generator/wellknown"
 )
 
 type Configuration struct {
@@ -51,10 +51,10 @@ type Configuration struct {
 }
 
 const (
-	infoURL                 = "https://github.com/openkratos/kratos/tree/main/cmd/protoc-gen-openapi"
+	infoURL                 = "https://github.com/sylphylabs/forge/tree/main/cmd/protoc-gen-openapi"
 	defaultOpenAPIVersion   = "3.2.0"
-	defaultErrorSchemaName  = "openkratos.errors.v1.Status"
-	defaultErrorDescription = "OpenKratos error response"
+	defaultErrorSchemaName  = "sylphy.errors.v1.Status"
+	defaultErrorDescription = "Forge error response"
 )
 
 // In order to dynamically add google.rpc.Status schemas for user-declared
@@ -607,7 +607,7 @@ func (g *OpenAPIv3Generator) buildOperationV3(
 				Oneof: &v3.ResponseOrReference_Response{
 					Response: &v3.Response{
 						Description: defaultErrorDescription,
-						Content:     g.openKratosErrorContent(d),
+						Content:     g.forgeErrorContent(d),
 					},
 				},
 			},
@@ -705,13 +705,13 @@ func (g *OpenAPIv3Generator) addOperationToDocumentV3(d *v3.Document, op *v3.Ope
 	return nil
 }
 
-func (g *OpenAPIv3Generator) openKratosErrorSchemaName() string {
+func (g *OpenAPIv3Generator) forgeErrorSchemaName() string {
 	return stringValue(g.conf.ErrorSchemaName, defaultErrorSchemaName)
 }
 
-func (g *OpenAPIv3Generator) openKratosErrorContent(d *v3.Document) *v3.MediaTypes {
-	schemaName := g.openKratosErrorSchemaName()
-	g.addSchemaToDocumentV3(d, wk.NewOpenKratosErrorStatusSchema(schemaName))
+func (g *OpenAPIv3Generator) forgeErrorContent(d *v3.Document) *v3.MediaTypes {
+	schemaName := g.forgeErrorSchemaName()
+	g.addSchemaToDocumentV3(d, wk.NewForgeErrorStatusSchema(schemaName))
 	return wk.NewApplicationJsonMediaType(&v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Reference{
 			Reference: &v3.Reference{XRef: "#/components/schemas/" + schemaName},
@@ -719,7 +719,7 @@ func (g *OpenAPIv3Generator) openKratosErrorContent(d *v3.Document) *v3.MediaTyp
 	})
 }
 
-func (g *OpenAPIv3Generator) applyOpenKratosErrorResponses(d *v3.Document, op *v3.Operation) {
+func (g *OpenAPIv3Generator) applyForgeErrorResponses(d *v3.Document, op *v3.Operation) {
 	if op == nil || op.Responses == nil {
 		return
 	}
@@ -731,7 +731,7 @@ func (g *OpenAPIv3Generator) applyOpenKratosErrorResponses(d *v3.Document, op *v
 		if !ok || response.Response == nil || hasResponseContent(response.Response) {
 			continue
 		}
-		response.Response.Content = g.openKratosErrorContent(d)
+		response.Response.Content = g.forgeErrorContent(d)
 	}
 }
 
@@ -787,7 +787,7 @@ func (g *OpenAPIv3Generator) addPathsToDocumentV3(d *v3.Document, services []*pr
 				if extOperation != nil {
 					proto.Merge(op, extOperation.(*v3.Operation))
 				}
-				g.applyOpenKratosErrorResponses(d, op)
+				g.applyForgeErrorResponses(d, op)
 
 				if err := g.addOperationToDocumentV3(d, op, openAPIPath, binding.Method); err != nil {
 					if binding.Index == 0 {

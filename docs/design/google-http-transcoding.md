@@ -6,10 +6,10 @@ Last reviewed: July 22, 2026
 
 ## Purpose
 
-This document is the implementation contract for making OpenKratos conform to
+This document is the implementation contract for making Forge conform to
 the Google HTTP transcoding model defined by `google.api.HttpRule`. It separates
 behavior that is part of the Google contract from Gorilla mux compatibility and
-from OpenKratos streaming extensions.
+from Forge streaming extensions.
 
 Current compatibility facts remain in [`COMPATIBILITY.md`](../../COMPATIBILITY.md).
 Nothing in this document becomes a compatibility claim until its acceptance
@@ -158,7 +158,7 @@ Do not add an interface for the parser. There is one implementation and all
 operations are deterministic pure functions or methods on the parsed template.
 
 The nested generator module may import this internal package because its module
-path is within `github.com/openkratos/kratos`. During pre-release development,
+path is within `github.com/sylphylabs/forge`. During pre-release development,
 its `go.mod` requires the root module at `v0.0.0` and uses a repository-relative
 replacement. The root module does not depend on the generator, so this does not
 create a module cycle.
@@ -175,7 +175,7 @@ ServeMux remains responsible for method dispatch, structural path matching,
 precedence, redirects, and conflict detection. A route bucket retains the parsed
 Google template selected for that handler.
 
-After ServeMux selects the route, OpenKratos extracts public variables from
+After ServeMux selects the route, Forge extracts public variables from
 `Request.URL.EscapedPath()` with the parsed template. It must not reconstruct a
 multi-segment resource name only from decoded `PathValue` values, because that
 loses the difference between `/` and `%2F`.
@@ -194,7 +194,7 @@ received. Matching never captures the leading `/`.
 
 `Context.Vars()` and `Request.PathValue(fieldPath)` must return the same public
 value. Templates that need synthetic ServeMux wildcard names use the reserved
-OpenKratos prefix. The router clears those captures before application
+Forge prefix. The router clears those captures before application
 middleware and handlers run, so they remain inaccessible to application code.
 
 Malformed request-target escapes are rejected with HTTP 400 before application
@@ -220,7 +220,7 @@ Path expansion must return an error for:
 - An invalid template.
 
 The current `BuildPath` API cannot report these failures. Before the first
-OpenKratos release, replace it with:
+Forge release, replace it with:
 
 ```go
 func BuildPath(pathTemplate string, msg proto.Message, opts ...BuildPathOption) (string, error)
@@ -320,7 +320,7 @@ JSON. Google-transcoded JSON uses `Content-Type: application/json` and ProtoJSON
 wire semantics without changing the general-purpose `encoding/json` codec.
 Generated handlers call the descriptor-aware projection helpers directly;
 `google.api.HttpBody` retains its declared media type. The existing
-`application/protojson` codec remains available for explicit OpenKratos calls but
+`application/protojson` codec remains available for explicit Forge calls but
 is not the public media type of a Google-transcoded endpoint.
 
 ### Additional Bindings

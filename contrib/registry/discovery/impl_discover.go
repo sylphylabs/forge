@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/openkratos/kratos/registry"
+	"github.com/sylphylabs/forge/registry"
 )
 
 func filterInstancesByZone(ins *disInstancesInfo, zone string) []*registry.ServiceInstance {

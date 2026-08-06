@@ -13,9 +13,9 @@ import (
 	natsgo "github.com/nats-io/nats.go"
 	natsjs "github.com/nats-io/nats.go/jetstream"
 
-	corenats "github.com/openkratos/kratos/contrib/transport/nats"
-	"github.com/openkratos/kratos/metadata"
-	"github.com/openkratos/kratos/transport/message"
+	corenats "github.com/sylphylabs/forge/contrib/transport/nats"
+	"github.com/sylphylabs/forge/metadata"
+	"github.com/sylphylabs/forge/transport/message"
 )
 
 var (

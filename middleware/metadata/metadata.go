@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/openkratos/kratos/metadata"
-	"github.com/openkratos/kratos/middleware"
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/metadata"
+	"github.com/sylphylabs/forge/middleware"
+	"github.com/sylphylabs/forge/transport"
 )
 
 // Option is metadata option.

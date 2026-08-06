@@ -1,10 +1,10 @@
-module github.com/openkratos/kratos/contrib/registry/consul
+module github.com/sylphylabs/forge/contrib/registry/consul
 
 go 1.27rc2
 
 require (
 	github.com/hashicorp/consul/api/v2 v2.0.0
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 )
 
 require (
@@ -29,6 +29,5 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 )
 
-replace github.com/openkratos/kratos => ../../../
+replace github.com/sylphylabs/forge => ../../../
 
-replace github.com/openkratos/api => ../../../../OpenKratos-api

@@ -1,11 +1,11 @@
-module github.com/openkratos/kratos/cmd
+module github.com/sylphylabs/forge/cmd
 
 go 1.27rc2
 
 require (
 	github.com/google/gnostic v0.7.1
-	github.com/openkratos/api v0.0.0
-	github.com/openkratos/kratos v0.0.0
+	github.com/sylphylabs/forge/api v0.0.0
+	github.com/sylphylabs/forge v0.0.0
 	github.com/pb33f/libopenapi v0.38.7
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	google.golang.org/genproto/googleapis/api v0.0.0-20260720211330-0afa2a65878a
@@ -26,9 +26,9 @@ require (
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.1 // indirect
 )
 
-replace github.com/openkratos/kratos => ..
+replace github.com/sylphylabs/forge => ..
 
-// Local-only until github.com/openkratos/api has its first public release.
-replace github.com/openkratos/api => ../../OpenKratos-api
+// The protobuf contract lives in this repository; see api/.
+replace github.com/sylphylabs/forge/api => ../api
 
 tool google.golang.org/grpc/cmd/protoc-gen-go-grpc

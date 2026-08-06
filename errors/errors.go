@@ -4,11 +4,11 @@ import (
 	"errors"
 	"fmt"
 
-	errorapi "github.com/openkratos/api/errors/v1"
+	errorapi "github.com/sylphylabs/forge/api/errors/v1"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/status"
 
-	httpstatus "github.com/openkratos/kratos/transport/http/status"
+	httpstatus "github.com/sylphylabs/forge/transport/http/status"
 )
 
 const (

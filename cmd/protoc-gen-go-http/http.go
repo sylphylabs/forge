@@ -12,18 +12,18 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/gofeaturespb"
 
-	"github.com/openkratos/kratos/cmd/internal/generator"
-	"github.com/openkratos/kratos/cmd/internal/httpbinding"
-	"github.com/openkratos/kratos/internal/httprule"
+	"github.com/sylphylabs/forge/cmd/internal/generator"
+	"github.com/sylphylabs/forge/cmd/internal/httpbinding"
+	"github.com/sylphylabs/forge/internal/httprule"
 )
 
 const (
 	contextPackage       = protogen.GoImportPath("context")
-	transportHTTPPackage = protogen.GoImportPath("github.com/openkratos/kratos/transport/http")
+	transportHTTPPackage = protogen.GoImportPath("github.com/sylphylabs/forge/transport/http")
 	httpBodyFullName     = protoreflect.FullName("google.api.HttpBody")
 )
 
-// generateHTTPFile generates a _http.pb.go file containing OpenKratos HTTP bindings.
+// generateHTTPFile generates a _http.pb.go file containing Forge HTTP bindings.
 func generateHTTPFile(gen *protogen.Plugin, file *protogen.File, omitempty bool, omitemptyPrefix string) (*protogen.GeneratedFile, error) {
 	if len(file.Services) == 0 || (omitempty && !hasHTTPRule(file.Services)) {
 		return nil, nil

@@ -8,8 +8,8 @@ import (
 	"github.com/polarismesh/polaris-go"
 	"github.com/polarismesh/polaris-go/pkg/model"
 
-	"github.com/openkratos/kratos/config"
-	"github.com/openkratos/kratos/log"
+	"github.com/sylphylabs/forge/config"
+	"github.com/sylphylabs/forge/log"
 )
 
 type Watcher struct {

@@ -3,7 +3,7 @@ package selector
 import (
 	"context"
 
-	"github.com/openkratos/kratos/errors"
+	"github.com/sylphylabs/forge/errors"
 )
 
 // ErrNoAvailable is no available node.

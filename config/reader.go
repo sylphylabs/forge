@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/openkratos/kratos/log"
+	"github.com/sylphylabs/forge/log"
 )
 
 // Reader is config reader.

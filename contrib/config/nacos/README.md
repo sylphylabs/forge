@@ -5,7 +5,7 @@ import (
 	"github.com/nacos-group/nacos-sdk-go/v2/clients"
 	"github.com/nacos-group/nacos-sdk-go/v2/common/constant"
 
-	kconfig "github.com/openkratos/kratos/config"
+	kconfig "github.com/sylphylabs/forge/config"
 )
 
 sc := []constant.ServerConfig{

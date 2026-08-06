@@ -8,7 +8,7 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	"github.com/openkratos/kratos/internal/testdata/binding"
+	"github.com/sylphylabs/forge/internal/testdata/binding"
 )
 
 func TestBuildPath(t *testing.T) {
@@ -78,9 +78,9 @@ func TestBuildPath(t *testing.T) {
 		{
 			name:         "nested proto text field name",
 			pathTemplate: "/v1/{sub.name}",
-			request:      &binding.HelloRequest{Sub: &binding.Sub{Name: "openkratos"}},
+			request:      &binding.HelloRequest{Sub: &binding.Sub{Name: "forge"}},
 			opts:         []BuildPathOption{WithQueryParams()},
-			want:         "/v1/openkratos",
+			want:         "/v1/forge",
 		},
 		{
 			name:         "field mask query",

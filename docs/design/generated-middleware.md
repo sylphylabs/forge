@@ -6,7 +6,7 @@ Last reviewed: July 23, 2026
 
 ## Purpose
 
-This document defines how OpenKratos binds application middleware to generated
+This document defines how Forge binds application middleware to generated
 services without publishing middleware names or execution policy in Protobuf.
 It covers server-side unary and streaming RPCs, HTTP and gRPC reuse,
 transport-specific escape hatches, registration-time composition, and migration
@@ -21,7 +21,7 @@ topology is defined in
 
 ## Decision
 
-OpenKratos does not publish a `middleware/v1` Protobuf package and does not
+Forge does not publish a `middleware/v1` Protobuf package and does not
 generate Go interface methods from arbitrary hook names in `.proto` files.
 The unpublished `policy/v1` prototype is also removed before the first public
 API release.
@@ -117,7 +117,7 @@ validate the type and return a service-and-method-qualified error instead of
 panicking on an invalid replacement.
 
 The existing `middleware.Handler` and `middleware.Middleware` names migrate to
-`UnaryHandler` and `UnaryMiddleware`. OpenKratos is pre-v1 and does not retain
+`UnaryHandler` and `UnaryMiddleware`. Forge is pre-v1 and does not retain
 ambiguous aliases in the final core API solely for source compatibility.
 
 ## Generated Service Plan
@@ -194,7 +194,7 @@ plan := documentv1.DocumentServiceMiddleware{
 ```
 
 `Authenticate`, `RequireDocumentsRead`, and the other constructors above are
-application APIs. OpenKratos neither knows their names nor generates interfaces
+application APIs. Forge neither knows their names nor generates interfaces
 for them.
 
 The same plan may be used by both transports:
@@ -276,7 +276,7 @@ runtime may preallocate the exact combined length.
 HTTP performs route matching and request binding before invoking the composed
 unary handler. gRPC-Go performs message decoding and its configured interceptors
 before invoking the generated wrapper. Both pass the same protobuf request and
-OpenKratos server context to the shared unary chain.
+Forge server context to the shared unary chain.
 
 ## Stream Execution
 
@@ -334,7 +334,7 @@ These layers use `net/http` middleware, HTTP filters, or gRPC interceptors. They
 are not forced through `UnaryMiddleware` or `StreamMiddleware` and are not
 claimed to be portable.
 
-Common OpenKratos server middleware is configured only through the generated
+Common Forge server middleware is configured only through the generated
 service plan. Selector-based server middleware and an additional server-wide
 common middleware layer do not remain in the core runtime.
 
@@ -354,7 +354,7 @@ Wrapper construction completes before the transport registers the service.
 There is no first-request initialization and no partially registered service
 after a composition error.
 
-Middleware request errors and panics retain the normal OpenKratos error and
+Middleware request errors and panics retain the normal Forge error and
 recovery boundaries. The framework never substitutes a no-op after a
 construction failure.
 
@@ -391,7 +391,7 @@ Putting names such as `Authenticate` in a public descriptor would:
 - leave streaming lifecycle semantics undefined.
 
 The unpublished fixed `policy/v1` prototype has the opposite problem: it makes
-OpenKratos own a closed list of authentication, authorization, validation,
+Forge own a closed list of authentication, authorization, validation,
 audit, idempotency, rate, and budget capabilities. That list is not retained as
 a compatibility layer.
 
@@ -426,9 +426,9 @@ and gRPC per-message semantics.
 
 ### Phase 0: Remove unpublished schema experiments
 
-- [x] Remove `openkratos/policy/v1` from the local API module, generated bindings,
+- [x] Remove `forge/policy/v1` from the local API module, generated bindings,
   tests, and documentation.
-- [x] Do not add `openkratos/middleware/v1`.
+- [x] Do not add `forge/middleware/v1`.
 - [x] Re-run the API module's clean generation and local external-consumer gates.
 
 ### Phase 1: Runtime ABI

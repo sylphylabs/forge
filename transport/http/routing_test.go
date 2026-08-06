@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"testing"
 
-	kratoserrors "github.com/openkratos/kratos/errors"
+	kratoserrors "github.com/sylphylabs/forge/errors"
 )
 
 func TestCompileRoute(t *testing.T) {
@@ -20,25 +20,25 @@ func TestCompileRoute(t *testing.T) {
 		{template: "/", pattern: "/{$}"},
 		{
 			template:   "/users/{id}",
-			pattern:    "/users/{__openkratos0}",
+			pattern:    "/users/{__forge0}",
 			muxPattern: "/users/{id}",
 			direct:     true,
 		},
 		{
 			template:   "/v1/{parent}/{id}",
-			pattern:    "/v1/{__openkratos0}/{__openkratos1}",
+			pattern:    "/v1/{__forge0}/{__forge1}",
 			muxPattern: "/v1/{parent}/{id}",
 			direct:     true,
 		},
-		{template: "/users/{user.name}", pattern: "/users/{__openkratos0}", direct: true},
+		{template: "/users/{user.name}", pattern: "/users/{__forge0}", direct: true},
 		{
 			template: "/v1/{message.name=publishers/*/books/*}",
-			pattern:  "/v1/publishers/{__openkratos0}/books/{__openkratos1}",
+			pattern:  "/v1/publishers/{__forge0}/books/{__forge1}",
 		},
-		{template: "/files/{path...}", pattern: "/files/{__openkratos0...}"},
-		{template: "/v1/{name}:archive", pattern: "/v1/{__openkratos0}"},
-		{template: "/items/{id:[0-9]+}", pattern: "/items/{__openkratos0}"},
-		{template: "/items/{id:[^/]+}", pattern: "/items/{__openkratos0}"},
+		{template: "/files/{path...}", pattern: "/files/{__forge0...}"},
+		{template: "/v1/{name}:archive", pattern: "/v1/{__forge0}"},
+		{template: "/items/{id:[0-9]+}", pattern: "/items/{__forge0}"},
+		{template: "/items/{id:[^/]+}", pattern: "/items/{__forge0}"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.template, func(t *testing.T) {
@@ -70,7 +70,7 @@ func TestCompileRouteRejectsMultiSegmentLegacyRegex(t *testing.T) {
 }
 
 func TestCompileRouteRejectsReservedVariableName(t *testing.T) {
-	if _, err := compileRoute("/v1/{__openkratos0}"); err == nil {
+	if _, err := compileRoute("/v1/{__forge0}"); err == nil {
 		t.Fatal("expected a reserved path variable name error")
 	}
 }
@@ -84,7 +84,7 @@ func TestCompileRouteRejectsMiddleMultiWildcard(t *testing.T) {
 func TestRouteMuxAIPVariables(t *testing.T) {
 	srv := NewServer()
 	srv.Route("/").GET("/v1/{message.name=publishers/*/books/*}", func(ctx Context) error {
-		if got := ctx.Request().PathValue("__openkratos0"); got != "" {
+		if got := ctx.Request().PathValue("__forge0"); got != "" {
 			t.Errorf("internal path value = %q", got)
 		}
 		return ctx.String(http.StatusOK, ctx.Vars().Get("message.name"))
@@ -105,13 +105,13 @@ func TestRouteMuxGoogleEscapedVariables(t *testing.T) {
 	srv := NewServer()
 	route := srv.Route("/")
 	route.GET("/single/{name}", func(ctx Context) error {
-		if got := ctx.Request().PathValue("__openkratos0"); got != "" {
+		if got := ctx.Request().PathValue("__forge0"); got != "" {
 			t.Errorf("internal path value = %q", got)
 		}
 		return ctx.String(http.StatusOK, ctx.Vars().Get("name")+"|"+ctx.Request().PathValue("name"))
 	})
 	route.GET("/multi/{name=**}", func(ctx Context) error {
-		if got := ctx.Request().PathValue("__openkratos0"); got != "" {
+		if got := ctx.Request().PathValue("__forge0"); got != "" {
 			t.Errorf("internal path value = %q", got)
 		}
 		return ctx.String(http.StatusOK, ctx.Vars().Get("name")+"|"+ctx.Request().PathValue("name"))
@@ -174,13 +174,13 @@ func TestRouteMuxConstraintVariants(t *testing.T) {
 	srv := NewServer()
 	route := srv.Route("/")
 	route.GET("/items/{id:[0-9]+}", func(ctx Context) error {
-		if got := ctx.Request().PathValue("__openkratos0"); got != "" {
+		if got := ctx.Request().PathValue("__forge0"); got != "" {
 			t.Errorf("internal path value = %q", got)
 		}
 		return ctx.String(http.StatusOK, "id:"+ctx.Vars().Get("id"))
 	})
 	route.GET("/items/{slug}", func(ctx Context) error {
-		if got := ctx.Request().PathValue("__openkratos0"); got != "" {
+		if got := ctx.Request().PathValue("__forge0"); got != "" {
 			t.Errorf("internal path value = %q", got)
 		}
 		return ctx.String(http.StatusOK, "slug:"+ctx.Vars().Get("slug"))
@@ -242,7 +242,7 @@ func TestRouteMuxCustomVerbVariants(t *testing.T) {
 func TestRouteMuxPathValue(t *testing.T) {
 	srv := NewServer()
 	srv.Route("/").GET("/users/{user.name}", func(ctx Context) error {
-		if got := ctx.Request().PathValue("__openkratos0"); got != "" {
+		if got := ctx.Request().PathValue("__forge0"); got != "" {
 			t.Errorf("internal path value = %q", got)
 		}
 		return ctx.String(http.StatusOK, ctx.Request().PathValue("user.name"))

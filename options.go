@@ -1,4 +1,4 @@
-package kratos
+package forge
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/openkratos/kratos/registry"
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/registry"
+	"github.com/sylphylabs/forge/transport"
 )
 
 // Option is an application option.

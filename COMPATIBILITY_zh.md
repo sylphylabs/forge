@@ -1,4 +1,4 @@
-# OpenKratos 与 Kratos 兼容性说明
+# Forge 与 Kratos 兼容性说明
 
 状态：预发布
 
@@ -7,14 +7,14 @@
 本文是 [`COMPATIBILITY.md`](COMPATIBILITY.md) 的中文翻译；如果两份文档存在
 歧义，以英文规范版本为准。
 
-OpenKratos 是 `go-kratos/kratos` 的独立 fork，不是 Kratos v3 的直接替代品，
+Forge 是 `go-kratos/kratos` 的独立 fork，不是 Kratos v3 的直接替代品，
 也不承诺与未来 Kratos 版本保持源码、行为或发布兼容。
 
-OpenKratos 也不会仅为了兼容 Kratos 而保留 API。如果已有更清晰或更高效的替代
+Forge 也不会仅为了兼容 Kratos 而保留 API。如果已有更清晰或更高效的替代
 方案，并且变更有充分技术依据，就可以移除旧 API。这类移除属于有意的破坏性
 更新，必须同时提供可执行的迁移说明。
 
-本文只记录已经被 OpenKratos 接受并完成验证的有意差异。尚未完成的工作不是
+本文只记录已经被 Forge 接受并完成验证的有意差异。尚未完成的工作不是
 兼容性事实；拟采用、待重做或已拒绝的上游变更记录在
 [`docs/upstream-adoptions.md`](docs/upstream-adoptions.md)。
 
@@ -23,21 +23,21 @@ OpenKratos 也不会仅为了兼容 Kratos 而保留 API。如果已有更清晰
 - 上游仓库：`https://github.com/go-kratos/kratos`
 - 初始上游 commit：`668db92c2c001e9552594ba5a8aede8456af6d7e`
 - 初始上游版本线：Kratos v3
-- OpenKratos 版本线：v0，目前尚未正式发布
+- Forge 版本线：v0，目前尚未正式发布
 
 除非条目显式链接了更新的上游 revision，否则本文均以上述 commit 为比较基线。
 
 ## 差异摘要
 
-| 领域 | Kratos v3 基线 | OpenKratos | 影响 |
+| 领域 | Kratos v3 基线 | Forge | 影响 |
 | --- | --- | --- | --- |
-| 根 module | `github.com/go-kratos/kratos/v3` | `github.com/openkratos/kratos` | 源码不兼容 |
+| 根 module | `github.com/go-kratos/kratos/v3` | `github.com/sylphylabs/forge` | 源码不兼容 |
 | 版本线 | v3 | v0 预发布 | 发布不兼容 |
 | 最低 Go 版本 | Go 1.25 | Go 1.27 | 构建要求变化 |
 | Module 数量 | 28，包含 `cmd/kratos` | 27 | 发布和工具变化 |
 | 异步消息 Transport | 没有协议中立的异步契约 | 根 module 提供 `transport/message`；broker SDK 适配器仍是可选嵌套 module | 新增 API；不承诺 broker wire 兼容 |
 | 项目 CLI | `cmd/kratos` | 已移除 | 工作流不兼容 |
-| Protobuf generator | Kratos module 路径 | OpenKratos module 路径 | 安装路径变化 |
+| Protobuf generator | Kratos module 路径 | Forge module 路径 | 安装路径变化 |
 | Contrib provider SDK | 旧 provider major 与已归档直接依赖 | 当前稳定 major 与受维护的标准替代 | 源码与依赖图变化 |
 | UUID 生成 | `google/uuid` 与 `gofrs/uuid` | 标准库 `uuid` | 源码与生成 ID 行为变化 |
 | HTTP protobuf 生成 | Open API 字段访问 | Editions 2023 Open/Opaque API accessor | 新增生成能力 |
@@ -56,18 +56,18 @@ OpenKratos 也不会仅为了兼容 Kratos 而保留 API。如果已有更清晰
 
 ## 仓库身份与版本
 
-所有 OpenKratos module 和生成的 Go package 都使用
-`github.com/openkratos/kratos` 前缀。OpenKratos 当前处于 v0 版本线，因此路径
+所有 Forge module 和生成的 Go package 都使用
+`github.com/sylphylabs/forge` 前缀。Forge 当前处于 v0 版本线，因此路径
 不带上游的 `/v3` 后缀。
 
 contrib 与 generator module 同样遵循这一规则，例如：
 
 ```text
 github.com/go-kratos/kratos/contrib/middleware/jwt/v3
-github.com/openkratos/kratos/contrib/middleware/jwt
+github.com/sylphylabs/forge/contrib/middleware/jwt
 
 github.com/go-kratos/kratos/cmd/protoc-gen-go-http/v3
-github.com/openkratos/kratos/cmd
+github.com/sylphylabs/forge/cmd
 ```
 
 首次发布前，仓库内部 module 使用临时的 `v0.0.0` requirement 和相对路径
@@ -76,7 +76,7 @@ module tag 不会自动发布嵌套 module。
 
 ## 工具链
 
-OpenKratos 要求 Go 1.27。在 final 工具链发布前，开发与 CI 使用 Go 1.27 RC2。
+Forge 要求 Go 1.27。在 final 工具链发布前，开发与 CI 使用 Go 1.27 RC2。
 上游基线要求 Go 1.25，因此仍需停留在 Go 1.25 或 Go 1.26 的项目无法直接迁移。
 
 仓库当前包含 27 个 Go module。根目录的 `go test ./...` 不会覆盖嵌套 module，
@@ -84,12 +84,12 @@ OpenKratos 要求 Go 1.27。在 final 工具链发布前，开发与 CI 使用 G
 
 ## 项目 CLI 与代码生成
 
-OpenKratos 不提供通用 `kratos` CLI。被移除的 module 曾包含项目脚手架、源码
+Forge 不提供通用 `kratos` CLI。被移除的 module 曾包含项目脚手架、源码
 生成封装、应用运行器、升级器和 changelog 辅助功能。
 
 上游脚手架会复制模板，并对复制后的所有文件执行不受约束的字节替换。该操作
 可能修改 protobuf raw descriptor，却不更新其中编码的长度，最终造成初始化
-panic。OpenKratos 不保留或修补这种隐式改写源码的工作流。
+panic。Forge 不保留或修补这种隐式改写源码的工作流。
 
 | 已移除命令 | 替代方案 |
 | --- | --- |
@@ -99,17 +99,17 @@ panic。OpenKratos 不保留或修补这种隐式改写源码的工作流。
 | `kratos upgrade` | `go get`、`go install` 与 `go mod tidy` |
 | `kratos changelog` | Git 历史与 GitHub release notes |
 
-三个原子化 OpenKratos Protobuf 命令共享一个确定性的源码 module：
+三个原子化 Forge Protobuf 命令共享一个确定性的源码 module：
 
 ```text
-github.com/openkratos/kratos/cmd/protoc-gen-go-errors
-github.com/openkratos/kratos/cmd/protoc-gen-go-http
-github.com/openkratos/kratos/cmd/protoc-gen-go-middleware
+github.com/sylphylabs/forge/cmd/protoc-gen-go-errors
+github.com/sylphylabs/forge/cmd/protoc-gen-go-http
+github.com/sylphylabs/forge/cmd/protoc-gen-go-middleware
 ```
 
 每条命令都声明支持到 protobuf Edition 2024，并且只生成自己拥有的
 `_errors.pb.go`、`_http.pb.go` 或 `_middleware.pb.go` 产物。项目不保留
-`protoc-gen-go-openkratos` 转发命令。真实 `protoc` fixture 已经对 Edition 2023
+`protoc-gen-go-forge` 转发命令。真实 `protoc` fixture 已经对 Edition 2023
 Open/Opaque API 的 message、scalar、repeated、map、显式 presence 与 oneof 字段
 完成编译和执行验证。
 
@@ -175,7 +175,7 @@ server 行为应使用 HTTP filter 或 gRPC interceptor；其他 client middlewa
 
 ## Contrib Provider 依赖
 
-OpenKratos contrib module 使用当前稳定的 Apollo v5、Consul API v2 与 Nacos SDK
+Forge contrib module 使用当前稳定的 Apollo v5、Consul API v2 与 Nacos SDK
 v2 module path。使用 SDK 类型构造 Consul 或 Nacos provider 的应用需要修改
 import，因此属于源码不兼容：
 
@@ -192,12 +192,12 @@ github.com/nacos-group/nacos-sdk-go/v2/clients/config_client
 实现 `Validate() error` 仍然兼容，不需要 PGV runtime module。
 
 部分当前 provider SDK 仍会编译已归档的传递依赖。其归属和替换条件记录在
-[`docs/dependency-maintenance.md`](docs/dependency-maintenance.md)；OpenKratos
+[`docs/dependency-maintenance.md`](docs/dependency-maintenance.md)；Forge
 并不宣称所有传递仓库仍处于维护状态。
 
 ## UUID 生成
 
-OpenKratos 直接生成的所有 UUID 均使用 Go 1.27 标准库 `uuid`。根 module 与
+Forge 直接生成的所有 UUID 均使用 Go 1.27 标准库 `uuid`。根 module 与
 contrib provider 不再直接依赖 `github.com/google/uuid` 或
 `github.com/gofrs/uuid`。
 
@@ -206,12 +206,12 @@ instance ID 从 Google UUIDv1（`google/uuid.NewUUID`）改为标准库默认
 （`uuid.New`），在 Go 1.27 中即 UUIDv4。需要稳定 ID 或指定 UUID version 的服务
 仍应显式传入 application ID。
 
-Provider SDK 仍可能传递依赖其自身的 UUID package。OpenKratos 不暴露这些类型，
+Provider SDK 仍可能传递依赖其自身的 UUID package。Forge 不暴露这些类型，
 也不会为了隐藏上游依赖再引入第二套直接 UUID 实现。
 
 ## HTTP 路由
 
-OpenKratos 使用基于标准库 `http.ServeMux` 的路由树替换
+Forge 使用基于标准库 `http.ServeMux` 的路由树替换
 `github.com/gorilla/mux`。生成的 Google AIP 路径会编译为标准库方法与路径
 pattern，匹配变量仍可通过 `transport/http.Context.Vars()` 和
 `http.Request.PathValue()` 获取。
@@ -293,20 +293,20 @@ grpc-go 官方实现负责。完整合同与基数策略见
 
 ## 继承自 Kratos v3 的行为
 
-以下行为很重要，但不是 OpenKratos 与 Kratos v3 的差异：
+以下行为很重要，但不是 Forge 与 Kratos v3 的差异：
 
 - 日志使用 `log/slog`；
 - errors package 提供兼容标准库的包装；
 - `encoding/json` 与 `encoding/protojson` 是独立 codec；
 - 生成的 HTTP handler 会先 Bind 请求，再进入 service middleware。
 
-只有在 OpenKratos 修改并完成验证后，这些项目才会进入差异章节。
+只有在 Forge 修改并完成验证后，这些项目才会进入差异章节。
 
 ## 迁移
 
 可执行迁移步骤见
-[`docs/migration/kratos-to-openkratos_zh.md`](docs/migration/kratos-to-openkratos_zh.md)。
-Kratos v2 应用还需要先处理 v2 到 v3 的 API 变化，因为 OpenKratos 从 v3 设计
+[`docs/migration/kratos-to-forge_zh.md`](docs/migration/kratos-to-forge_zh.md)。
+Kratos v2 应用还需要先处理 v2 到 v3 的 API 变化，因为 Forge 从 v3 设计
 开始，不提供直接的 v2 兼容层。
 
 ## 维护规则

@@ -16,7 +16,7 @@ go1.27rc2 version
 
 ## Modules
 
-OpenKratos contains 27 Go modules. The root `go test ./...` command does not cover nested modules. Use the repository helpers for complete checks:
+Forge contains 27 Go modules. The root `go test ./...` command does not cover nested modules. Use the repository helpers for complete checks:
 
 ```shell
 ./hack/tools.sh tidy
@@ -43,7 +43,7 @@ for mod in $(find . -name go.mod -exec dirname {} \; | sort); do
 done
 ```
 
-Go 1.27 switches `x/net/http2` to its standard-library wrapper by default. OpenKratos requires `golang.org/x/net` v0.55.0 or newer because earlier wrapper releases omitted APIs used by gRPC-Go. Validate the native path without compatibility build tags:
+Go 1.27 switches `x/net/http2` to its standard-library wrapper by default. Forge requires `golang.org/x/net` v0.55.0 or newer because earlier wrapper releases omitted APIs used by gRPC-Go. Validate the native path without compatibility build tags:
 
 ```shell
 go1.27rc2 test ./...
@@ -51,7 +51,7 @@ go1.27rc2 test ./...
 
 ## HTTP Routing
 
-OpenKratos uses the Go standard library's `http.ServeMux` method and path tree. The transport compiles Google AIP path templates into standard-library patterns and restores the original variables through both `Context.Vars()` and `Request.PathValue()`.
+Forge uses the Go standard library's `http.ServeMux` method and path tree. The transport compiles Google AIP path templates into standard-library patterns and restores the original variables through both `Context.Vars()` and `Request.PathValue()`.
 
 This is intentionally not route-compatible with Gorilla mux:
 
@@ -84,12 +84,12 @@ go test ./selector/p2c -run '^$' -bench '^BenchmarkSelect' \
 
 ## Repository Identity
 
-All OpenKratos modules and generated Go package paths use the `github.com/openkratos/kratos` prefix. Internal cross-module requirements use the temporary `v0.0.0` version together with local `replace` directives until the first OpenKratos tags are published.
+All Forge modules and generated Go package paths use the `github.com/sylphylabs/forge` prefix. Internal cross-module requirements use the temporary `v0.0.0` version together with local `replace` directives until the first Forge tags are published.
 
-The `upstream` remote cannot be pushed to from this checkout. Add the OpenKratos repository as `origin` only after it has been created:
+The `upstream` remote cannot be pushed to from this checkout. Add the Forge repository as `origin` only after it has been created:
 
 ```shell
-git remote add origin git@github.com:openkratos/kratos.git
+git remote add origin git@github.com:sylphylabs/forge.git
 ```
 
 Do not push upstream Kratos tags to `origin`.

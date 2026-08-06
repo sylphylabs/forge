@@ -9,14 +9,14 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/openkratos/kratos/cmd/internal/generator"
+	"github.com/sylphylabs/forge/cmd/internal/generator"
 )
 
 const (
 	contextPackage       = protogen.GoImportPath("context")
 	fmtPackage           = protogen.GoImportPath("fmt")
-	middlewarePackage    = protogen.GoImportPath("github.com/openkratos/kratos/middleware")
-	transportHTTPPackage = protogen.GoImportPath("github.com/openkratos/kratos/transport/http")
+	middlewarePackage    = protogen.GoImportPath("github.com/sylphylabs/forge/middleware")
+	transportHTTPPackage = protogen.GoImportPath("github.com/sylphylabs/forge/transport/http")
 	grpcPackage          = protogen.GoImportPath("google.golang.org/grpc")
 )
 
@@ -187,7 +187,7 @@ func generateHTTPMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.
 
 	g.P("// Wrap", service.GoName, "HTTPServer snapshots plan and composes every HTTP handler before registration.")
 	g.P("func Wrap", service.GoName, "HTTPServer(srv ", service.GoName, "HTTPServer, plan ", service.GoName, "Middleware) (", service.GoName, "HTTPServer, error) {")
-	g.P("if srv == nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("openkratos: nil "+service.GoName+" HTTP server"), ") }")
+	g.P("if srv == nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: nil "+service.GoName+" HTTP server"), ") }")
 	g.P("wrapped := &", wrapper, "{", service.GoName, "HTTPServer: srv}")
 	for _, method := range methods {
 		generateComposeBlock(g, service, method, "HTTP", "srv", "wrapped")
@@ -223,7 +223,7 @@ func generateGRPCMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.
 
 	g.P("// Wrap", service.GoName, "GRPCServer snapshots plan and composes every gRPC handler before registration.")
 	g.P("func Wrap", service.GoName, "GRPCServer(srv ", service.GoName, "Server, plan ", service.GoName, "Middleware) (", service.GoName, "Server, error) {")
-	g.P("if srv == nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("openkratos: nil "+service.GoName+" gRPC server"), ") }")
+	g.P("if srv == nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: nil "+service.GoName+" gRPC server"), ") }")
 	g.P("wrapped := &", wrapper, "{", service.GoName, "Server: srv}")
 	for _, method := range service.Methods {
 		generateComposeBlock(g, service, method, "gRPC", "srv", "wrapped")
@@ -254,11 +254,11 @@ func generateComposeBlock(g *protogen.GeneratedFile, service *protogen.Service, 
 		g.P("middlewares = append(middlewares, plan.Methods.", method.GoName, "...)")
 		g.P("handler, err := ", middlewarePackage.Ident("ComposeUnary"), "(func(ctx ", contextPackage.Ident("Context"), ", request any) (any, error) {")
 		g.P("typed, ok := request.(*", method.Input.GoIdent, ")")
-		g.P("if !ok { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("openkratos: "+qualified+" request type %T, want *"+method.Input.GoIdent.GoName), ", request) }")
+		g.P("if !ok { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: "+qualified+" request type %T, want *"+method.Input.GoIdent.GoName), ", request) }")
 		g.P("return ", serviceVar, ".", method.GoName, "(ctx, typed)")
 		g.P("}, middlewares...)")
 	}
-	g.P("if err != nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("openkratos: wrapping "+qualified+": %w"), ", err) }")
+	g.P("if err != nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: wrapping "+qualified+": %w"), ", err) }")
 	g.P(wrapperVar, ".", field, " = handler")
 	g.P("}")
 }
@@ -271,15 +271,15 @@ func generateStreamTerminal(g *protogen.GeneratedFile, service *protogen.Service
 		nativeType = grpcPackage.Ident("ServerStream")
 	}
 	g.P("native, ok := stream.Context().Value(", adapter, "Key{}).(", nativeType, ")")
-	g.P("if !ok { return ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("openkratos: "+qualified+" lost native stream"), ") }")
+	g.P("if !ok { return ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: "+qualified+" lost native stream"), ") }")
 	g.P("typedStream := &", adapter, "Typed{ServerStream: native, stream: stream}")
 	if method.Desc.IsStreamingClient() {
-		g.P("if request != nil { return ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("openkratos: "+qualified+" initial request type %T, want nil"), ", request) }")
+		g.P("if request != nil { return ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: "+qualified+" initial request type %T, want nil"), ", request) }")
 		g.P("return ", serviceVar, ".", method.GoName, "(typedStream)")
 		return
 	}
 	g.P("typed, ok := request.(*", method.Input.GoIdent, ")")
-	g.P("if !ok { return ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("openkratos: "+qualified+" request type %T, want *"+method.Input.GoIdent.GoName), ", request) }")
+	g.P("if !ok { return ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: "+qualified+" request type %T, want *"+method.Input.GoIdent.GoName), ", request) }")
 	g.P("return ", serviceVar, ".", method.GoName, "(typed, typedStream)")
 }
 
@@ -290,7 +290,7 @@ func generateHTTPWrapperMethod(g *protogen.GeneratedFile, service *protogen.Serv
 		g.P("reply, err := s.", field, "(ctx, request)")
 		g.P("if err != nil { return nil, err }")
 		g.P("typed, ok := reply.(*", method.Output.GoIdent, ")")
-		g.P("if !ok { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("openkratos: "+string(service.Desc.FullName())+"/"+string(method.Desc.Name())+" HTTP reply type %T, want *"+method.Output.GoIdent.GoName), ", reply) }")
+		g.P("if !ok { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: "+string(service.Desc.FullName())+"/"+string(method.Desc.Name())+" HTTP reply type %T, want *"+method.Output.GoIdent.GoName), ", reply) }")
 		g.P("return typed, nil")
 		g.P("}")
 		g.P()
@@ -318,7 +318,7 @@ func generateGRPCWrapperMethod(g *protogen.GeneratedFile, service *protogen.Serv
 		g.P("reply, err := s.", field, "(ctx, request)")
 		g.P("if err != nil { return nil, err }")
 		g.P("typed, ok := reply.(*", method.Output.GoIdent, ")")
-		g.P("if !ok { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("openkratos: "+string(service.Desc.FullName())+"/"+string(method.Desc.Name())+" gRPC reply type %T, want *"+method.Output.GoIdent.GoName), ", reply) }")
+		g.P("if !ok { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: "+string(service.Desc.FullName())+"/"+string(method.Desc.Name())+" gRPC reply type %T, want *"+method.Output.GoIdent.GoName), ", reply) }")
 		g.P("return typed, nil")
 		g.P("}")
 		g.P()

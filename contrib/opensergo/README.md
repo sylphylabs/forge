@@ -18,9 +18,9 @@ if err != nil {
 }
 helloworld.RegisterGreeterServer(grpcSrv, grpcService)
 
-app := kratos.New(
-	kratos.Name(Name),
-	kratos.Server(
+app := forge.New(
+	forge.Name(Name),
+	forge.Server(
 		grpcSrv,
 	),
 )

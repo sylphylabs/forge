@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report reproducible incorrect OpenKratos behavior.
+about: Report reproducible incorrect Forge behavior.
 title: "[Bug] "
 labels: bug
 assignees: ''
@@ -17,12 +17,12 @@ the problem. Remove credentials and private data.
 
 ### Regression information
 
-State whether the behavior differs from an earlier OpenKratos revision or from
+State whether the behavior differs from an earlier Forge revision or from
 upstream Kratos. Link the relevant compatibility entry when one exists.
 
 ### Environment
 
-- OpenKratos version or commit (`go list -m github.com/openkratos/kratos`):
+- Forge version or commit (`go list -m github.com/sylphylabs/forge`):
 - Go version (`go version`):
 - Operating system and architecture:
 - Transport, registry, config source, or contrib module involved:

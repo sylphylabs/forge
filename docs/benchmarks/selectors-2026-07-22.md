@@ -2,7 +2,7 @@
 
 ## Environment
 
-- Baseline: `3f29df21` (OpenKratos before selector PRs)
+- Baseline: `3f29df21` (Forge before selector PRs)
 - Optimized algorithms: WRR `42b647be`, P2C `f1246466`
 - Benchmark harness: `4fa25d1b`
 - Go: `go1.26.4`

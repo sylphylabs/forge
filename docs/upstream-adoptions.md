@@ -6,7 +6,7 @@ Last reviewed: July 22, 2026
 
 ## Purpose
 
-OpenKratos preserves the go-kratos history but does not merge upstream changes
+Forge preserves the go-kratos history but does not merge upstream changes
 mechanically. This ledger records why a notable upstream proposal was adopted,
 superseded, deferred for redesign, or rejected. It complements the synchronization
 policy in [`UPSTREAM.md`](../UPSTREAM.md); it does not replace commit provenance.
@@ -15,21 +15,21 @@ the implementation and validation are complete.
 
 ## Status Vocabulary
 
-- **Adopted**: accepted into OpenKratos with a local commit and validation.
+- **Adopted**: accepted into Forge with a local commit and validation.
 - **Implemented**: implemented and validated in the current worktree; the local
   commit and final provenance record are still pending.
-- **Superseded**: the problem is handled by a different OpenKratos design.
+- **Superseded**: the problem is handled by a different Forge design.
 - **Candidate**: the change is technically worthwhile but is not scheduled.
 - **Planned**: accepted in principle and awaiting an isolated implementation.
 - **Rework required**: the problem is valid, but the proposed patch is not safe
   or complete enough to import.
-- **Rejected**: the proposed behavior conflicts with OpenKratos goals.
+- **Rejected**: the proposed behavior conflicts with Forge goals.
 
 ## Current Ledger
 
 All upstream states in this table were verified on July 22, 2026.
 
-| Upstream revision | Area | Decision | OpenKratos record | Rationale |
+| Upstream revision | Area | Decision | Forge record | Rationale |
 | --- | --- | --- | --- | --- |
 | [Issue #3820](https://github.com/go-kratos/kratos/issues/3820) | Gorilla mux request-path cost | Adopted | `3f29df21`; [benchmarks](benchmarks/http-routing-2026-07-22.md) | ServeMux successful dispatch improves 20.02% to 99.71% across the controlled matrix and removes route-count scaling; the fixed 404 and path-variable allocation costs are explicitly accepted. |
 | [PR #3831](https://github.com/go-kratos/kratos/pull/3831) @ `15639816` | WRR steady-state cost | Adopted | `42b647be`; tests `4fa25d1b`; [benchmarks](benchmarks/selectors-2026-07-22.md) | Removes the per-pick node-set scan while retaining churn invariants. |
@@ -39,8 +39,8 @@ All upstream states in this table were verified on July 22, 2026.
 | [PR #3856](https://github.com/go-kratos/kratos/pull/3856) @ `e4697dc1` | HTTP path escaping | Adopted | `ec58dbf5` | Reimplemented with AIP-template-aware escaping: single-segment variables cannot inject route slashes, while structural multi-segment slashes remain intact. |
 | [PR #3838](https://github.com/go-kratos/kratos/pull/3838) @ `1a937058` | Eureka endpoint metadata aliasing | Adopted | `71bae081` | Metadata is cloned per endpoint and source metadata remains unchanged. |
 | [PR #3836](https://github.com/go-kratos/kratos/pull/3836) @ `b444c589` | EWMA cancellation health signal | Adopted | `0afec3e2` | Corrects `errors.Is` ordering and does not penalize caller cancellation unless a custom classifier explicitly requests it. |
-| [PR #3852](https://github.com/go-kratos/kratos/pull/3852) @ `1c993d03` | `kratos run` relative paths | Superseded | Legacy CLI removed | OpenKratos uses the standard Go toolchain to run services and does not retain the `kratos run` wrapper. |
-| [Issue #3854](https://github.com/go-kratos/kratos/issues/3854) | Project scaffold corrupts protobuf descriptors | Superseded | Legacy CLI removed | Blind module-path replacement mutates generated raw descriptors without updating their encoded lengths. OpenKratos removes the project-scaffolding CLI instead of preserving this implicit source rewrite. |
+| [PR #3852](https://github.com/go-kratos/kratos/pull/3852) @ `1c993d03` | `kratos run` relative paths | Superseded | Legacy CLI removed | Forge uses the standard Go toolchain to run services and does not retain the `kratos run` wrapper. |
+| [Issue #3854](https://github.com/go-kratos/kratos/issues/3854) | Project scaffold corrupts protobuf descriptors | Superseded | Legacy CLI removed | Blind module-path replacement mutates generated raw descriptors without updating their encoded lengths. Forge removes the project-scaffolding CLI instead of preserving this implicit source rewrite. |
 | [PR #3781](https://github.com/go-kratos/kratos/pull/3781) @ `bf65393e` | Eureka retry server selection | Adopted | `71bae081` | Defines `maxRetry` as retries after the first attempt, removes shared slice mutation, handles empty server lists, and replays request bodies. |
 | [PR #3835](https://github.com/go-kratos/kratos/pull/3835) @ `e98b0686` | gRPC stream timeout | Rejected | None | Applying the default two-second unary timeout to every stream would terminate normal long-lived streams. Any stream timeout must be explicit and cover the full send/receive lifecycle. |
 | [PR #3813](https://github.com/go-kratos/kratos/pull/3813) @ `04a41bad` | Opaque protobuf HTTP generation | Adopted | `a08e60ea` | Reimplemented with API-aware getters/setters and real Editions 2023 opaque generation-and-compilation coverage for message, scalar, repeated, and map fields. |
@@ -64,7 +64,7 @@ All upstream states in this table were verified on July 22, 2026.
 Before an upstream proposal is marked **Adopted**:
 
 1. Record the upstream PR and exact source commit.
-2. Re-evaluate the change against the current OpenKratos architecture and Go
+2. Re-evaluate the change against the current Forge architecture and Go
    baseline; do not assume a clean cherry-pick is correct.
 3. Preserve upstream authorship and source provenance in the local commit.
 4. Add focused correctness tests. Shared-state changes also require race tests.

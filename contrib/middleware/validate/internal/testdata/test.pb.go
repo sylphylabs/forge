@@ -82,7 +82,7 @@ const file_test_proto_rawDesc = "" +
 	"test.proto\x12\btestdata\x1a\x1bbuf/validate/validate.proto\"@\n" +
 	"\x06Modern\x12\x1b\n" +
 	"\x04name\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x05R\x04name\x12\x19\n" +
-	"\x03age\x18\x02 \x01(\x05B\a\xbaH\x04\x1a\x02 \x12R\x03ageBLZJgithub.com/openkratos/kratos/contrib/middleware/validate/internal/testdatab\x06proto3"
+	"\x03age\x18\x02 \x01(\x05B\a\xbaH\x04\x1a\x02 \x12R\x03ageBKZIgithub.com/sylphylabs/forge/contrib/middleware/validate/internal/testdatab\x06proto3"
 
 var (
 	file_test_proto_rawDescOnce sync.Once

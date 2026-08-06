@@ -289,16 +289,16 @@ func NewGoogleRpcStatusSchema(name string, any_name string) *v3.NamedSchemaOrRef
 	}
 }
 
-// OpenKratos HTTP errors use the stable four-field envelope shared by the
-// runtime errors package and the public openkratos.errors.v1.Status schema.
-func NewOpenKratosErrorStatusSchema(name string) *v3.NamedSchemaOrReference {
+// Forge HTTP errors use the stable four-field envelope shared by the
+// runtime errors package and the public sylphy.errors.v1.Status schema.
+func NewForgeErrorStatusSchema(name string) *v3.NamedSchemaOrReference {
 	return &v3.NamedSchemaOrReference{
 		Name: name,
 		Value: &v3.SchemaOrReference{
 			Oneof: &v3.SchemaOrReference_Schema{
 				Schema: &v3.Schema{
 					Type:        "object",
-					Description: "OpenKratos HTTP JSON error envelope. gRPC transports project the same error into google.rpc.Status with google.rpc.ErrorInfo details.",
+					Description: "Forge HTTP JSON error envelope. gRPC transports project the same error into google.rpc.Status with google.rpc.ErrorInfo details.",
 					Required:    []string{"code"},
 					Properties: &v3.Properties{
 						AdditionalProperties: []*v3.NamedSchemaOrReference{
@@ -309,7 +309,7 @@ func NewOpenKratosErrorStatusSchema(name string) *v3.NamedSchemaOrReference {
 										Schema: &v3.Schema{
 											Type:        "integer",
 											Format:      "int32",
-											Description: "HTTP status code carried by the OpenKratos error.",
+											Description: "HTTP status code carried by the Forge error.",
 										},
 									},
 								},

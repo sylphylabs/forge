@@ -181,7 +181,7 @@ func newProjectionMessage(t testing.TB) protoreflect.Message {
 	file, err := protodesc.NewFile(&descriptorpb.FileDescriptorProto{
 		Syntax:  proto.String("proto3"),
 		Name:    proto.String("projection.proto"),
-		Package: proto.String("openkratos.test"),
+		Package: proto.String("sylphy.test"),
 		MessageType: []*descriptorpb.DescriptorProto{
 			{
 				Name: proto.String("Child"),
@@ -205,12 +205,12 @@ func newProjectionMessage(t testing.TB) protoreflect.Message {
 					{Name: proto.String("name"), Number: proto.Int32(1), Label: &optional, Type: &stringKind},
 					{Name: proto.String("count"), Number: proto.Int32(2), Label: &optional, Type: &int64Kind},
 					{Name: proto.String("tags"), Number: proto.Int32(3), Label: &repeated, Type: &stringKind},
-					{Name: proto.String("labels"), Number: proto.Int32(4), Label: &repeated, Type: &messageKind, TypeName: proto.String(".openkratos.test.Projection.LabelsEntry")},
-					{Name: proto.String("child"), Number: proto.Int32(5), Label: &optional, Type: &messageKind, TypeName: proto.String(".openkratos.test.Child")},
+					{Name: proto.String("labels"), Number: proto.Int32(4), Label: &repeated, Type: &messageKind, TypeName: proto.String(".sylphy.test.Projection.LabelsEntry")},
+					{Name: proto.String("child"), Number: proto.Int32(5), Label: &optional, Type: &messageKind, TypeName: proto.String(".sylphy.test.Child")},
 					{Name: proto.String("data"), Number: proto.Int32(6), Label: &optional, Type: &bytesKind},
 					{Name: proto.String("score"), Number: proto.Int32(7), Label: &optional, Type: &doubleKind},
-					{Name: proto.String("state"), Number: proto.Int32(8), Label: &optional, Type: &enumKind, TypeName: proto.String(".openkratos.test.State")},
-					{Name: proto.String("children"), Number: proto.Int32(9), Label: &repeated, Type: &messageKind, TypeName: proto.String(".openkratos.test.Child")},
+					{Name: proto.String("state"), Number: proto.Int32(8), Label: &optional, Type: &enumKind, TypeName: proto.String(".sylphy.test.State")},
+					{Name: proto.String("children"), Number: proto.Int32(9), Label: &repeated, Type: &messageKind, TypeName: proto.String(".sylphy.test.Child")},
 				},
 			},
 		},

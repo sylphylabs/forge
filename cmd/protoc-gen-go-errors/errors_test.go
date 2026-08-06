@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	errorapi "github.com/openkratos/api/errors/v1"
+	errorapi "github.com/sylphylabs/forge/api/errors/v1"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -12,7 +12,7 @@ import (
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
-func TestGenerateOpenKratosErrorAnnotations(t *testing.T) {
+func TestGenerateForgeErrorAnnotations(t *testing.T) {
 	enumOptions := new(descriptorpb.EnumOptions)
 	proto.SetExtension(enumOptions, errorapi.E_DefaultCode, int32(500))
 	valueOptions := new(descriptorpb.EnumValueOptions)
@@ -22,7 +22,7 @@ func TestGenerateOpenKratosErrorAnnotations(t *testing.T) {
 		Name:       proto.String("test/v1/errors.proto"),
 		Package:    proto.String("test.v1"),
 		Syntax:     proto.String("proto3"),
-		Dependency: []string{"openkratos/errors/v1/errors.proto"},
+		Dependency: []string{"sylphy/errors/v1/errors.proto"},
 		Options: &descriptorpb.FileOptions{
 			GoPackage: proto.String("example.com/test/v1;testv1"),
 		},
@@ -39,7 +39,7 @@ func TestGenerateOpenKratosErrorAnnotations(t *testing.T) {
 		FileToGenerate: []string{file.GetName()},
 		ProtoFile: []*descriptorpb.FileDescriptorProto{
 			protodesc.ToFileDescriptorProto(descriptorpb.File_google_protobuf_descriptor_proto),
-			protodesc.ToFileDescriptorProto(errorapi.File_openkratos_errors_v1_errors_proto),
+			protodesc.ToFileDescriptorProto(errorapi.File_sylphy_errors_v1_errors_proto),
 			file,
 		},
 	}
@@ -68,7 +68,7 @@ func TestGenerateOpenKratosErrorAnnotations(t *testing.T) {
 		`errors.New(500, ErrorReason_INTERNAL.String()`,
 		`func ErrorNotFound(`,
 		`errors.New(404, ErrorReason_NOT_FOUND.String()`,
-		`github.com/openkratos/kratos/errors`,
+		`github.com/sylphylabs/forge/errors`,
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("generated output is missing %q:\n%s", want, content)
@@ -128,7 +128,7 @@ func newErrorPlugin(t *testing.T, defaultCode int32, valueCode *int32) (*protoge
 		Name:       proto.String("test/v1/errors.proto"),
 		Package:    proto.String("test.v1"),
 		Syntax:     proto.String("proto3"),
-		Dependency: []string{"openkratos/errors/v1/errors.proto"},
+		Dependency: []string{"sylphy/errors/v1/errors.proto"},
 		Options:    &descriptorpb.FileOptions{GoPackage: proto.String("example.com/test/v1;testv1")},
 		EnumType: []*descriptorpb.EnumDescriptorProto{{
 			Name:    proto.String("ErrorReason"),
@@ -143,7 +143,7 @@ func newErrorPlugin(t *testing.T, defaultCode int32, valueCode *int32) (*protoge
 		FileToGenerate: []string{file.GetName()},
 		ProtoFile: []*descriptorpb.FileDescriptorProto{
 			protodesc.ToFileDescriptorProto(descriptorpb.File_google_protobuf_descriptor_proto),
-			protodesc.ToFileDescriptorProto(errorapi.File_openkratos_errors_v1_errors_proto),
+			protodesc.ToFileDescriptorProto(errorapi.File_sylphy_errors_v1_errors_proto),
 			file,
 		},
 	}

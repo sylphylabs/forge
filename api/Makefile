@@ -29,7 +29,7 @@ vet:
 
 descriptor:
 	mkdir -p build
-	$(BUF) build --as-file-descriptor-set -o build/openkratos-api.binpb
+	$(BUF) build --as-file-descriptor-set -o build/forge-api.binpb
 	protoc -I proto -I testdata/consumer --include_imports \
 		--descriptor_set_out=build/consumer.binpb \
 		testdata/consumer/test/v1/consumer.proto

@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/openkratos/kratos/log"
-	"github.com/openkratos/kratos/registry"
+	"github.com/sylphylabs/forge/log"
+	"github.com/sylphylabs/forge/registry"
 )
 
 func (d *Discovery) Register(ctx context.Context, service *registry.ServiceInstance) (err error) {

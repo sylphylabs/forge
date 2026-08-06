@@ -5,8 +5,8 @@ import (
 
 	"github.com/apolloconfig/agollo/v5/storage"
 
-	"github.com/openkratos/kratos/config"
-	"github.com/openkratos/kratos/encoding"
+	"github.com/sylphylabs/forge/config"
+	"github.com/sylphylabs/forge/encoding"
 )
 
 func Test_onChange(t *testing.T) {

@@ -3,11 +3,11 @@ package circuitbreaker
 import (
 	"context"
 
-	"github.com/openkratos/kratos/errors"
-	internalbreaker "github.com/openkratos/kratos/internal/circuitbreaker"
-	"github.com/openkratos/kratos/internal/group"
-	"github.com/openkratos/kratos/middleware"
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/errors"
+	internalbreaker "github.com/sylphylabs/forge/internal/circuitbreaker"
+	"github.com/sylphylabs/forge/internal/group"
+	"github.com/sylphylabs/forge/middleware"
+	"github.com/sylphylabs/forge/transport"
 )
 
 // ErrNotAllowed is request failed due to circuit breaker triggered.

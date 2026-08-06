@@ -6,7 +6,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/openkratos/kratos/metadata"
+	"github.com/sylphylabs/forge/metadata"
 )
 
 // Message is the portable part of a delivered message.

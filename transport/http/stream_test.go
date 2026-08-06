@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openkratos/kratos/encoding"
-	"github.com/openkratos/kratos/internal/testdata/binding"
-	"github.com/openkratos/kratos/middleware"
-	"github.com/openkratos/kratos/selector"
-	transportpkg "github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/encoding"
+	"github.com/sylphylabs/forge/internal/testdata/binding"
+	"github.com/sylphylabs/forge/middleware"
+	"github.com/sylphylabs/forge/selector"
+	transportpkg "github.com/sylphylabs/forge/transport"
 )
 
 type streamTestCodec struct{}

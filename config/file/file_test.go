@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openkratos/kratos/config"
+	"github.com/sylphylabs/forge/config"
 )
 
 const (

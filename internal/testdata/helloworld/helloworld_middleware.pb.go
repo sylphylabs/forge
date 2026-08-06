@@ -9,7 +9,7 @@ package helloworld
 import (
 	context "context"
 	fmt "fmt"
-	middleware "github.com/openkratos/kratos/middleware"
+	middleware "github.com/sylphylabs/forge/middleware"
 	grpc "google.golang.org/grpc"
 )
 
@@ -37,7 +37,7 @@ type _GreeterHTTPMiddlewareServer struct {
 // WrapGreeterHTTPServer snapshots plan and composes every HTTP handler before registration.
 func WrapGreeterHTTPServer(srv GreeterHTTPServer, plan GreeterMiddleware) (GreeterHTTPServer, error) {
 	if srv == nil {
-		return nil, fmt.Errorf("openkratos: nil Greeter HTTP server")
+		return nil, fmt.Errorf("forge: nil Greeter HTTP server")
 	}
 	wrapped := &_GreeterHTTPMiddlewareServer{GreeterHTTPServer: srv}
 	{
@@ -47,12 +47,12 @@ func WrapGreeterHTTPServer(srv GreeterHTTPServer, plan GreeterMiddleware) (Greet
 		handler, err := middleware.ComposeUnary(func(ctx context.Context, request any) (any, error) {
 			typed, ok := request.(*HelloRequest)
 			if !ok {
-				return nil, fmt.Errorf("openkratos: helloworld.Greeter/SayHello HTTP request type %T, want *HelloRequest", request)
+				return nil, fmt.Errorf("forge: helloworld.Greeter/SayHello HTTP request type %T, want *HelloRequest", request)
 			}
 			return srv.SayHello(ctx, typed)
 		}, middlewares...)
 		if err != nil {
-			return nil, fmt.Errorf("openkratos: wrapping helloworld.Greeter/SayHello HTTP: %w", err)
+			return nil, fmt.Errorf("forge: wrapping helloworld.Greeter/SayHello HTTP: %w", err)
 		}
 		wrapped.handlerSayHello = handler
 	}
@@ -66,7 +66,7 @@ func (s *_GreeterHTTPMiddlewareServer) SayHello(ctx context.Context, request *He
 	}
 	typed, ok := reply.(*HelloReply)
 	if !ok {
-		return nil, fmt.Errorf("openkratos: helloworld.Greeter/SayHello HTTP reply type %T, want *HelloReply", reply)
+		return nil, fmt.Errorf("forge: helloworld.Greeter/SayHello HTTP reply type %T, want *HelloReply", reply)
 	}
 	return typed, nil
 }
@@ -113,7 +113,7 @@ func (s *_Greeter_SayHelloStreamGRPCMiddlewareStreamTyped) Recv() (*HelloRequest
 // WrapGreeterGRPCServer snapshots plan and composes every gRPC handler before registration.
 func WrapGreeterGRPCServer(srv GreeterServer, plan GreeterMiddleware) (GreeterServer, error) {
 	if srv == nil {
-		return nil, fmt.Errorf("openkratos: nil Greeter gRPC server")
+		return nil, fmt.Errorf("forge: nil Greeter gRPC server")
 	}
 	wrapped := &_GreeterGRPCMiddlewareServer{GreeterServer: srv}
 	{
@@ -123,12 +123,12 @@ func WrapGreeterGRPCServer(srv GreeterServer, plan GreeterMiddleware) (GreeterSe
 		handler, err := middleware.ComposeUnary(func(ctx context.Context, request any) (any, error) {
 			typed, ok := request.(*HelloRequest)
 			if !ok {
-				return nil, fmt.Errorf("openkratos: helloworld.Greeter/SayHello gRPC request type %T, want *HelloRequest", request)
+				return nil, fmt.Errorf("forge: helloworld.Greeter/SayHello gRPC request type %T, want *HelloRequest", request)
 			}
 			return srv.SayHello(ctx, typed)
 		}, middlewares...)
 		if err != nil {
-			return nil, fmt.Errorf("openkratos: wrapping helloworld.Greeter/SayHello gRPC: %w", err)
+			return nil, fmt.Errorf("forge: wrapping helloworld.Greeter/SayHello gRPC: %w", err)
 		}
 		wrapped.handlerSayHello = handler
 	}
@@ -139,16 +139,16 @@ func WrapGreeterGRPCServer(srv GreeterServer, plan GreeterMiddleware) (GreeterSe
 		handler, err := middleware.ComposeStream(func(request any, stream middleware.ServerStream) error {
 			native, ok := stream.Context().Value(_Greeter_SayHelloStreamGRPCMiddlewareStreamKey{}).(grpc.ServerStream)
 			if !ok {
-				return fmt.Errorf("openkratos: helloworld.Greeter/SayHelloStream gRPC lost native stream")
+				return fmt.Errorf("forge: helloworld.Greeter/SayHelloStream gRPC lost native stream")
 			}
 			typedStream := &_Greeter_SayHelloStreamGRPCMiddlewareStreamTyped{ServerStream: native, stream: stream}
 			if request != nil {
-				return fmt.Errorf("openkratos: helloworld.Greeter/SayHelloStream gRPC initial request type %T, want nil", request)
+				return fmt.Errorf("forge: helloworld.Greeter/SayHelloStream gRPC initial request type %T, want nil", request)
 			}
 			return srv.SayHelloStream(typedStream)
 		}, middlewares...)
 		if err != nil {
-			return nil, fmt.Errorf("openkratos: wrapping helloworld.Greeter/SayHelloStream gRPC: %w", err)
+			return nil, fmt.Errorf("forge: wrapping helloworld.Greeter/SayHelloStream gRPC: %w", err)
 		}
 		wrapped.handlerSayHelloStream = handler
 	}
@@ -162,7 +162,7 @@ func (s *_GreeterGRPCMiddlewareServer) SayHello(ctx context.Context, request *He
 	}
 	typed, ok := reply.(*HelloReply)
 	if !ok {
-		return nil, fmt.Errorf("openkratos: helloworld.Greeter/SayHello gRPC reply type %T, want *HelloReply", reply)
+		return nil, fmt.Errorf("forge: helloworld.Greeter/SayHello gRPC reply type %T, want *HelloReply", reply)
 	}
 	return typed, nil
 }

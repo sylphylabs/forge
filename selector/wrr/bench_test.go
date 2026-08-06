@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/openkratos/kratos/selector"
+	"github.com/sylphylabs/forge/selector"
 )
 
 func benchmarkWRRNodes(count, offset int) []selector.WeightedNode {

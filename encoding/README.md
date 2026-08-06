@@ -3,5 +3,5 @@
 ## msgpack
 
 ```shell
-go get -u github.com/openkratos/kratos/contrib/encoding/msgpack
+go get -u github.com/sylphylabs/forge/contrib/encoding/msgpack
 ```

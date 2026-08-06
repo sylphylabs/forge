@@ -6,8 +6,8 @@ import (
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/protobuf/proto"
 
-	enc "github.com/openkratos/kratos/encoding"
-	"github.com/openkratos/kratos/encoding/protojson"
+	enc "github.com/sylphylabs/forge/encoding"
+	"github.com/sylphylabs/forge/encoding/protojson"
 )
 
 const jsonName = "json"

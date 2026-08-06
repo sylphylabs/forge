@@ -11,8 +11,8 @@ import (
 	"github.com/go-chassis/cari/pkg/errsvc"
 	"github.com/go-chassis/sc-client"
 
-	"github.com/openkratos/kratos/log"
-	"github.com/openkratos/kratos/registry"
+	"github.com/sylphylabs/forge/log"
+	"github.com/sylphylabs/forge/registry"
 )
 
 func init() {

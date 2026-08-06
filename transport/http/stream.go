@@ -18,12 +18,12 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	"github.com/openkratos/kratos/encoding"
-	kerrors "github.com/openkratos/kratos/errors"
-	"github.com/openkratos/kratos/internal/httputil"
-	"github.com/openkratos/kratos/middleware"
-	"github.com/openkratos/kratos/selector"
-	"github.com/openkratos/kratos/transport"
+	"github.com/sylphylabs/forge/encoding"
+	kerrors "github.com/sylphylabs/forge/errors"
+	"github.com/sylphylabs/forge/internal/httputil"
+	"github.com/sylphylabs/forge/middleware"
+	"github.com/sylphylabs/forge/selector"
+	"github.com/sylphylabs/forge/transport"
 )
 
 const (

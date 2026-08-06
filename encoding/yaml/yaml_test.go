@@ -111,7 +111,7 @@ func TestCodecCompatibility(t *testing.T) {
 	}
 	want := document{
 		Enabled: true,
-		Labels:  map[string]string{"app": "openkratos"},
+		Labels:  map[string]string{"app": "forge"},
 		Ports:   []int{8000, 9000},
 	}
 	data, err := (codec{}).Marshal(want)

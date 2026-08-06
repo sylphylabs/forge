@@ -10,10 +10,10 @@ import (
 	"google.golang.org/genproto/googleapis/api/httpbody"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/openkratos/kratos/encoding"
-	"github.com/openkratos/kratos/encoding/form"
-	"github.com/openkratos/kratos/errors"
-	"github.com/openkratos/kratos/internal/httputil"
+	"github.com/sylphylabs/forge/encoding"
+	"github.com/sylphylabs/forge/encoding/form"
+	"github.com/sylphylabs/forge/errors"
+	"github.com/sylphylabs/forge/internal/httputil"
 )
 
 // These constants should not be referenced from any other code.

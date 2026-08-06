@@ -3,9 +3,9 @@ package ratelimit
 import (
 	"context"
 
-	"github.com/openkratos/kratos/errors"
-	internalratelimit "github.com/openkratos/kratos/internal/ratelimit"
-	"github.com/openkratos/kratos/middleware"
+	"github.com/sylphylabs/forge/errors"
+	internalratelimit "github.com/sylphylabs/forge/internal/ratelimit"
+	"github.com/sylphylabs/forge/middleware"
 )
 
 // ErrLimitExceed is service unavailable due to rate limit exceeded.

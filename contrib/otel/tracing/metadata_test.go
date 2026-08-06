@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/openkratos/kratos"
-	"github.com/openkratos/kratos/metadata"
+	"github.com/sylphylabs/forge"
+	"github.com/sylphylabs/forge/metadata"
 
 	"go.opentelemetry.io/otel/propagation"
 )
@@ -34,8 +34,8 @@ func TestMetadata_Inject(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := kratos.New(kratos.Name(tt.args.appName))
-			ctx := kratos.NewContext(context.Background(), a)
+			a := forge.New(forge.Name(tt.args.appName))
+			ctx := forge.NewContext(context.Background(), a)
 			m := new(Metadata)
 			m.Inject(ctx, tt.args.carrier)
 			if res := tt.args.carrier.Get(serviceHeader); tt.want != res {

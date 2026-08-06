@@ -1,8 +1,8 @@
-# 从 Kratos v3 迁移到 OpenKratos
+# 从 Kratos v3 迁移到 Forge
 
-OpenKratos 是预发布的独立 fork，并不是 Kratos 的原地升级版本。请在独立分支中
+Forge 是预发布的独立 fork，并不是 Kratos 的原地升级版本。请在独立分支中
 执行迁移，并在修改依赖前阅读 [`COMPATIBILITY.md`](../../COMPATIBILITY.md)。
-OpenKratos 可能直接替换 Kratos API，而不是保留兼容 shim；每项已接受的移除都会
+Forge 可能直接替换 Kratos API，而不是保留兼容 shim；每项已接受的移除都会
 在本文记录替代方案与验证步骤。
 
 ## 1. 建立迁移基线
@@ -15,7 +15,7 @@ go vet ./...
 ```
 
 提交或单独保存生成代码与 `go.mod`，避免迁移差异和无关改动混在一起。
-OpenKratos 要求 Go 1.27，因此应先完成工具链升级。
+Forge 要求 Go 1.27，因此应先完成工具链升级。
 
 ## 2. 替换 Module 路径
 
@@ -28,21 +28,21 @@ github.com/go-kratos/kratos/v3
 替换为：
 
 ```text
-github.com/openkratos/kratos
+github.com/sylphylabs/forge
 ```
 
-每个使用到的 contrib module 也需要单独替换。OpenKratos 当前使用 v0 版本线，
+每个使用到的 contrib module 也需要单独替换。Forge 当前使用 v0 版本线，
 因此路径不包含上游的 `/v3`：
 
 ```text
 github.com/go-kratos/kratos/contrib/middleware/jwt/v3
-github.com/openkratos/kratos/contrib/middleware/jwt
+github.com/sylphylabs/forge/contrib/middleware/jwt
 ```
 
 预发布阶段可以从 `main` 解析根 module：
 
 ```shell
-go get github.com/openkratos/kratos@main
+go get github.com/sylphylabs/forge@main
 go mod tidy
 ```
 
@@ -58,14 +58,14 @@ github.com/nacos-group/nacos-sdk-go/clients/config_client
 github.com/nacos-group/nacos-sdk-go/v2/clients/config_client
 ```
 
-Apollo integration 使用 `github.com/apolloconfig/agollo/v5`。OpenKratos 使用
+Apollo integration 使用 `github.com/apolloconfig/agollo/v5`。Forge 使用
 Go 1.27 标准库 `uuid`，不再直接使用 Google 或 gofrs UUID 类型。默认 application
 ID 从 UUIDv1 改为 UUIDv4；如果其值或 version 属于运维契约，应显式配置 ID。
 
 ## 3. 更新代码生成器
 
-OpenKratos 将公开错误 descriptor 统一放在独立的
-`github.com/openkratos/api` module 中。runtime 对外发送和接收的仍然是
+Forge 将公开错误 descriptor 统一放在独立的
+`github.com/sylphylabs/forge/api` module 中。runtime 对外发送和接收的仍然是
 `{code, reason, message, metadata}` 四字段错误体，不会用
 `google.rpc.Status` 替换它。
 
@@ -74,13 +74,13 @@ OpenKratos 将公开错误 descriptor 统一放在独立的
 
 ```text
 github.com/go-kratos/kratos/v3/errors.Status
-github.com/openkratos/api/errors/v1.Status
+github.com/sylphylabs/forge/api/errors/v1.Status
 ```
 
-API import path `github.com/openkratos/api/errors/v1` 声明的 package 名是
+API import path `github.com/sylphylabs/forge/api/errors/v1` 声明的 package 名是
 `errors`。runtime 内部将其 alias 为 `errorapi`，并在 `errors.Error` 中嵌入
 `errorapi.Status`，因此 `err.Code`、`err.Reason`、`err.Message` 与
-`err.Metadata` 等字段访问保持不变。待 OpenKratos API module 发布后，还需更新
+`err.Metadata` 等字段访问保持不变。待 Forge API module 发布后，还需更新
 `.proto` import 与 enum annotation；不应继续保留或 vendor 继承自 Kratos 的任一份
 `errors/errors.proto`。
 
@@ -94,23 +94,23 @@ enum ErrorReason {
   ERROR_REASON_UNSPECIFIED = 0;
 }
 
-// OpenKratos
-import "openkratos/errors/v1/errors.proto";
+// Forge
+import "sylphy/errors/v1/errors.proto";
 enum ErrorReason {
-  option (openkratos.errors.v1.default_code) = 500;
+  option (sylphy.errors.v1.default_code) = 500;
   ERROR_REASON_UNSPECIFIED = 0;
 }
 ```
 
 enum value override 同样需要从 `(errors.code)` 改为
-`(openkratos.errors.v1.code)`。修改源文件后应重新生成 helper；generator 不再携带
+`(sylphy.errors.v1.code)`。修改源文件后应重新生成 helper；generator 不再携带
 旧 annotation 的私有 fallback descriptor。
 
-用三个原子化 OpenKratos 命令替换继承来的 generator module。本地开发期间它们
+用三个原子化 Forge 命令替换继承来的 generator module。本地开发期间它们
 共享一个源码 module：
 
 ```text
-github.com/openkratos/kratos/cmd
+github.com/sylphylabs/forge/cmd
 ```
 
 errors 与 HTTP 生成保持独立可选；只有应用使用生成的 service plan 时才加入
@@ -126,7 +126,7 @@ plugins:
     out: gen/go
     opt: paths=source_relative
 
-# OpenKratos 本地切换
+# Forge 本地切换
 plugins:
   - local: protoc-gen-go-errors
     out: gen/go
@@ -150,11 +150,11 @@ HTTP plugin 保留原 option 名称。middleware 的 HTTP 方法集合必须与 
 不需要 HTTP wrapper 时省略 middleware 的 `http` option。只有同一生成流程也运行
 `protoc-gen-go-grpc` 时才设置 `grpc=true`。三类输出分别是
 `_errors.pb.go`、`_http.pb.go` 和 `_middleware.pb.go`；检查生成 diff 前应删除旧的
-`_openkratos.pb.go`。项目不保留 `protoc-gen-go-openkratos` 转发命令或
-`--go-openkratos_out` flag。
+`_forge.pb.go`。项目不保留 `protoc-gen-go-forge` 转发命令或
+`--go-forge_out` flag。
 
 三个 plugin 公开后，已发布项目应把本地 entry 替换为固定 revision 的
-`buf.build/openkratos/go-errors`、`go-http` 和 `go-middleware`，不得使用未固定的
+`buf.build/forge/go-errors`、`go-http` 和 `go-middleware`，不得使用未固定的
 开发 revision。
 
 ```shell
@@ -173,9 +173,9 @@ module 不会改写已有生成代码。
 
 ## 4. 替换 Kratos CLI 工作流
 
-OpenKratos 不提供通用的 `kratos` 可执行文件。
+Forge 不提供通用的 `kratos` 可执行文件。
 
-| 原工作流 | OpenKratos 工作流 |
+| 原工作流 | Forge 工作流 |
 | --- | --- |
 | `kratos new` | 创建普通 Go module，或使用经过审查的仓库模板 |
 | `kratos run` | 使用 `go run` 启动服务 |
@@ -190,7 +190,7 @@ go run ./cmd/server -conf ./configs
 
 ## 5. 检查 HTTP 路由
 
-OpenKratos 使用标准库 `http.ServeMux` 的优先级规则，不再依赖 Gorilla mux 的
+Forge 使用标准库 `http.ServeMux` 的优先级规则，不再依赖 Gorilla mux 的
 注册顺序。应为以下行为增加测试：
 
 - 重叠的 literal 与变量路由；
@@ -201,16 +201,16 @@ OpenKratos 使用标准库 `http.ServeMux` 的优先级规则，不再依赖 Gor
 - 预期的 404 与 405 响应。
 
 跨多段路径的 Gorilla 正则应改写为 Google AIP 模板。从 server 构造中删除
-`http.StrictSlash(...)`；OpenKratos 遵循 `http.ServeMux` 的路径清理和尾部斜杠
+`http.StrictSlash(...)`；Forge 遵循 `http.ServeMux` 的路径清理和尾部斜杠
 行为。如果服务有意使用 `http.DefaultServeMux` 兜底，需要通过 `NotFoundHandler`
 显式传入。
 
 ## 6. 迁移 Server Middleware
 
-OpenKratos 直接移除 server 侧 selector API，不保留运行时兼容路径。先完成以下
+Forge 直接移除 server 侧 selector API，不保留运行时兼容路径。先完成以下
 机械重命名：
 
-| Kratos 名称 | OpenKratos 名称 |
+| Kratos 名称 | Forge 名称 |
 | --- | --- |
 | `middleware.Handler` | `middleware.UnaryHandler` |
 | `middleware.Middleware` | `middleware.UnaryMiddleware` |
@@ -265,7 +265,7 @@ service middleware 外层。
 
 ## 7. 检查 Google HTTP Transcoding
 
-重新生成所有 HTTP client 与 server。OpenKratos 会更严格地校验 inline unary
+重新生成所有 HTTP client 与 server。Forge 会更严格地校验 inline unary
 `google.api.HttpRule`；原 generator 仅警告或推迟到运行期处理的 schema 现在可能
 直接生成失败。
 
@@ -330,7 +330,7 @@ HTTP SSE 与 WebSocket stream 不会再被 unary server timeout 终止。如果�
 
 ## 9. 保留 Kratos v3 已完成的迁移
 
-OpenKratos 继续使用 Kratos v3 的 `log/slog` 日志模型、兼容标准库的 errors，
+Forge 继续使用 Kratos v3 的 `log/slog` 日志模型、兼容标准库的 errors，
 以及相互独立的 `json` 与 `protojson` codec。已经使用 Kratos v3 的服务不应
 撤销这些迁移。
 
@@ -339,7 +339,7 @@ HTTP generator 已支持 Edition 2023 Open/Opaque API。应从 schema 重新生�
 
 ## 10. 替换旧 Metrics Middleware
 
-OpenKratos 直接移除继承的通用 metrics middleware，不提供兼容 shim，也不双发旧
+Forge 直接移除继承的通用 metrics middleware，不提供兼容 shim，也不双发旧
 指标。HTTP 应在原生 filter 与 `RoundTripper` 边界安装：
 
 ```go
@@ -394,7 +394,7 @@ message size 指标，并可能在 grpc-go 升级后自动采用新的默认项�
 
 旧 API 对应关系如下：
 
-| Kratos API | OpenKratos 替代方式 |
+| Kratos API | Forge 替代方式 |
 | --- | --- |
 | `metrics.Server(...)` | HTTP 使用 `metrics.NewHTTPServerFilter(provider, ...)`；gRPC 使用 `grpcotel.ServerOption` |
 | `metrics.Client(...)` | HTTP 使用 `metrics.NewHTTPClientWrapper(provider, ...)`；gRPC 使用 `grpcotel.DialOption` |
@@ -467,7 +467,7 @@ go vet ./...
 - [ ] 替换每个使用到的 contrib module，并移除 `/v3`。
 - [ ] 更新 Consul、Nacos 与 Apollo provider SDK import path。
 - [ ] 替换直接使用的 Google/gofrs UUID import，并检查 application ID version 变化。
-- [ ] 固定 OpenKratos generator 版本。
+- [ ] 固定 Forge generator 版本。
 - [ ] 从源文件重新生成所有 Go 代码。
 - [ ] 确认生成的 HTTP 文件断言 `SupportPackageIsVersion5`。
 - [ ] 使用 Go 与 Buf 命令替代 `kratos` CLI。

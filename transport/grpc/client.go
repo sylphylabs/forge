@@ -11,15 +11,15 @@ import (
 	grpcinsecure "google.golang.org/grpc/credentials/insecure"
 	grpcmd "google.golang.org/grpc/metadata"
 
-	"github.com/openkratos/kratos/middleware"
-	"github.com/openkratos/kratos/registry"
-	"github.com/openkratos/kratos/selector"
-	"github.com/openkratos/kratos/selector/wrr"
-	"github.com/openkratos/kratos/transport"
-	"github.com/openkratos/kratos/transport/grpc/resolver/discovery"
+	"github.com/sylphylabs/forge/middleware"
+	"github.com/sylphylabs/forge/registry"
+	"github.com/sylphylabs/forge/selector"
+	"github.com/sylphylabs/forge/selector/wrr"
+	"github.com/sylphylabs/forge/transport"
+	"github.com/sylphylabs/forge/transport/grpc/resolver/discovery"
 
 	// init resolver
-	_ "github.com/openkratos/kratos/transport/grpc/resolver/direct"
+	_ "github.com/sylphylabs/forge/transport/grpc/resolver/direct"
 )
 
 func init() {

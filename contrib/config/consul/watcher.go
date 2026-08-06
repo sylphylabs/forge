@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/consul/api/v2"
 	"github.com/hashicorp/consul/api/v2/watch"
 
-	"github.com/openkratos/kratos/config"
+	"github.com/sylphylabs/forge/config"
 )
 
 type watcher struct {
