@@ -237,6 +237,29 @@ func TestWithoutApply(t *testing.T) {
 	}
 }
 
+func TestDefaultFilterReturnsPlainNode(t *testing.T) {
+	builder := DefaultBuilder{
+		Node:     &mockWeightedNodeBuilder{},
+		Balancer: &mockBalancerBuilder{},
+	}
+	selector := builder.Build()
+	selector.Apply([]Node{NewNode("http", "127.0.0.1:8080", nil)})
+
+	want := NewNode("http", "127.0.0.1:9090", nil)
+	node, done, err := selector.Select(t.Context(), WithNodeFilter(func(context.Context, []Node) []Node {
+		return []Node{nil, want}
+	}))
+	if err != nil {
+		t.Fatalf("Select() error = %v", err)
+	}
+	if node != want {
+		t.Fatalf("Select() node = %v, want %v", node, want)
+	}
+	if done == nil {
+		t.Fatal("Select() done is nil")
+	}
+}
+
 func TestNoPick(t *testing.T) {
 	builder := DefaultBuilder{
 		Node:     &mockWeightedNodeBuilder{},

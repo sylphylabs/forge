@@ -111,6 +111,52 @@ func TestHTTP(t *testing.T) {
 	}
 }
 
+func TestDisabledLevelSkipsFormatting(t *testing.T) {
+	request := &countingRedacter{}
+	handler := &captureHandler{disabled: true}
+	logger := slog.New(handler)
+	called := false
+
+	next := Server(logger)(func(context.Context, any) (any, error) {
+		called = true
+		return "reply", nil
+	})
+	reply, err := next(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply != "reply" {
+		t.Fatalf("reply = %v, want %q", reply, "reply")
+	}
+	if !called {
+		t.Fatal("business handler was not called")
+	}
+	if request.calls != 0 {
+		t.Fatalf("Redact calls = %d, want 0", request.calls)
+	}
+	if len(handler.records) != 0 {
+		t.Fatalf("records len = %d, want 0", len(handler.records))
+	}
+}
+
+func BenchmarkServerDisabled(b *testing.B) {
+	logger := slog.New(&captureHandler{disabled: true})
+	next := Server(logger)(func(context.Context, any) (any, error) {
+		return nil, nil
+	})
+	request := &countingRedacter{}
+
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := next(context.Background(), request); err != nil {
+			b.Fatal(err)
+		}
+	}
+	if request.calls != 0 {
+		b.Fatalf("Redact calls = %d, want 0", request.calls)
+	}
+}
+
 type (
 	dummy struct {
 		field string
@@ -121,7 +167,15 @@ type (
 	dummyStringerRedacter struct {
 		field string
 	}
+	countingRedacter struct {
+		calls int
+	}
 )
+
+func (r *countingRedacter) Redact() string {
+	r.calls++
+	return "redacted"
+}
 
 func (d *dummyStringer) String() string {
 	return "my value"
@@ -178,8 +232,9 @@ func TestExtractError(t *testing.T) {
 }
 
 type captureHandler struct {
-	records []slog.Record
-	attrs   []map[string]any
+	records  []slog.Record
+	attrs    []map[string]any
+	disabled bool
 }
 
 func (h *captureHandler) reset() {
@@ -188,7 +243,7 @@ func (h *captureHandler) reset() {
 }
 
 func (h *captureHandler) Enabled(context.Context, slog.Level) bool {
-	return true
+	return !h.disabled
 }
 
 func (h *captureHandler) Handle(_ context.Context, record slog.Record) error {

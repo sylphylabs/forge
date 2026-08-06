@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/openkratos/kratos/encoding"
@@ -38,22 +40,26 @@ type DecodeResponseFunc func(ctx context.Context, res *http.Response, out any) e
 // ClientOption is HTTP client option.
 type ClientOption func(*clientOptions)
 
+// RoundTripperWrapper decorates an HTTP client transport.
+type RoundTripperWrapper func(http.RoundTripper) (http.RoundTripper, error)
+
 // Client is an HTTP transport client.
 type clientOptions struct {
-	ctx          context.Context
-	tlsConf      *tls.Config
-	timeout      time.Duration
-	endpoint     string
-	userAgent    string
-	encoder      EncodeRequestFunc
-	decoder      DecodeResponseFunc
-	errorDecoder DecodeErrorFunc
-	transport    http.RoundTripper
-	nodeFilters  []selector.NodeFilter
-	discovery    registry.Discovery
-	middleware   []middleware.UnaryMiddleware
-	block        bool
-	subsetSize   int
+	ctx                  context.Context
+	tlsConf              *tls.Config
+	timeout              time.Duration
+	endpoint             string
+	userAgent            string
+	encoder              EncodeRequestFunc
+	decoder              DecodeResponseFunc
+	errorDecoder         DecodeErrorFunc
+	transport            http.RoundTripper
+	roundTripperWrappers []RoundTripperWrapper
+	nodeFilters          []selector.NodeFilter
+	discovery            registry.Discovery
+	middleware           []middleware.UnaryMiddleware
+	block                bool
+	subsetSize           int
 }
 
 // WithSubset with client discovery subset size.
@@ -68,6 +74,14 @@ func WithSubset(size int) ClientOption {
 func WithTransport(trans http.RoundTripper) ClientOption {
 	return func(o *clientOptions) {
 		o.transport = trans
+	}
+}
+
+// WithRoundTripperWrapper appends transport decorators. The first wrapper is
+// the outermost wrapper and observes each request first.
+func WithRoundTripperWrapper(wrappers ...RoundTripperWrapper) ClientOption {
+	return func(o *clientOptions) {
+		o.roundTripperWrappers = append(o.roundTripperWrappers, wrappers...)
 	}
 }
 
@@ -172,12 +186,30 @@ func NewClient(ctx context.Context, opts ...ClientOption) (*Client, error) {
 	for _, o := range opts {
 		o(&options)
 	}
+	if isNilRoundTripper(options.transport) {
+		return nil, stderrors.New("[http client] transport is nil")
+	}
+	for i, wrapper := range options.roundTripperWrappers {
+		if wrapper == nil {
+			return nil, fmt.Errorf("[http client] round tripper wrapper %d is nil", i)
+		}
+	}
 	if options.tlsConf != nil {
 		if tr, ok := options.transport.(*http.Transport); ok {
 			cloned := tr.Clone()
 			cloned.TLSClientConfig = options.tlsConf
 			options.transport = cloned
 		}
+	}
+	for i := len(options.roundTripperWrappers) - 1; i >= 0; i-- {
+		wrapped, err := options.roundTripperWrappers[i](options.transport)
+		if err != nil {
+			return nil, fmt.Errorf("[http client] round tripper wrapper %d failed: %w", i, err)
+		}
+		if isNilRoundTripper(wrapped) {
+			return nil, fmt.Errorf("[http client] round tripper wrapper %d returned nil", i)
+		}
+		options.transport = wrapped
 	}
 	insecure := options.tlsConf == nil
 	target, err := parseTarget(options.endpoint, insecure)
@@ -206,6 +238,19 @@ func NewClient(ctx context.Context, opts ...ClientOption) (*Client, error) {
 		},
 		selector: selector,
 	}, nil
+}
+
+func isNilRoundTripper(roundTripper http.RoundTripper) bool {
+	if roundTripper == nil {
+		return true
+	}
+	value := reflect.ValueOf(roundTripper)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
 }
 
 // Invoke makes a rpc call procedure for remote service.
@@ -302,6 +347,13 @@ func (client *Client) Do(req *http.Request, opts ...CallOption) (*http.Response,
 func (client *Client) do(req *http.Request) (*http.Response, error) {
 	var done func(context.Context, selector.DoneInfo)
 	if client.r != nil {
+		if _, ok := transport.FromClientContext(req.Context()); !ok {
+			req = req.WithContext(transport.NewClientContext(req.Context(), &Transport{
+				endpoint:  client.opts.endpoint,
+				reqHeader: headerCarrier(req.Header),
+				request:   req,
+			}))
+		}
 		var (
 			err  error
 			node selector.Node

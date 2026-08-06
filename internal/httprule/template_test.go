@@ -186,6 +186,19 @@ func TestExtractValuesUsesVariableOrder(t *testing.T) {
 	}
 }
 
+func BenchmarkExtractValues(b *testing.B) {
+	template, err := Parse("/v1/{name=publishers/*/books/*}")
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := template.ExtractValues("/v1/publishers/acme/books/42"); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func TestExtractRejectsMismatches(t *testing.T) {
 	template, err := Parse("/v1/{name=publishers/*}:archive")
 	if err != nil {

@@ -93,13 +93,14 @@ func (t *Template) Expand(resolve func(fieldPath string) (string, error)) (strin
 	if resolve == nil {
 		return "", errors.New("http rule: nil field resolver")
 	}
-	parts := make([]string, 0, len(t.parts))
+	var path strings.Builder
+	path.Grow(len(t.pattern))
 	for _, part := range t.parts {
 		if part.unbound {
 			return "", fmt.Errorf("%w in template %q", ErrUnboundWildcard, t.pattern)
 		}
 		if part.variable < 0 {
-			parts = append(parts, part.segments[0].raw)
+			appendPathSegment(&path, part.segments[0].raw)
 			continue
 		}
 
@@ -108,72 +109,96 @@ func (t *Template) Expand(resolve func(fieldPath string) (string, error)) (strin
 		if err != nil {
 			return "", fmt.Errorf("expand %q variable %q: %w", t.pattern, variable.FieldPath, err)
 		}
-		expanded, err := expandVariable(part.segments, value)
-		if err != nil {
+		if err := appendExpandedVariable(&path, part.segments, value); err != nil {
 			return "", fmt.Errorf("expand %q variable %q: %w", t.pattern, variable.FieldPath, err)
 		}
-		parts = append(parts, expanded...)
 	}
-	path := "/" + strings.Join(parts, "/")
-	if len(parts) == 0 {
-		path = "/"
+	if path.Len() == 0 {
+		path.WriteByte('/')
 	}
 	if t.verbRaw != "" {
-		path += ":" + t.verbRaw
+		path.WriteByte(':')
+		path.WriteString(t.verbRaw)
 	}
-	return path, nil
+	return path.String(), nil
 }
 
-func expandVariable(segments []segment, value string) ([]string, error) {
+func appendPathSegment(path *strings.Builder, value string) {
+	path.WriteByte('/')
+	path.WriteString(value)
+}
+
+func appendExpandedVariable(path *strings.Builder, segments []segment, value string) error {
 	if len(segments) == 1 {
 		switch segments[0].kind {
 		case literalSegment:
 			if value != segments[0].decoded {
-				return nil, fmt.Errorf("value %q does not match literal %q", value, segments[0].decoded)
+				return fmt.Errorf("value %q does not match literal %q", value, segments[0].decoded)
 			}
-			return []string{segments[0].raw}, nil
+			appendPathSegment(path, segments[0].raw)
+			return nil
 		case singleWildcardSegment:
 			if value == "" {
-				return nil, errors.New("single-segment value is empty")
+				return errors.New("single-segment value is empty")
 			}
-			return []string{escapeSegment(value)}, nil
+			appendPathSegment(path, escapeSegment(value))
+			return nil
 		case multiWildcardSegment:
-			return escapeSegments(value), nil
+			for offset := 0; ; {
+				part, next, ok := nextPathSegment(value, offset)
+				if !ok {
+					break
+				}
+				appendPathSegment(path, escapeSegment(part))
+				offset = next
+			}
+			return nil
 		}
 	}
 
-	values := strings.Split(value, "/")
-	result := make([]string, 0, len(values))
-	valueIndex := 0
+	valueOffset := 0
 	for _, segment := range segments {
 		switch segment.kind {
 		case literalSegment:
-			if valueIndex >= len(values) || values[valueIndex] != segment.decoded {
-				return nil, fmt.Errorf("value %q does not match resource template", value)
+			part, next, ok := nextPathSegment(value, valueOffset)
+			if !ok || part != segment.decoded {
+				return fmt.Errorf("value %q does not match resource template", value)
 			}
-			result = append(result, segment.raw)
-			valueIndex++
+			appendPathSegment(path, segment.raw)
+			valueOffset = next
 		case singleWildcardSegment:
-			if valueIndex >= len(values) || values[valueIndex] == "" {
-				return nil, fmt.Errorf("value %q does not match resource template", value)
+			part, next, ok := nextPathSegment(value, valueOffset)
+			if !ok || part == "" {
+				return fmt.Errorf("value %q does not match resource template", value)
 			}
-			result = append(result, escapeSegment(values[valueIndex]))
-			valueIndex++
+			appendPathSegment(path, escapeSegment(part))
+			valueOffset = next
 		case multiWildcardSegment:
-			for ; valueIndex < len(values); valueIndex++ {
-				result = append(result, escapeSegment(values[valueIndex]))
+			for {
+				part, next, ok := nextPathSegment(value, valueOffset)
+				if !ok {
+					break
+				}
+				appendPathSegment(path, escapeSegment(part))
+				valueOffset = next
 			}
 		}
 	}
-	if valueIndex != len(values) {
-		return nil, fmt.Errorf("value %q does not match resource template", value)
+	if _, _, ok := nextPathSegment(value, valueOffset); ok {
+		return fmt.Errorf("value %q does not match resource template", value)
 	}
-	return result, nil
+	return nil
 }
 
-type captureRange struct {
-	start int
-	end   int
+func nextPathSegment(value string, offset int) (segment string, next int, ok bool) {
+	if offset > len(value) {
+		return "", offset, false
+	}
+	if end := strings.IndexByte(value[offset:], '/'); end >= 0 {
+		end += offset
+		return value[offset:end], end + 1, true
+	}
+	return value[offset:], len(value) + 1, true
 }
 
 // ExtractValues recovers public variable values in Variables order from an
@@ -182,34 +207,37 @@ func (t *Template) ExtractValues(escapedPath string) ([]string, error) {
 	if escapedPath == "" || escapedPath[0] != '/' {
 		return nil, fmt.Errorf("extract %q: %w", t.pattern, ErrPathMismatch)
 	}
-	rawParts := splitPath(escapedPath)
+	rawPath := escapedPath[1:]
 	if t.verbDecoded != "" {
-		if len(rawParts) == 0 {
+		if rawPath == "" {
 			return nil, fmt.Errorf("extract %q: missing custom verb: %w", t.pattern, ErrPathMismatch)
 		}
-		prefix, ok, err := stripEscapedSuffix(rawParts[len(rawParts)-1], ":"+t.verbDecoded)
+		lastPart := strings.LastIndexByte(rawPath, '/') + 1
+		prefix, ok, err := stripEscapedSuffix(rawPath[lastPart:], ":"+t.verbDecoded)
 		if err != nil {
 			return nil, fmt.Errorf("extract %q: %w", t.pattern, err)
 		}
 		if !ok {
 			return nil, fmt.Errorf("extract %q: custom verb mismatch: %w", t.pattern, ErrPathMismatch)
 		}
-		rawParts[len(rawParts)-1] = prefix
+		rawPath = rawPath[:lastPart+len(prefix)]
 	}
 
-	captures := make([]captureRange, len(t.variables))
-	pathIndex := 0
+	values := make([]string, len(t.variables))
+	pathOffset := 0
 	for _, part := range t.parts {
-		captureStart := pathIndex
+		captureStart := pathOffset
+		captureEnd := pathOffset
 		for _, expected := range part.segments {
 			if expected.kind == multiWildcardSegment {
-				pathIndex = len(rawParts)
+				captureEnd = len(rawPath)
+				pathOffset = len(rawPath) + 1
 				continue
 			}
-			if pathIndex >= len(rawParts) {
+			raw, next, ok := nextExtractPathSegment(rawPath, pathOffset)
+			if !ok {
 				return nil, fmt.Errorf("extract %q: too few path segments: %w", t.pattern, ErrPathMismatch)
 			}
-			raw := rawParts[pathIndex]
 			if expected.kind == singleWildcardSegment && raw == "" {
 				return nil, fmt.Errorf("extract %q: empty wildcard segment: %w", t.pattern, ErrPathMismatch)
 			}
@@ -222,35 +250,38 @@ func (t *Template) ExtractValues(escapedPath string) ([]string, error) {
 					return nil, fmt.Errorf("extract %q: literal mismatch: %w", t.pattern, ErrPathMismatch)
 				}
 			}
-			pathIndex++
+			captureEnd = pathOffset + len(raw)
+			pathOffset = next
 		}
 		if part.variable >= 0 {
-			captures[part.variable] = captureRange{start: captureStart, end: pathIndex}
+			variable := t.variables[part.variable]
+			raw := rawPath[captureStart:captureEnd]
+			var (
+				value string
+				err   error
+			)
+			if variable.Multi {
+				value, err = decodeMulti(raw)
+			} else {
+				value, err = url.PathUnescape(raw)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("extract %q variable %q: %w", t.pattern, variable.FieldPath, err)
+			}
+			values[part.variable] = value
 		}
 	}
-	if pathIndex != len(rawParts) {
+	if _, _, ok := nextExtractPathSegment(rawPath, pathOffset); ok {
 		return nil, fmt.Errorf("extract %q: too many path segments: %w", t.pattern, ErrPathMismatch)
 	}
-
-	values := make([]string, len(t.variables))
-	for i, variable := range t.variables {
-		capture := captures[i]
-		raw := strings.Join(rawParts[capture.start:capture.end], "/")
-		var (
-			value string
-			err   error
-		)
-		if variable.Multi {
-			value, err = decodeMulti(raw)
-		} else {
-			value, err = url.PathUnescape(raw)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("extract %q variable %q: %w", t.pattern, variable.FieldPath, err)
-		}
-		values[i] = value
-	}
 	return values, nil
+}
+
+func nextExtractPathSegment(path string, offset int) (segment string, next int, ok bool) {
+	if path == "" && offset == 0 {
+		return "", 0, false
+	}
+	return nextPathSegment(path, offset)
 }
 
 // Extract recovers public variable values from an escaped request path.
@@ -264,11 +295,4 @@ func (t *Template) Extract(escapedPath string) (map[string]string, error) {
 		values[variable.FieldPath] = extracted[i]
 	}
 	return values, nil
-}
-
-func splitPath(path string) []string {
-	if path == "/" {
-		return nil
-	}
-	return strings.Split(strings.TrimPrefix(path, "/"), "/")
 }

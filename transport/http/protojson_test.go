@@ -13,6 +13,8 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
+var benchmarkProtoJSON []byte
+
 func TestProtoJSONFieldProjection(t *testing.T) {
 	message := newProjectionMessage(t)
 	fields := message.Descriptor().Fields()
@@ -118,6 +120,26 @@ func TestProtoJSONOmitsAndClearsPathFields(t *testing.T) {
 	}
 }
 
+func BenchmarkProtoJSONOmitFields(b *testing.B) {
+	message := newProjectionMessage(b)
+	fields := message.Descriptor().Fields()
+	message.Set(fields.ByName("name"), protoreflect.ValueOfString("publishers/1"))
+	message.Set(fields.ByName("count"), protoreflect.ValueOfInt64(42))
+	message.Mutable(fields.ByName("tags")).List().Append(protoreflect.ValueOfString("tag"))
+	child := message.Mutable(fields.ByName("child")).Message()
+	child.Set(child.Descriptor().Fields().ByName("id"), protoreflect.ValueOfString("child-1"))
+	value := NewProtoJSON(message.Interface(), "name", "count", "child.id")
+
+	b.ReportAllocs()
+	for b.Loop() {
+		data, err := json.Marshal(value)
+		if err != nil {
+			b.Fatal(err)
+		}
+		benchmarkProtoJSON = data
+	}
+}
+
 func TestProtoJSONFieldUnmarshalPreservesOtherFields(t *testing.T) {
 	message := newProjectionMessage(t)
 	if err := json.Unmarshal([]byte(`"first"`), NewProtoJSONField(message.Interface(), "name")); err != nil {
@@ -145,7 +167,7 @@ func TestBuildPathRejectsUnsupportedQueryFields(t *testing.T) {
 	}
 }
 
-func newProjectionMessage(t *testing.T) protoreflect.Message {
+func newProjectionMessage(t testing.TB) protoreflect.Message {
 	t.Helper()
 	optional := descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL
 	repeated := descriptorpb.FieldDescriptorProto_LABEL_REPEATED

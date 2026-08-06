@@ -69,13 +69,7 @@ func (p *ProtoJSON) MarshalJSON() ([]byte, error) {
 	if len(p.omitFields) == 0 {
 		return data, nil
 	}
-	for _, fieldPath := range p.omitFields {
-		data, err = omitProtoJSONField(data, message.Descriptor(), fieldPath)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return data, nil
+	return omitProtoJSONFields(data, message.Descriptor(), p.omitFields)
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -150,44 +144,69 @@ func topLevelField(message protoreflect.MessageDescriptor, name string) (protore
 	return field, nil
 }
 
-func omitProtoJSONField(data []byte, message protoreflect.MessageDescriptor, fieldPath string) ([]byte, error) {
-	parts := strings.Split(fieldPath, ".")
-	if len(parts) == 0 || parts[0] == "" {
-		return nil, errors.New("protobuf JSON omit field path is empty")
+func omitProtoJSONFields(data []byte, message protoreflect.MessageDescriptor, fieldPaths []string) ([]byte, error) {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(data, &object); err != nil {
+		return nil, fmt.Errorf("omit protobuf JSON fields: %w", err)
 	}
-	return omitProtoJSONPath(data, message, parts, fieldPath)
+	changed := false
+	for _, fieldPath := range fieldPaths {
+		parts := strings.Split(fieldPath, ".")
+		if len(parts) == 0 || parts[0] == "" {
+			return nil, errors.New("protobuf JSON omit field path is empty")
+		}
+		fieldChanged, err := omitProtoJSONObject(object, message, parts, fieldPath)
+		if err != nil {
+			return nil, err
+		}
+		changed = changed || fieldChanged
+	}
+	if !changed {
+		return data, nil
+	}
+	return json.Marshal(object)
 }
 
-func omitProtoJSONPath(data []byte, message protoreflect.MessageDescriptor, parts []string, fieldPath string) ([]byte, error) {
+func omitProtoJSONObject(object map[string]json.RawMessage, message protoreflect.MessageDescriptor, parts []string, fieldPath string) (bool, error) {
 	field := message.Fields().ByName(protoreflect.Name(parts[0]))
 	if field == nil {
 		field = message.Fields().ByJSONName(parts[0])
 	}
 	if field == nil {
-		return nil, fmt.Errorf("protobuf JSON omit field %q does not exist", fieldPath)
-	}
-	var object map[string]json.RawMessage
-	if err := json.Unmarshal(data, &object); err != nil {
-		return nil, fmt.Errorf("omit protobuf JSON field %q: %w", fieldPath, err)
+		return false, fmt.Errorf("protobuf JSON omit field %q does not exist", fieldPath)
 	}
 	name := field.JSONName()
 	if len(parts) == 1 {
+		if _, ok := object[name]; !ok {
+			return false, nil
+		}
 		delete(object, name)
-		return json.Marshal(object)
+		return true, nil
 	}
 	if field.IsList() || field.IsMap() || field.Message() == nil {
-		return nil, fmt.Errorf("protobuf JSON omit field %q has non-message prefix %q", fieldPath, parts[0])
+		return false, fmt.Errorf("protobuf JSON omit field %q has non-message prefix %q", fieldPath, parts[0])
 	}
 	value, ok := object[name]
 	if !ok {
-		return data, nil
+		return false, nil
 	}
-	value, err := omitProtoJSONPath(value, field.Message(), parts[1:], fieldPath)
+	var nested map[string]json.RawMessage
+	if err := json.Unmarshal(value, &nested); err != nil {
+		return false, fmt.Errorf("omit protobuf JSON field %q: %w", fieldPath, err)
+	}
+	changed, err := omitProtoJSONObject(nested, field.Message(), parts[1:], fieldPath)
 	if err != nil {
-		return nil, err
+		return false, err
+	}
+	if !changed {
+		return false, nil
+	}
+	value, err = json.Marshal(nested)
+	if err != nil {
+		return false, err
 	}
 	object[name] = value
-	return json.Marshal(object)
+	return true, nil
 }
 
 func clearProtoField(message protoreflect.Message, fieldPath string) error {

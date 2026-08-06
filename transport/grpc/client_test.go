@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/openkratos/kratos/middleware"
 	"github.com/openkratos/kratos/registry"
+	"github.com/openkratos/kratos/transport"
 )
 
 func TestWithEndpoint(t *testing.T) {
@@ -100,6 +102,37 @@ func TestUnaryClientInterceptor(t *testing.T) {
 		})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestUnaryClientInterceptorPropagatesAllHeaderValues(t *testing.T) {
+	addHeaders := func(handler middleware.UnaryHandler) middleware.UnaryHandler {
+		return func(ctx context.Context, req any) (any, error) {
+			tr, ok := transport.FromClientContext(ctx)
+			if !ok {
+				t.Fatal("client transport missing from context")
+			}
+			tr.RequestHeader().Add("x-tag", "one")
+			tr.RequestHeader().Add("x-tag", "two")
+			return handler(ctx, req)
+		}
+	}
+
+	interceptor := unaryClientInterceptor([]middleware.UnaryMiddleware{addHeaders}, 0, nil)
+	err := interceptor(t.Context(), "hello", &struct{}{}, &struct{}{}, &grpc.ClientConn{},
+		func(ctx context.Context, _ string, _, _ any, _ *grpc.ClientConn, _ ...grpc.CallOption) error {
+			md, ok := metadata.FromOutgoingContext(ctx)
+			if !ok {
+				t.Fatal("outgoing metadata missing from context")
+			}
+			values := md.Get("x-tag")
+			if len(values) != 2 || values[0] != "one" || values[1] != "two" {
+				t.Fatalf("outgoing x-tag values = %q, want [one two]", values)
+			}
+			return nil
+		})
+	if err != nil {
+		t.Fatalf("unary interceptor returned an error: %v", err)
 	}
 }
 

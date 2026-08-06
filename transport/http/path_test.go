@@ -328,6 +328,11 @@ func BenchmarkBuildPath(b *testing.B) {
 			},
 			opts: []BuildPathOption{WithQueryParams()},
 		},
+		{
+			name:         "AIPResourceName",
+			pathTemplate: "/v1/{name=publishers/*/books/*}",
+			msg:          &binding.HelloRequest{Name: "publishers/acme/books/42"},
+		},
 	}
 
 	for _, bm := range benchmarks {
@@ -376,6 +381,11 @@ func BenchmarkCompiledPath(b *testing.B) {
 				UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"name", "sub.name"}},
 			},
 			opts: []BuildPathOption{WithQueryParams()},
+		},
+		{
+			name:         "AIPResourceName",
+			pathTemplate: "/v1/{name=publishers/*/books/*}",
+			msg:          &binding.HelloRequest{Name: "publishers/acme/books/42"},
 		},
 	}
 

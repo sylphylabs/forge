@@ -36,18 +36,17 @@ type buildPathOptions struct {
 // request type. It moves template parsing and descriptor validation out of the
 // request path.
 type CompiledPath struct {
-	template          *httprule.Template
-	staticPath        string
-	descriptor        protoreflect.MessageDescriptor
-	fields            map[string]compiledPathField
-	variables         []httprule.Variable
-	encodedPathFields []string
-	queryParams       bool
-	omitFields        []string
-	prepareOnce       sync.Once
-	prototype         proto.Message
-	prepareOptions    buildPathOptions
-	prepareErr        error
+	template        *httprule.Template
+	staticPath      string
+	descriptor      protoreflect.MessageDescriptor
+	fields          map[string]compiledPathField
+	variables       []httprule.Variable
+	queryOmitFields []string
+	queryParams     bool
+	prepareOnce     sync.Once
+	prototype       proto.Message
+	prepareOptions  buildPathOptions
+	prepareErr      error
 }
 
 type compiledPathField struct {
@@ -108,7 +107,6 @@ func compilePath(template *httprule.Template, prototype proto.Message, options b
 		fields:      make(map[string]compiledPathField, len(variables)),
 		variables:   variables,
 		queryParams: options.queryParams,
-		omitFields:  append([]string(nil), options.omitFields...),
 	}
 	if len(variables) == 0 && !template.HasUnboundWildcard() {
 		path, err := template.Expand(func(string) (string, error) {
@@ -127,11 +125,14 @@ func compilePath(template *httprule.Template, prototype proto.Message, options b
 		}
 		compiled.fields[variable.FieldPath] = field
 		pathFields[variable.FieldPath] = struct{}{}
-		compiled.encodedPathFields = append(compiled.encodedPathFields, encodedDescriptorFieldPath(descriptor, variable.FieldPath))
+		compiled.queryOmitFields = append(compiled.queryOmitFields, encodedDescriptorFieldPath(descriptor, variable.FieldPath))
 	}
 	if options.queryParams {
 		if err := validateQueryParameters(descriptor, "", "", pathFields, options.omitFields); err != nil {
 			return nil, fmt.Errorf("compile HTTP query: %w", err)
+		}
+		for _, field := range options.omitFields {
+			compiled.queryOmitFields = append(compiled.queryOmitFields, encodedDescriptorFieldPath(descriptor, field))
 		}
 	}
 	return compiled, nil
@@ -188,9 +189,8 @@ func (p *CompiledPath) Build(msg proto.Message) (string, error) {
 			p.descriptor = compiled.descriptor
 			p.fields = compiled.fields
 			p.variables = compiled.variables
-			p.encodedPathFields = compiled.encodedPathFields
+			p.queryOmitFields = compiled.queryOmitFields
 			p.queryParams = compiled.queryParams
-			p.omitFields = compiled.omitFields
 		})
 		if p.prepareErr != nil {
 			return "", p.prepareErr
@@ -237,15 +237,11 @@ func (p *CompiledPath) Build(msg proto.Message) (string, error) {
 	if !p.queryParams {
 		return path, nil
 	}
-	queryParams, err := form.EncodeValues(msg)
+	queryParams, err := form.EncodeValuesExcept(msg, p.queryOmitFields...)
 	if err != nil {
 		return "", fmt.Errorf("build HTTP query: %w", err)
 	}
-	for _, field := range p.encodedPathFields {
-		delete(queryParams, field)
-	}
 	if len(queryParams) > 0 {
-		omitQueryParams(queryParams, p.omitFields)
 		if query := queryParams.Encode(); query != "" {
 			path += "?" + query
 		}
@@ -293,15 +289,18 @@ func BuildPath(pathTemplate string, msg proto.Message, opts ...BuildPathOption) 
 		return "", fmt.Errorf("build HTTP query: %w", err)
 	}
 
-	queryParams, err := form.EncodeValues(msg)
+	omitFields := make([]string, 0, len(template.Variables())+len(options.omitFields))
+	for _, variable := range template.Variables() {
+		omitFields = append(omitFields, encodedFieldPath(msg, variable.FieldPath))
+	}
+	for _, field := range options.omitFields {
+		omitFields = append(omitFields, encodedDescriptorFieldPath(msg.ProtoReflect().Descriptor(), field))
+	}
+	queryParams, err := form.EncodeValuesExcept(msg, omitFields...)
 	if err != nil {
 		return "", fmt.Errorf("build HTTP query: %w", err)
 	}
-	for _, variable := range template.Variables() {
-		delete(queryParams, encodedFieldPath(msg, variable.FieldPath))
-	}
 	if len(queryParams) > 0 {
-		omitQueryParams(queryParams, options.omitFields)
 		if query := queryParams.Encode(); query != "" {
 			path += "?" + query
 		}
@@ -517,20 +516,5 @@ func formatPathFloat(value float64, bits int) string {
 		return "-Infinity"
 	default:
 		return strconv.FormatFloat(value, 'g', -1, bits)
-	}
-}
-
-func omitQueryParams(values map[string][]string, fields []string) {
-	for _, field := range fields {
-		if field == "" {
-			continue
-		}
-		delete(values, field)
-		prefix := field + "."
-		for key := range values {
-			if strings.HasPrefix(key, prefix) {
-				delete(values, key)
-			}
-		}
 	}
 }

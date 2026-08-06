@@ -37,13 +37,13 @@ func BenchmarkRouteMux(b *testing.B) {
 	})
 	b.Run("custom-not-found", func(b *testing.B) {
 		router := newRouteMux()
-		router.notFoundHandler = http.HandlerFunc(benchmarkHandler)
+		router.setNotFoundHandler(http.HandlerFunc(benchmarkHandler))
 		router.handle(http.MethodGet, "/resource", http.HandlerFunc(benchmarkHandler), false)
 		benchmarkRouter(b, router, "/missing", false)
 	})
 	b.Run("custom-method-not-allowed", func(b *testing.B) {
 		router := newRouteMux()
-		router.methodNotAllowedHandler = http.HandlerFunc(benchmarkHandler)
+		router.setMethodNotAllowedHandler(http.HandlerFunc(benchmarkHandler))
 		router.handle(http.MethodGet, "/resource", http.HandlerFunc(benchmarkHandler), false)
 		benchmarkRouterMethod(b, router, http.MethodPost, "/resource")
 	})

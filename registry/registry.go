@@ -3,7 +3,8 @@ package registry
 import (
 	"context"
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 )
 
 // Registrar is service registrar.
@@ -56,40 +57,30 @@ func (i *ServiceInstance) String() string {
 
 // Equal returns whether i and o are equivalent.
 func (i *ServiceInstance) Equal(o any) bool {
-	if i == nil && o == nil {
-		return true
+	if o == nil {
+		return i == nil
 	}
-
-	if i == nil || o == nil {
-		return false
-	}
-
 	t, ok := o.(*ServiceInstance)
 	if !ok {
 		return false
 	}
+	if i == nil || t == nil {
+		return i == t
+	}
 
+	if i.ID != t.ID || i.Name != t.Name || i.Version != t.Version {
+		return false
+	}
+	if !maps.Equal(i.Metadata, t.Metadata) {
+		return false
+	}
 	if len(i.Endpoints) != len(t.Endpoints) {
 		return false
 	}
 
-	sort.Strings(i.Endpoints)
-	sort.Strings(t.Endpoints)
-	for j := 0; j < len(i.Endpoints); j++ {
-		if i.Endpoints[j] != t.Endpoints[j] {
-			return false
-		}
-	}
-
-	if len(i.Metadata) != len(t.Metadata) {
-		return false
-	}
-
-	for k, v := range i.Metadata {
-		if v != t.Metadata[k] {
-			return false
-		}
-	}
-
-	return i.ID == t.ID && i.Name == t.Name && i.Version == t.Version
+	iEndpoints := slices.Clone(i.Endpoints)
+	tEndpoints := slices.Clone(t.Endpoints)
+	slices.Sort(iEndpoints)
+	slices.Sort(tEndpoints)
+	return slices.Equal(iEndpoints, tEndpoints)
 }

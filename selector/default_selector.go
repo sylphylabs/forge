@@ -39,9 +39,16 @@ func (d *Default) Select(ctx context.Context, opts ...SelectOption) (selected No
 		for _, filter := range options.NodeFilters {
 			newNodes = filter(ctx, newNodes)
 		}
-		candidates = make([]WeightedNode, len(newNodes))
-		for i, n := range newNodes {
-			candidates[i] = n.(WeightedNode)
+		candidates = make([]WeightedNode, 0, len(newNodes))
+		for _, n := range newNodes {
+			if n == nil {
+				continue
+			}
+			if wn, ok := n.(WeightedNode); ok {
+				candidates = append(candidates, wn)
+				continue
+			}
+			candidates = append(candidates, d.NodeBuilder.Build(n))
 		}
 	} else {
 		candidates = nodes

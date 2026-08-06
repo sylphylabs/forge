@@ -33,14 +33,6 @@ func escapeSegment(value string) string {
 	return builder.String()
 }
 
-func escapeSegments(value string) []string {
-	segments := strings.Split(value, "/")
-	for i := range segments {
-		segments[i] = escapeSegment(segments[i])
-	}
-	return segments
-}
-
 func decodeMulti(value string) (string, error) {
 	if !strings.ContainsRune(value, '%') {
 		return value, nil

@@ -77,7 +77,7 @@ func DefaultRequestQuery(r *http.Request, v any) error {
 func DefaultRequestDecoder(r *http.Request, v any) error {
 	if body, ok := httpBody(v); ok {
 		data, err := io.ReadAll(r.Body)
-		r.Body = io.NopCloser(bytes.NewBuffer(data))
+		r.Body = newReplayBody(data)
 		if err != nil {
 			return errors.BadRequest("CODEC", err.Error())
 		}
@@ -86,7 +86,7 @@ func DefaultRequestDecoder(r *http.Request, v any) error {
 		return nil
 	}
 	data, err := io.ReadAll(r.Body)
-	r.Body = io.NopCloser(bytes.NewBuffer(data))
+	r.Body = newReplayBody(data)
 	if err != nil {
 		return errors.BadRequest("CODEC", err.Error())
 	}
@@ -102,6 +102,18 @@ func DefaultRequestDecoder(r *http.Request, v any) error {
 	}
 	return nil
 }
+
+type replayBody struct {
+	bytes.Reader
+}
+
+func newReplayBody(data []byte) *replayBody {
+	body := new(replayBody)
+	body.Reset(data)
+	return body
+}
+
+func (*replayBody) Close() error { return nil }
 
 // DefaultResponseEncoder encodes the object to the HTTP response.
 func DefaultResponseEncoder(w http.ResponseWriter, r *http.Request, v any) error {

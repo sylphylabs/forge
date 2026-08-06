@@ -77,6 +77,20 @@ func TestEncodeValuesUsesProtoJSONScalarText(t *testing.T) {
 	}
 }
 
+func TestEncodeValuesOmitsFieldsBeforeEncoding(t *testing.T) {
+	query, err := EncodeValuesExcept(&complex.Complex{
+		Id:     2233,
+		Age:    18,
+		Simple: &complex.Simple{Component: "hidden"},
+	}, "id", "very_simple.component")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := query.Encode(); got != "age=18" {
+		t.Fatalf("encoded query = %q, want age=18", got)
+	}
+}
+
 func TestJsonCamelCase(t *testing.T) {
 	tests := []struct {
 		camelCase string

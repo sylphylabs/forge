@@ -143,7 +143,6 @@ type matchedRouteHandler interface {
 
 type routeBucket struct {
 	router       *routeMux
-	pattern      string
 	captureNames []string
 	mu           sync.Mutex
 	routes       atomic.Pointer[[]routeVariant]
@@ -163,7 +162,9 @@ func (b *routeBucket) add(route routeVariant) {
 }
 
 func (b *routeBucket) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	req.Pattern = b.pattern
+	// net/http publishes the structural mux pattern before invoking the bucket.
+	// Do not expose it unless one of the registered route variants really matches.
+	req.Pattern = ""
 	routes := b.routes.Load()
 	if routes == nil {
 		b.router.serveNotFound(w, req)
@@ -172,6 +173,7 @@ func (b *routeBucket) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	for i := range *routes {
 		candidate := &(*routes)[i]
 		if len(candidate.route.vars) == 0 && candidate.route.template == candidate.route.pattern {
+			req.Pattern = candidate.route.template
 			candidate.handler.ServeHTTP(w, req)
 			return
 		}
@@ -183,6 +185,7 @@ func (b *routeBucket) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if !ok {
 			continue
 		}
+		req.Pattern = candidate.route.template
 		if handler, ok := candidate.handler.(matchedRouteHandler); ok {
 			handler.serveMatchedRoute(w, req, &candidate.route, values, b.captureNames)
 			return
@@ -202,25 +205,31 @@ type headerRoute struct {
 	handler http.Handler
 }
 
-type routeMux struct {
-	mux                     *http.ServeMux
-	mu                      sync.RWMutex
-	buckets                 map[string]*routeBucket
-	methods                 map[string]struct{}
-	methodList              atomic.Pointer[[]string]
-	routes                  []RouteInfo
+type routeRuntime struct {
 	headers                 []headerRoute
 	notFoundHandler         http.Handler
 	methodNotAllowedHandler http.Handler
 	errorEncoder            EncodeErrorFunc
 }
 
+type routeMux struct {
+	mux        *http.ServeMux
+	mu         sync.RWMutex
+	buckets    map[string]*routeBucket
+	methods    map[string]struct{}
+	methodList atomic.Pointer[[]string]
+	routes     []RouteInfo
+	runtime    atomic.Pointer[routeRuntime]
+}
+
 func newRouteMux() *routeMux {
-	return &routeMux{
+	router := &routeMux{
 		mux:     http.NewServeMux(),
 		buckets: make(map[string]*routeBucket),
 		methods: make(map[string]struct{}),
 	}
+	router.runtime.Store(new(routeRuntime))
+	return router
 }
 
 func (r *routeMux) handle(method, template string, handler http.Handler, walk bool) {
@@ -246,7 +255,7 @@ func (r *routeMux) handleCompiled(method string, route compiledRoute, handler ht
 	defer r.mu.Unlock()
 	bucket := r.buckets[pattern]
 	if bucket == nil {
-		bucket = &routeBucket{router: r, pattern: pattern, captureNames: route.captureNames}
+		bucket = &routeBucket{router: r, captureNames: route.captureNames}
 		bucket.add(routeVariant{route: route, handler: handler})
 		r.mux.Handle(muxPattern, bucket)
 		r.buckets[pattern] = bucket
@@ -286,7 +295,36 @@ func (r *routeMux) handlePrefix(prefix string, handler http.Handler) {
 
 func (r *routeMux) handleHeader(key, value string, handler http.Handler) {
 	r.mu.Lock()
-	r.headers = append(r.headers, headerRoute{key: key, value: value, handler: handler})
+	current := r.runtime.Load()
+	next := *current
+	next.headers = make([]headerRoute, len(current.headers), len(current.headers)+1)
+	copy(next.headers, current.headers)
+	next.headers = append(next.headers, headerRoute{key: key, value: value, handler: handler})
+	r.runtime.Store(&next)
+	r.mu.Unlock()
+}
+
+func (r *routeMux) setNotFoundHandler(handler http.Handler) {
+	r.mu.Lock()
+	next := *r.runtime.Load()
+	next.notFoundHandler = handler
+	r.runtime.Store(&next)
+	r.mu.Unlock()
+}
+
+func (r *routeMux) setMethodNotAllowedHandler(handler http.Handler) {
+	r.mu.Lock()
+	next := *r.runtime.Load()
+	next.methodNotAllowedHandler = handler
+	r.runtime.Store(&next)
+	r.mu.Unlock()
+}
+
+func (r *routeMux) setErrorEncoder(encoder EncodeErrorFunc) {
+	r.mu.Lock()
+	next := *r.runtime.Load()
+	next.errorEncoder = encoder
+	r.runtime.Store(&next)
 	r.mu.Unlock()
 }
 
@@ -303,17 +341,17 @@ func (r *routeMux) walk(fn WalkRouteFunc) error {
 }
 
 func (r *routeMux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	r.mu.RLock()
+	req.Pattern = ""
+	runtime := r.runtime.Load()
 	var headerHandler http.Handler
-	for _, route := range r.headers {
+	for _, route := range runtime.headers {
 		if req.Header.Get(route.key) == route.value {
 			headerHandler = route.handler
 			break
 		}
 	}
-	notFound := r.notFoundHandler
-	methodNotAllowed := r.methodNotAllowedHandler
-	r.mu.RUnlock()
+	notFound := runtime.notFoundHandler
+	methodNotAllowed := runtime.methodNotAllowedHandler
 
 	if headerHandler != nil {
 		headerHandler.ServeHTTP(w, req)
@@ -321,13 +359,17 @@ func (r *routeMux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if notFound == nil && methodNotAllowed == nil {
-		r.mux.ServeHTTP(w, req)
+		r.serveMuxHandler(w, req)
 		return
 	}
 
 	handler, pattern := r.mux.Handler(req)
 	if pattern != "" {
-		r.mux.ServeHTTP(w, req)
+		if _, matchedBucket := handler.(*routeBucket); matchedBucket {
+			r.mux.ServeHTTP(w, req)
+		} else {
+			handler.ServeHTTP(w, req)
+		}
 		return
 	}
 	methods := r.methodList.Load()
@@ -341,6 +383,20 @@ func (r *routeMux) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	if !methodNotAllowedMatch && notFound != nil {
 		notFound.ServeHTTP(w, req)
+		return
+	}
+	handler.ServeHTTP(w, req)
+}
+
+func (r *routeMux) serveMuxHandler(w http.ResponseWriter, req *http.Request) {
+	if req.RequestURI == "*" {
+		r.mux.ServeHTTP(w, req)
+		req.Pattern = ""
+		return
+	}
+	handler, _ := r.mux.Handler(req)
+	if _, matchedBucket := handler.(*routeBucket); matchedBucket {
+		r.mux.ServeHTTP(w, req)
 		return
 	}
 	handler.ServeHTTP(w, req)
@@ -362,9 +418,7 @@ func matchesOtherMethod(mux *http.ServeMux, methods []string, req *http.Request)
 }
 
 func (r *routeMux) serveNotFound(w http.ResponseWriter, req *http.Request) {
-	r.mu.RLock()
-	handler := r.notFoundHandler
-	r.mu.RUnlock()
+	handler := r.runtime.Load().notFoundHandler
 	if handler == nil {
 		http.NotFound(w, req)
 		return
@@ -373,9 +427,7 @@ func (r *routeMux) serveNotFound(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *routeMux) serveRouteError(w http.ResponseWriter, req *http.Request, err error) {
-	r.mu.RLock()
-	encode := r.errorEncoder
-	r.mu.RUnlock()
+	encode := r.runtime.Load().errorEncoder
 	if encode == nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return

@@ -356,3 +356,145 @@ func TestRouteMuxPathPrefix(t *testing.T) {
 		}
 	}
 }
+
+func TestRouteMuxPublishesCanonicalPatternAfterMatch(t *testing.T) {
+	var before, after, inHandler string
+	srv := NewServer(Filter(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			before = req.Pattern
+			next.ServeHTTP(w, req)
+			after = req.Pattern
+		})
+	}))
+	srv.Route("/").GET("/v1/{message.name=publishers/*/books/*}", func(ctx Context) error {
+		inHandler = ctx.Request().Pattern
+		return ctx.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/publishers/acme/books/42", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	const wantPattern = "/v1/{message.name=publishers/*/books/*}"
+	if before != "" {
+		t.Fatalf("pattern before routing = %q, want empty", before)
+	}
+	if after != wantPattern {
+		t.Fatalf("pattern after routing = %q, want %q", after, wantPattern)
+	}
+	if inHandler != wantPattern {
+		t.Fatalf("handler pattern = %q, want %q", inHandler, wantPattern)
+	}
+	if req.Pattern != wantPattern {
+		t.Fatalf("original request pattern = %q, want %q", req.Pattern, wantPattern)
+	}
+}
+
+func TestRouteMuxDoesNotPublishPatternWithoutMatchedCandidate(t *testing.T) {
+	srv := NewServer()
+	srv.Route("/").GET("/items/{id:[0-9]+}", func(ctx Context) error {
+		return ctx.String(http.StatusOK, "ok")
+	})
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		status int
+	}{
+		{name: "candidate mismatch", method: http.MethodGet, path: "/items/not-a-number", status: http.StatusNotFound},
+		{name: "method not allowed", method: http.MethodPost, path: "/items/123", status: http.StatusMethodNotAllowed},
+		{name: "not found", method: http.MethodGet, path: "/missing", status: http.StatusNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req.Pattern = "stale pattern"
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+			if w.Code != tt.status {
+				t.Fatalf("status = %d, want %d", w.Code, tt.status)
+			}
+			if req.Pattern != "" {
+				t.Fatalf("request pattern = %q, want empty", req.Pattern)
+			}
+		})
+	}
+}
+
+func TestRouteMuxDoesNotPublishPatternForServeMuxRedirect(t *testing.T) {
+	srv := NewServer()
+	srv.Route("/").GET("/tree/", func(ctx Context) error {
+		return ctx.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/tree", nil)
+	req.Pattern = "stale pattern"
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusTemporaryRedirect)
+	}
+	if req.Pattern != "" {
+		t.Fatalf("request pattern = %q, want empty", req.Pattern)
+	}
+}
+
+func TestRouteMuxDoesNotPublishPatternForHeaderRoute(t *testing.T) {
+	srv := NewServer()
+	srv.HandleHeader("X-Route", "header", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/unregistered", nil)
+	req.Header.Set("X-Route", "header")
+	req.Pattern = "stale pattern"
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusNoContent)
+	}
+	if req.Pattern != "" {
+		t.Fatalf("request pattern = %q, want empty", req.Pattern)
+	}
+}
+
+func TestRouteMuxDoesNotPublishPatternForCustomFallbacks(t *testing.T) {
+	srv := NewServer(
+		NotFoundHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusTeapot)
+		})),
+		MethodNotAllowedHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusConflict)
+		})),
+	)
+	srv.Route("/").GET("/items/{id}", func(ctx Context) error {
+		return ctx.String(http.StatusOK, "ok")
+	})
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		status int
+	}{
+		{name: "not found", method: http.MethodGet, path: "/missing", status: http.StatusTeapot},
+		{name: "method not allowed", method: http.MethodPost, path: "/items/42", status: http.StatusConflict},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req.Pattern = "stale pattern"
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+			if w.Code != tt.status {
+				t.Fatalf("status = %d, want %d", w.Code, tt.status)
+			}
+			if req.Pattern != "" {
+				t.Fatalf("request pattern = %q, want empty", req.Pattern)
+			}
+		})
+	}
+}

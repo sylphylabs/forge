@@ -14,20 +14,32 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
-// EncodeValues encode a message into url values.
+// EncodeValues encodes a message into URL values.
 func EncodeValues(msg any) (url.Values, error) {
+	return encodeValues(msg, nil)
+}
+
+// EncodeValuesExcept encodes a message into URL values while excluding the
+// matching encoded field paths and all of their descendants.
+func EncodeValuesExcept(msg any, omitFields ...string) (url.Values, error) {
+	return encodeValues(msg, omitFields)
+}
+
+func encodeValues(msg any, omitFields []string) (url.Values, error) {
 	if msg == nil || (reflect.ValueOf(msg).Kind() == reflect.Pointer && reflect.ValueOf(msg).IsNil()) {
 		return url.Values{}, nil
 	}
 	if v, ok := msg.(proto.Message); ok {
 		u := make(url.Values)
-		err := encodeByField(u, "", v.ProtoReflect())
+		err := encodeByField(u, "", v.ProtoReflect(), omitFields)
 		return u, err
 	}
-	return encoder.Encode(msg)
+	u, err := encoder.Encode(msg)
+	omitValues(u, omitFields)
+	return u, err
 }
 
-func encodeByField(u url.Values, path string, m protoreflect.Message) (finalErr error) {
+func encodeByField(u url.Values, path string, m protoreflect.Message, omitFields []string) (finalErr error) {
 	m.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
 		var (
 			key     string
@@ -42,6 +54,9 @@ func encodeByField(u url.Values, path string, m protoreflect.Message) (finalErr 
 			newPath = key
 		} else {
 			newPath = path + "." + key
+		}
+		if omittedField(newPath, omitFields) {
+			return true
 		}
 		if of := fd.ContainingOneof(); of != nil {
 			if f := m.WhichOneof(of); f != nil && f != fd {
@@ -75,7 +90,7 @@ func encodeByField(u url.Values, path string, m protoreflect.Message) (finalErr 
 				u.Set(newPath, value)
 				return true
 			}
-			if err = encodeByField(u, newPath, v.Message()); err != nil {
+			if err = encodeByField(u, newPath, v.Message(), omitFields); err != nil {
 				finalErr = err
 			}
 		default:
@@ -88,6 +103,29 @@ func encodeByField(u url.Values, path string, m protoreflect.Message) (finalErr 
 		return true
 	})
 	return
+}
+
+func omittedField(path string, fields []string) bool {
+	for _, field := range fields {
+		if path == field {
+			return true
+		}
+	}
+	return false
+}
+
+func omitValues(values url.Values, fields []string) {
+	for _, field := range fields {
+		if field == "" {
+			continue
+		}
+		delete(values, field)
+		for key := range values {
+			if strings.HasPrefix(key, field+".") || strings.HasPrefix(key, field+"[") {
+				delete(values, key)
+			}
+		}
+	}
 }
 
 func encodeRepeatedField(fieldDescriptor protoreflect.FieldDescriptor, list protoreflect.List) ([]string, error) {

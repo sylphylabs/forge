@@ -117,13 +117,13 @@ func PathPrefix(prefix string) ServerOption {
 
 func NotFoundHandler(handler http.Handler) ServerOption {
 	return func(s *Server) {
-		s.router.notFoundHandler = handler
+		s.router.setNotFoundHandler(handler)
 	}
 }
 
 func MethodNotAllowedHandler(handler http.Handler) ServerOption {
 	return func(s *Server) {
-		s.router.methodNotAllowedHandler = handler
+		s.router.setMethodNotAllowedHandler(handler)
 	}
 }
 
@@ -163,7 +163,7 @@ func NewServer(opts ...ServerOption) *Server {
 	for _, o := range opts {
 		o(srv)
 	}
-	srv.router.errorEncoder = srv.ene
+	srv.router.setErrorEncoder(srv.ene)
 	srv.Server = &http.Server{
 		Handler:   FilterChain(srv.filters...)(srv.router),
 		TLSConfig: srv.tlsConf,

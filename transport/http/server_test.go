@@ -347,8 +347,8 @@ func TestMatchedRoutePreservesRequestSemantics(t *testing.T) {
 	srv := NewServer(Timeout(0))
 	srv.Route("").GET("/context/{name}", func(ctx Context) error {
 		request := ctx.Request()
-		if got := request.Pattern; got != "GET /context/{__openkratos0}" {
-			t.Fatalf("request pattern = %q", got)
+		if got := request.Pattern; got != "/context/{name}" {
+			t.Fatalf("request pattern = %q, want %q", got, "/context/{name}")
 		}
 		if got := request.PathValue("name"); got != "kratos" {
 			t.Fatalf("path value = %q", got)

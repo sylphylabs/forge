@@ -30,6 +30,12 @@ func (rt *mockRoundTripper) RoundTrip(_ *http.Request) (resp *http.Response, err
 	return
 }
 
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
 type captureRoundTripper struct {
 	req *http.Request
 }
@@ -74,6 +80,23 @@ func TestWithTransport(t *testing.T) {
 	o(co)
 	if !reflect.DeepEqual(co.transport, ov) {
 		t.Errorf("expected transport to be %v, got %v", ov, co.transport)
+	}
+}
+
+func TestWithRoundTripperWrapperAppends(t *testing.T) {
+	options := new(clientOptions)
+	first := RoundTripperWrapper(func(next http.RoundTripper) (http.RoundTripper, error) {
+		return next, nil
+	})
+	second := RoundTripperWrapper(func(next http.RoundTripper) (http.RoundTripper, error) {
+		return next, nil
+	})
+
+	WithRoundTripperWrapper(first)(options)
+	WithRoundTripperWrapper(second)(options)
+
+	if got := len(options.roundTripperWrappers); got != 2 {
+		t.Fatalf("wrapper count = %d, want 2", got)
 	}
 }
 
@@ -495,5 +518,141 @@ func TestNewClientWithTLSDoesNotModifyDefaultTransport(t *testing.T) {
 
 	if defaultTransport.TLSClientConfig != originalTLSConfig {
 		t.Error("NewClient modified http.DefaultTransport.TLSClientConfig")
+	}
+}
+
+func TestNewClientAppliesRoundTripperWrappersInOrder(t *testing.T) {
+	var events []string
+	base := roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		events = append(events, "roundtrip:base")
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       http.NoBody,
+		}, nil
+	})
+	wrapper := func(name string) RoundTripperWrapper {
+		return func(next http.RoundTripper) (http.RoundTripper, error) {
+			events = append(events, "wrap:"+name)
+			return roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+				events = append(events, "roundtrip:"+name)
+				return next.RoundTrip(req)
+			}), nil
+		}
+	}
+
+	client, err := NewClient(
+		t.Context(),
+		WithEndpoint("http://example.com"),
+		WithTransport(base),
+		WithRoundTripperWrapper(wrapper("first")),
+		WithRoundTripperWrapper(wrapper("second")),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := client.cc.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = res.Body.Close()
+
+	want := []string{
+		"wrap:second",
+		"wrap:first",
+		"roundtrip:first",
+		"roundtrip:second",
+		"roundtrip:base",
+	}
+	if !reflect.DeepEqual(events, want) {
+		t.Fatalf("events = %v, want %v", events, want)
+	}
+}
+
+func TestNewClientAppliesRoundTripperWrapperAfterTLSClone(t *testing.T) {
+	base := &http.Transport{}
+	tlsConfig := &tls.Config{ServerName: "example.com"}
+	var wrappedBase http.RoundTripper
+
+	_, err := NewClient(
+		t.Context(),
+		WithEndpoint("https://example.com"),
+		WithTransport(base),
+		WithTLSConfig(tlsConfig),
+		WithRoundTripperWrapper(func(next http.RoundTripper) (http.RoundTripper, error) {
+			wrappedBase = next
+			return next, nil
+		}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cloned, ok := wrappedBase.(*http.Transport)
+	if !ok {
+		t.Fatalf("wrapped transport type = %T, want *http.Transport", wrappedBase)
+	}
+	if cloned == base {
+		t.Fatal("wrapper received the original transport instead of a clone")
+	}
+	if cloned.TLSClientConfig != tlsConfig {
+		t.Fatal("wrapper did not receive the configured TLS settings")
+	}
+}
+
+func TestNewClientRejectsInvalidRoundTripperWrappers(t *testing.T) {
+	wrapperErr := errors.New("instrument creation failed")
+	var typedNil *mockRoundTripper
+	tests := []struct {
+		name string
+		opts []ClientOption
+		err  error
+	}{
+		{
+			name: "nil base transport",
+			opts: []ClientOption{WithTransport(nil)},
+		},
+		{
+			name: "typed nil base transport",
+			opts: []ClientOption{WithTransport(typedNil)},
+		},
+		{
+			name: "nil wrapper",
+			opts: []ClientOption{WithRoundTripperWrapper(nil)},
+		},
+		{
+			name: "wrapper error",
+			opts: []ClientOption{WithRoundTripperWrapper(func(http.RoundTripper) (http.RoundTripper, error) {
+				return nil, wrapperErr
+			})},
+			err: wrapperErr,
+		},
+		{
+			name: "nil wrapped transport",
+			opts: []ClientOption{WithRoundTripperWrapper(func(http.RoundTripper) (http.RoundTripper, error) {
+				return nil, nil
+			})},
+		},
+		{
+			name: "typed nil wrapped transport",
+			opts: []ClientOption{WithRoundTripperWrapper(func(http.RoundTripper) (http.RoundTripper, error) {
+				return typedNil, nil
+			})},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := append([]ClientOption{WithEndpoint("http://example.com")}, tt.opts...)
+			_, err := NewClient(t.Context(), opts...)
+			if err == nil {
+				t.Fatal("NewClient() error = nil")
+			}
+			if tt.err != nil && !errors.Is(err, tt.err) {
+				t.Fatalf("NewClient() error = %v, want wrapped %v", err, tt.err)
+			}
+		})
 	}
 }

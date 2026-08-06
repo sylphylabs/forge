@@ -26,27 +26,25 @@ func Server(logger *slog.Logger) middleware.UnaryMiddleware {
 	}
 	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
-			var (
-				code      int32
-				reason    string
-				kind      string
-				operation string
-			)
-
-			// default code
-			code = int32(status.FromGRPCCode(codes.OK))
-
 			startTime := time.Now()
+			var kind, operation string
 			if info, ok := transport.FromServerContext(ctx); ok {
 				kind = info.Kind().String()
 				operation = info.Operation()
 			}
 			reply, err = handler(ctx, req)
+			level := levelForError(err)
+			if !logger.Enabled(ctx, level) {
+				return
+			}
+
+			code := int32(status.FromGRPCCode(codes.OK))
+			var reason string
 			if se := errors.FromError(err); se != nil {
 				code = se.Code
 				reason = se.Reason
 			}
-			level, stack := extractError(err)
+			_, stack := extractError(err)
 			attrs := []slog.Attr{
 				slog.String("kind", "server"),
 				slog.String("component", kind),
@@ -75,27 +73,25 @@ func Client(logger *slog.Logger) middleware.UnaryMiddleware {
 	}
 	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
-			var (
-				code      int32
-				reason    string
-				kind      string
-				operation string
-			)
-
-			// default code
-			code = int32(status.FromGRPCCode(codes.OK))
-
 			startTime := time.Now()
+			var kind, operation string
 			if info, ok := transport.FromClientContext(ctx); ok {
 				kind = info.Kind().String()
 				operation = info.Operation()
 			}
 			reply, err = handler(ctx, req)
+			level := levelForError(err)
+			if !logger.Enabled(ctx, level) {
+				return
+			}
+
+			code := int32(status.FromGRPCCode(codes.OK))
+			var reason string
 			if se := errors.FromError(err); se != nil {
 				code = se.Code
 				reason = se.Reason
 			}
-			level, stack := extractError(err)
+			_, stack := extractError(err)
 			attrs := []slog.Attr{
 				slog.String("kind", "client"),
 				slog.String("component", kind),
@@ -117,6 +113,13 @@ func Client(logger *slog.Logger) middleware.UnaryMiddleware {
 	}
 }
 
+func levelForError(err error) slog.Level {
+	if err != nil {
+		return slog.LevelError
+	}
+	return slog.LevelInfo
+}
+
 // extractArgs returns the string of the req
 func extractArgs(req any) string {
 	if redacter, ok := req.(Redacter); ok {
@@ -131,7 +134,7 @@ func extractArgs(req any) string {
 // extractError returns the level and stack to attach for err.
 func extractError(err error) (slog.Level, string) {
 	if err != nil {
-		return slog.LevelError, fmt.Sprintf("%+v", err)
+		return levelForError(err), fmt.Sprintf("%+v", err)
 	}
-	return slog.LevelInfo, ""
+	return levelForError(err), ""
 }
