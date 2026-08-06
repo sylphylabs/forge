@@ -1,0 +1,11 @@
+version: v2
+modules:
+  - path: proto
+    name: buf.build/openkratos/api
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE
+
