@@ -44,6 +44,15 @@ func WithMiddleware(m ...Middleware) ServerOption {
 	}
 }
 
+// Endpoint sets the broker endpoint reported to middleware through
+// transport.Transporter. It is descriptive only: the subscriber owns the
+// actual connection.
+func Endpoint(endpoint string) ServerOption {
+	return func(s *Server) {
+		s.endpoint = endpoint
+	}
+}
+
 // ShutdownTimeout bounds cleanup triggered by cancellation of Start's parent
 // context. Explicit Stop callers provide their own context.
 func ShutdownTimeout(timeout time.Duration) ServerOption {
@@ -73,6 +82,7 @@ const (
 type Server struct {
 	subscriber      Subscriber
 	shutdownTimeout time.Duration
+	endpoint        string
 
 	mu         sync.Mutex
 	state      serverState
@@ -172,7 +182,7 @@ func (s *Server) Start(ctx context.Context) error {
 		if runCtx.Err() != nil {
 			return s.closeAfterCancellation(ctx)
 		}
-		handler := wrapped(b.handler)
+		handler := withTransportContext(s.endpoint, wrapped(b.handler))
 		sub, err := s.subscriber.Subscribe(runCtx, b.topic, handler)
 		if err != nil {
 			cleanupErr := s.closeAfterCancellation(ctx)

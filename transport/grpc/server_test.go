@@ -32,7 +32,9 @@ type server struct {
 func (s *server) SayHelloStream(streamServer pb.Greeter_SayHelloStreamServer) error {
 	tctx, ok := transport.FromServerContext(streamServer.Context())
 	if ok {
-		tctx.ReplyHeader().Set("123", "123")
+		if rh, ok := tctx.(transport.ReplyHeaderer); ok {
+			rh.ReplyHeader().Set("123", "123")
+		}
 	}
 	var cnt uint
 	for {
@@ -77,8 +79,10 @@ func TestServer(t *testing.T) {
 	ctx = context.WithValue(ctx, testKey{}, "test")
 	srv := NewServer(
 		UnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-			if tr, ok := transport.FromServerContext(ctx); ok && tr.ReplyHeader() != nil {
-				tr.ReplyHeader().Set("req_id", "3344")
+			if tr, ok := transport.FromServerContext(ctx); ok {
+				if rh, ok := tr.(transport.ReplyHeaderer); ok && rh.ReplyHeader() != nil {
+					rh.ReplyHeader().Set("req_id", "3344")
+				}
 			}
 			return handler(ctx, req)
 		}),
