@@ -38,7 +38,10 @@ linters:
         - condition
         - return
     whitespace:
-      multi-func: true
+      # multi-func would require a blank line after a multi-line signature,
+      # which gofumpt then removes. gofumpt wins: it is the stricter formatter
+      # and the one that rewrites files.
+      multi-func: false
   exclusions:
     generated: lax
     presets:
@@ -49,6 +52,16 @@ linters:
     rules:
       - linters:
           - goconst
+        path: (.+)_test\.go
+      # Tests scope errors per step with `if err := ...`, which reads better
+      # than reusing one variable, and table fixtures hold wire payloads that
+      # cannot be wrapped without changing what is asserted.
+      - linters:
+          - govet
+        path: (.+)_test\.go
+        text: 'shadow: declaration of "err"'
+      - linters:
+          - lll
         path: (.+)_test\.go
     paths:
       - third_party$

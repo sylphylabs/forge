@@ -291,23 +291,34 @@ func generateStreamTerminal(g *protogen.GeneratedFile, service *protogen.Service
 	g.P("return ", serviceVar, ".", method.GoName, "(typed, typedStream)")
 }
 
+// wrapperTransport carries the per-transport naming and types used by generateWrapperMethod.
+type wrapperTransport struct {
+	name         string
+	wrapper      string
+	streamType   string
+	nativeStream protogen.GoIdent
+}
+
 func generateHTTPWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, wrapper string) {
-	generateWrapperMethod(g, service, method, wrapper, "HTTP",
-		service.GoName+"_"+method.GoName+"HTTPServer", transportHTTPPackage.Ident("ServerStream"))
+	generateWrapperMethod(g, service, method, wrapperTransport{
+		name:         "HTTP",
+		wrapper:      wrapper,
+		streamType:   service.GoName + "_" + method.GoName + "HTTPServer",
+		nativeStream: transportHTTPPackage.Ident("ServerStream"),
+	})
 }
 
 func generateGRPCWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, wrapper string) {
-	generateWrapperMethod(g, service, method, wrapper, "gRPC",
-		service.GoName+"_"+method.GoName+"Server", grpcPackage.Ident("ServerStream"))
+	generateWrapperMethod(g, service, method, wrapperTransport{
+		name:         "gRPC",
+		wrapper:      wrapper,
+		streamType:   service.GoName + "_" + method.GoName + "Server",
+		nativeStream: grpcPackage.Ident("ServerStream"),
+	})
 }
 
-func generateWrapperMethod(
-	g *protogen.GeneratedFile,
-	service *protogen.Service,
-	method *protogen.Method,
-	wrapper, transport, streamType string,
-	nativeStream protogen.GoIdent,
-) {
+func generateWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, tr wrapperTransport) {
+	wrapper, transport, streamType, nativeStream := tr.wrapper, tr.name, tr.streamType, tr.nativeStream
 	field := "handler" + method.GoName
 	if !isStreaming(method) {
 		g.P("func (s *", wrapper, ") ", method.GoName, "(ctx ", contextPackage.Ident("Context"),

@@ -254,7 +254,7 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 	protocInclude := filepath.Join(filepath.Dir(filepath.Dir(protocPath)), "include")
 	tmp := t.TempDir()
 	bin := filepath.Join(tmp, "bin")
-	if err := os.Mkdir(bin, 0o755); err != nil {
+	if err = os.Mkdir(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	plugin := filepath.Join(bin, "protoc-gen-go-http")
@@ -278,8 +278,9 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 		cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 		return cmd.CombinedOutput()
 	}
-	if output, err := generate(); err != nil {
-		t.Fatalf("protoc failed: %v\n%s", err, output)
+	output, genErr := generate()
+	if genErr != nil {
+		t.Fatalf("protoc failed: %v\n%s", genErr, output)
 	}
 	generatedPath := filepath.Join(tmp, "openpb", "open_http.pb.go")
 	generated, err := os.ReadFile(generatedPath)
@@ -301,8 +302,9 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 			t.Fatalf("generated output missing %q:\n%s", want, generated)
 		}
 	}
-	if output, err := generate(); err != nil {
-		t.Fatalf("second protoc run failed: %v\n%s", err, output)
+	output, genErr = generate()
+	if genErr != nil {
+		t.Fatalf("second protoc run failed: %v\n%s", genErr, output)
 	}
 	regenerated, err := os.ReadFile(generatedPath)
 	if err != nil {
@@ -470,10 +472,18 @@ func TestGeneratedGoogleHTTPConformance(t *testing.T) {
 		call  func(proto.Message) (proto.Message, error)
 		in    proto.Message
 	}{
-		{name: "message", field: "payload", value: ` + "`" + `{"value":"hello"}` + "`" + `, in: new(testpb.MessageRequest), call: func(in proto.Message) (proto.Message, error) { return opaqueClient.MessageBody(t.Context(), in.(*testpb.MessageRequest)) }},
-		{name: "scalar", field: "text", value: ` + "`" + `"hello"` + "`" + `, in: new(testpb.ScalarRequest), call: func(in proto.Message) (proto.Message, error) { return opaqueClient.ScalarBody(t.Context(), in.(*testpb.ScalarRequest)) }},
-		{name: "repeated", field: "tags", value: ` + "`" + `["a","b"]` + "`" + `, in: new(testpb.RepeatedRequest), call: func(in proto.Message) (proto.Message, error) { return opaqueClient.RepeatedBody(t.Context(), in.(*testpb.RepeatedRequest)) }},
-		{name: "map", field: "labels", value: ` + "`" + `{"env":"prod"}` + "`" + `, in: new(testpb.MapRequest), call: func(in proto.Message) (proto.Message, error) { return opaqueClient.MapBody(t.Context(), in.(*testpb.MapRequest)) }},
+		{name: "message", field: "payload", value: ` + "`" + `{"value":"hello"}` + "`" +
+		`, in: new(testpb.MessageRequest), call: func(in proto.Message) (proto.Message, error) ` +
+		`{ return opaqueClient.MessageBody(t.Context(), in.(*testpb.MessageRequest)) }},
+		{name: "scalar", field: "text", value: ` + "`" + `"hello"` + "`" +
+		`, in: new(testpb.ScalarRequest), call: func(in proto.Message) (proto.Message, error) ` +
+		`{ return opaqueClient.ScalarBody(t.Context(), in.(*testpb.ScalarRequest)) }},
+		{name: "repeated", field: "tags", value: ` + "`" + `["a","b"]` + "`" +
+		`, in: new(testpb.RepeatedRequest), call: func(in proto.Message) (proto.Message, error) ` +
+		`{ return opaqueClient.RepeatedBody(t.Context(), in.(*testpb.RepeatedRequest)) }},
+		{name: "map", field: "labels", value: ` + "`" + `{"env":"prod"}` + "`" +
+		`, in: new(testpb.MapRequest), call: func(in proto.Message) (proto.Message, error) ` +
+		`{ return opaqueClient.MapBody(t.Context(), in.(*testpb.MapRequest)) }},
 	}
 	for _, tt := range projectionCases {
 		t.Run("opaque_"+tt.name, func(t *testing.T) {
@@ -505,7 +515,8 @@ func TestGeneratedGoogleHTTPConformance(t *testing.T) {
 		t.Fatal(err)
 	}
 	requestURL, requestBody = recorder.snapshot()
-	if requestURL != "/v1/whole/items%2Fwhole" || strings.Contains(requestBody, "name") || !strings.Contains(requestBody, ` + "`" + `"count":"9007199254740993"` + "`" + `) {
+	if requestURL != "/v1/whole/items%2Fwhole" || strings.Contains(requestBody, "name") ` +
+		`|| !strings.Contains(requestBody, ` + "`" + `"count":"9007199254740993"` + "`" + `) {
 		t.Fatalf("whole body classification: url=%s body=%s", requestURL, requestBody)
 	}
 	if got := fieldJSON(wholeReply, "name"); got != ` + "`" + `"items/whole"` + "`" + ` {
@@ -698,7 +709,8 @@ service API { rpc Get(Request) returns (Reply) { option (google.api.http) = { ge
 		{
 			name: "nested additional binding",
 			source: `message Request {}
-service API { rpc Get(Request) returns (Reply) { option (google.api.http) = { get: "/v1/get" additional_bindings { get: "/v1/alt" additional_bindings { get: "/v1/nested" } } }; } }`,
+service API { rpc Get(Request) returns (Reply) { option (google.api.http) = ` +
+				`{ get: "/v1/get" additional_bindings { get: "/v1/alt" additional_bindings { get: "/v1/nested" } } }; } }`,
 			want: `nested additional bindings are not allowed`,
 		},
 		{

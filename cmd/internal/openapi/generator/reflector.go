@@ -81,8 +81,8 @@ func (r *OpenAPIv3Reflector) formatMessageName(message protoreflect.MessageDescr
 	}
 
 	if *r.conf.FQSchemaNaming {
-		package_name := string(message.ParentFile().Package())
-		name = package_name + "." + name
+		packageName := string(message.ParentFile().Package())
+		name = packageName + "." + name
 	}
 
 	return name
@@ -209,9 +209,8 @@ func (r *OpenAPIv3Reflector) schemaOrReferenceForField(field protoreflect.FieldD
 			// So we need to find the `value` field in the `MapFieldEntry` message and
 			// then return a MapFieldEntry schema using the schema for the `value` field
 			return wk.NewGoogleProtobufMapFieldEntrySchema(r.schemaOrReferenceForField(field.MapValue()))
-		} else {
-			kindSchema = r.schemaOrReferenceForMessage(field.Message())
 		}
+		kindSchema = r.schemaOrReferenceForMessage(field.Message())
 
 	case protoreflect.StringKind:
 		kindSchema = wk.NewStringSchema()
@@ -225,7 +224,7 @@ func (r *OpenAPIv3Reflector) schemaOrReferenceForField(field protoreflect.FieldD
 		kindSchema = wk.NewStringSchema()
 
 	case protoreflect.EnumKind:
-		kindSchema = wk.NewEnumSchema(*&r.conf.EnumType, field)
+		kindSchema = wk.NewEnumSchema(r.conf.EnumType, field)
 
 	case protoreflect.BoolKind:
 		kindSchema = wk.NewBooleanSchema()

@@ -719,14 +719,15 @@ func newOpenAPIPlugin(t *testing.T) *protogen.Plugin {
 func newOpenAPIPluginForFile(t *testing.T, file *descriptorpb.FileDescriptorProto, dependencies ...*descriptorpb.FileDescriptorProto) *protogen.Plugin {
 	t.Helper()
 
-	protoFiles := []*descriptorpb.FileDescriptorProto{
+	protoFiles := make([]*descriptorpb.FileDescriptorProto, 0, 6+len(dependencies)+1)
+	protoFiles = append(protoFiles,
 		protodesc.ToFileDescriptorProto(descriptorpb.File_google_protobuf_descriptor_proto),
 		protodesc.ToFileDescriptorProto(anypb.File_google_protobuf_any_proto),
 		protodesc.ToFileDescriptorProto(annotations.File_google_api_http_proto),
 		protodesc.ToFileDescriptorProto(annotations.File_google_api_annotations_proto),
 		protodesc.ToFileDescriptorProto(v3.File_openapiv3_OpenAPIv3_proto),
 		protodesc.ToFileDescriptorProto(v3.File_openapiv3_annotations_proto),
-	}
+	)
 	protoFiles = append(protoFiles, dependencies...)
 	protoFiles = append(protoFiles, file)
 	request := &pluginpb.CodeGeneratorRequest{
