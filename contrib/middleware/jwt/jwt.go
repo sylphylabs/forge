@@ -7,6 +7,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
+	"github.com/sylphylabs/forge/auth"
 	"github.com/sylphylabs/forge/errors"
 	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/transport"
@@ -130,6 +131,7 @@ func Server(keyFunc jwt.Keyfunc, opts ...Option) middleware.UnaryMiddleware {
 					return nil, ErrUnSupportSigningMethod
 				}
 				ctx = NewContext(ctx, tokenInfo.Claims)
+				ctx = auth.NewContext(ctx, Principal{Claims: tokenInfo.Claims})
 				return handler(ctx, req)
 			}
 			return nil, ErrWrongContext
