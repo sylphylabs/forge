@@ -7,10 +7,15 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/transport"
 
 	"github.com/mark3labs/mcp-go/server"
 )
+
+// ErrUnexpectedReply reports framework middleware that replaced a tool result
+// with a value the MCP transport cannot return.
+var ErrUnexpectedReply = errors.New("mcp: middleware returned a reply that is not *mcp.CallToolResult")
 
 var (
 	_ transport.Server     = (*Server)(nil)
@@ -38,10 +43,16 @@ func Endpoint(endpoint *url.URL) ServerOption {
 	}
 }
 
-// Middleware with server middleware.
-func Middleware(m MiddlewareFunc) ServerOption {
+// Middleware with server middleware. Repeated calls append, and the first
+// middleware is the outermost wrapper, matching WithMiddleware in
+// transport/message. Nil middleware is ignored.
+func Middleware(m ...MiddlewareFunc) ServerOption {
 	return func(s *Server) {
-		s.middleware = m
+		for _, mw := range m {
+			if mw != nil {
+				s.middleware = append(s.middleware, mw)
+			}
+		}
 	}
 }
 
@@ -62,26 +73,47 @@ func SSEOptions(opts ...server.SSEOption) ServerOption {
 // Server is a MCP server.
 type Server struct {
 	*server.MCPServer
-	srv        *http.Server
-	sse        *server.SSEServer
-	middleware MiddlewareFunc
-	address    string
-	endpoint   *url.URL
-	srvOpts    []server.ServerOption
-	sseOpts    []server.SSEOption
+	srv             *http.Server
+	sse             *server.SSEServer
+	middleware      []MiddlewareFunc
+	unaryMiddleware []middleware.UnaryMiddleware
+	address         string
+	endpoint        *url.URL
+	srvOpts         []server.ServerOption
+	sseOpts         []server.SSEOption
+}
+
+// chainHTTP composes m in declaration order, so the first middleware is the
+// outermost wrapper and runs first on entry.
+func chainHTTP(next http.Handler, m ...MiddlewareFunc) http.Handler {
+	for i := len(m) - 1; i >= 0; i-- {
+		next = m[i](next)
+	}
+	return next
 }
 
 // NewServer creates a new MCP server.
 func NewServer(name, version string, opts ...ServerOption) *Server {
 	srv := &Server{
-		address:    ":8000",
-		middleware: func(next http.Handler) http.Handler { return next },
+		address: ":8000",
 	}
 	for _, o := range opts {
 		o(srv)
 	}
-	srv.MCPServer = server.NewMCPServer(name, version, srv.srvOpts...)
-	srv.srv = &http.Server{Addr: srv.address, Handler: srv.middleware(srv)}
+	srvOpts := srv.srvOpts
+	if len(srv.unaryMiddleware) > 0 {
+		// Registered after the caller's own options so that the endpoint,
+		// which options may set, is already known.
+		endpoint := ""
+		if e, err := srv.Endpoint(); err == nil {
+			endpoint = e.String()
+		}
+		srvOpts = append(srvOpts, server.WithToolHandlerMiddleware(
+			UnaryMiddleware(endpoint, srv.unaryMiddleware...),
+		))
+	}
+	srv.MCPServer = server.NewMCPServer(name, version, srvOpts...)
+	srv.srv = &http.Server{Addr: srv.address, Handler: chainHTTP(srv, srv.middleware...)}
 	srv.sse = server.NewSSEServer(srv.MCPServer, append(srv.sseOpts, server.WithHTTPServer(srv.srv))...)
 	return srv
 }
