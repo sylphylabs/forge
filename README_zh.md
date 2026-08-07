@@ -110,7 +110,7 @@ make lint
 
 ## 致谢
 
-Forge 保留了完整的 Forge Git 历史和原始 MIT 版权声明。上游 Kratos 项目及其贡献者构建了本项目的基础。
+Forge 保留了完整的 Kratos Git 历史和原始 MIT 版权声明。上游 Kratos 项目及其贡献者构建了本项目的基础。
 
 以下项目对原始 Forge 设计有重要影响：
 

@@ -5,14 +5,14 @@ It is required to
 > serviceaccount should be set to the actual account of your environment, the default account will be `namespace::default` if the `spec.serviceAccount` is unset.
 execute this command:
 ```
-kubectl create clusterrolebinding go-kratos:kube --clusterrole=view --serviceaccount=mesh:default
+kubectl create clusterrolebinding forge:kube --clusterrole=view --serviceaccount=mesh:default
 ```
 or use `kubectl apply -f bind-role.yaml`
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: go-kratos:kube
+  name: forge:kube
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

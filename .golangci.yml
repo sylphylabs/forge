@@ -62,7 +62,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/go-kratos
+        - github.com/sylphylabs
   exclusions:
     generated: lax
     paths:
