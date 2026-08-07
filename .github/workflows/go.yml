@@ -13,7 +13,10 @@ jobs:
   build:
     strategy:
       matrix:
-        go: [1.26.x]
+        # Every go.mod requires go 1.27rc2, so that is what the blocking job
+        # must run. setup-go spells release candidates in semver form, unlike
+        # the go directive.
+        go: [1.27.0-rc.2]
     name: build & test
     runs-on: ubuntu-latest
     services:
@@ -90,15 +93,19 @@ jobs:
           GOTOOLCHAIN: auto
 
   forward-go:
-    name: Go 1.27 RC forward compatibility
+    name: Go tip forward compatibility
     runs-on: ubuntu-latest
+    # Advisory: it watches the next toolchain, so an upstream regression must
+    # not block this repository. The required toolchain is exercised by the
+    # build job above.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v6
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: 1.27rc2
+          go-version: stable
+          check-latest: true
       - name: Test core
         run: go test ./...
       - name: Test generator modules
