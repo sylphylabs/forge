@@ -1,9 +1,17 @@
 version: v2
 modules:
+  # Public API protos. Their own root, so `sylphy.errors.v1` resolves at the
+  # import path consumers use: sylphy/errors/v1/errors.proto.
+  - path: api/proto
+    name: buf.build/sylphylabs/forge
   - path: .
     excludes:
       - cmd
       - third_party
+      - api/proto
+      # Consumer fixture: imports sylphy/errors/v1 relative to api/proto, so it
+      # only resolves against that module root. Built via `make -C api`.
+      - api/testdata/consumer
 deps:
   - buf.build/bufbuild/protovalidate
   - buf.build/googleapis/googleapis
