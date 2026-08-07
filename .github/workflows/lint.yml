@@ -25,12 +25,22 @@ jobs:
     runs-on: ubuntu-latest
     needs: resolve-modules
     strategy:
+      # Report every failing module in one run instead of cancelling the rest.
+      fail-fast: false
       matrix: ${{ fromJson(needs.resolve-modules.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v6
-      - name: Lint
-        uses: golangci/golangci-lint-action@v7
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
-          version: v2.12.2
-          working-directory: ${{ matrix.workdir }}
-          skip-cache: true
+          go-version-file: go.mod
+      # The released golangci-lint binaries are built with Go 1.26 and refuse to
+      # run against our 1.27 modules ("the Go language version used to build
+      # golangci-lint is lower than the targeted Go version"). Build it from
+      # source with our own toolchain instead of using golangci-lint-action.
+      - name: Lint
+        working-directory: ${{ matrix.workdir }}
+        run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$GOLANGCI_VERSION run
+        env:
+          GOLANGCI_VERSION: v2.12.2
+          GOTOOLCHAIN: auto
