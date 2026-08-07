@@ -6,6 +6,9 @@ import (
 
 const (
 	baseContentType = "application"
+
+	jsonSubtype     = "json"
+	jsonContentType = baseContentType + "/" + jsonSubtype
 )
 
 // ContentType returns the content-type with base prefix.
@@ -19,8 +22,8 @@ func ContentType(subtype string) string {
 // according rfc7231.
 // contentType is assumed to be lowercase already.
 func ContentSubtype(contentType string) string {
-	if contentType == "application/json" {
-		return "json"
+	if contentType == jsonContentType {
+		return jsonSubtype
 	}
 	left := strings.IndexByte(contentType, '/')
 	if left == -1 {

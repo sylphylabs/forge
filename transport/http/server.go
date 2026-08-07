@@ -229,23 +229,11 @@ func (f *serverFilter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	f.serve(w, req, nil, nil, nil)
 }
 
-func (f *serverFilter) serveMatchedRoute(
-	w http.ResponseWriter,
-	req *http.Request,
-	route *compiledRoute,
-	values []string,
-	captureNames []string,
-) {
+func (f *serverFilter) serveMatchedRoute(w http.ResponseWriter, req *http.Request, route *compiledRoute, values, captureNames []string) {
 	f.serve(w, req, route, values, captureNames)
 }
 
-func (f *serverFilter) serve(
-	w http.ResponseWriter,
-	req *http.Request,
-	route *compiledRoute,
-	values []string,
-	captureNames []string,
-) {
+func (f *serverFilter) serve(w http.ResponseWriter, req *http.Request, route *compiledRoute, values, captureNames []string) {
 	ctx := req.Context()
 	if f.server.timeout > 0 {
 		var cancel context.CancelFunc

@@ -22,6 +22,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	v3 "github.com/google/gnostic/openapiv3"
+
 	wk "github.com/sylphylabs/forge/cmd/internal/openapi/generator/wellknown"
 )
 
@@ -61,9 +62,10 @@ func (r *OpenAPIv3Reflector) formatMessageName(message protoreflect.MessageDescr
 
 	name := r.getMessageName(message)
 	if !*r.conf.FQSchemaNaming {
-		if typeName == ".google.protobuf.Value" {
+		switch typeName {
+		case protobufValueTypeName:
 			name = protobufValueName
-		} else if typeName == ".google.protobuf.Any" {
+		case ".google.protobuf.Any":
 			name = protobufAnyName
 		}
 	}
@@ -107,18 +109,18 @@ func (r *OpenAPIv3Reflector) responseContentForMessage(message protoreflect.Mess
 		return "200", &v3.MediaTypes{}
 	}
 
-	if typeName == ".google.api.HttpBody" {
-		return "200", wk.NewGoogleApiHttpBodyMediaType()
+	if typeName == httpBodyTypeName {
+		return "200", wk.NewGoogleAPIHTTPBodyMediaType()
 	}
 
-	return "200", wk.NewApplicationJsonMediaType(r.schemaOrReferenceForMessage(message))
+	return "200", wk.NewApplicationJSONMediaType(r.schemaOrReferenceForMessage(message))
 }
 
 func (r *OpenAPIv3Reflector) responseContentForField(field protoreflect.FieldDescriptor) (string, *v3.MediaTypes) {
-	if field.Kind() == protoreflect.MessageKind && r.fullMessageTypeName(field.Message()) == ".google.api.HttpBody" {
-		return "200", wk.NewGoogleApiHttpBodyMediaType()
+	if field.Kind() == protoreflect.MessageKind && r.fullMessageTypeName(field.Message()) == httpBodyTypeName {
+		return "200", wk.NewGoogleAPIHTTPBodyMediaType()
 	}
-	return "200", wk.NewApplicationJsonMediaType(r.schemaOrReferenceForField(field))
+	return "200", wk.NewApplicationJSONMediaType(r.schemaOrReferenceForField(field))
 }
 
 func (r *OpenAPIv3Reflector) schemaReferenceForMessage(message protoreflect.MessageDescriptor) string {
@@ -135,9 +137,8 @@ func (r *OpenAPIv3Reflector) schemaOrReferenceForMessage(message protoreflect.Me
 	typeName := r.fullMessageTypeName(message)
 
 	switch typeName {
-
-	case ".google.api.HttpBody":
-		return wk.NewGoogleApiHttpBodySchema()
+	case httpBodyTypeName:
+		return wk.NewGoogleAPIHTTPBodySchema()
 
 	case ".google.protobuf.Timestamp":
 		return wk.NewGoogleProtobufTimestampSchema()
@@ -180,7 +181,9 @@ func (r *OpenAPIv3Reflector) schemaOrReferenceForMessage(message protoreflect.Me
 		ref := r.schemaReferenceForMessage(message)
 		return &v3.SchemaOrReference{
 			Oneof: &v3.SchemaOrReference_Reference{
-				Reference: &v3.Reference{XRef: ref}}}
+				Reference: &v3.Reference{XRef: ref},
+			},
+		}
 	}
 }
 
@@ -190,7 +193,6 @@ func (r *OpenAPIv3Reflector) schemaOrReferenceForField(field protoreflect.FieldD
 	kind := field.Kind()
 
 	switch kind {
-
 	case protoreflect.MessageKind:
 		if field.IsMap() {
 			// This means the field is a map, for example:

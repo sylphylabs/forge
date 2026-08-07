@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	errorapi "github.com/sylphylabs/forge/api/errors/v1"
-	"github.com/sylphylabs/forge/cmd/internal/generator"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
+
+	errorapi "github.com/sylphylabs/forge/api/errors/v1"
+	"github.com/sylphylabs/forge/cmd/internal/generator"
 )
 
 const (

@@ -16,7 +16,7 @@ import "context"
 //
 // Implementations that carry richer credential detail should expose it through
 // their own package rather than through this interface. Authorization — what a
-// caller may do — is a separate concern and is not modelled here.
+// caller may do — is a separate concern and is not modeled here.
 type Principal interface {
 	// Subject identifies the caller: a user ID, a service account name, or a
 	// certificate subject. It is opaque to the framework.

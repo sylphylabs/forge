@@ -44,7 +44,7 @@ func (d *Default) Select(ctx context.Context, opts ...SelectOption) (selected No
 			if n == nil {
 				continue
 			}
-			if wn, ok := n.(WeightedNode); ok {
+			if wn, isWeighted := n.(WeightedNode); isWeighted {
 				candidates = append(candidates, wn)
 				continue
 			}

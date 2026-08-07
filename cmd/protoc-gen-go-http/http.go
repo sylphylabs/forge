@@ -68,7 +68,15 @@ func generateHTTPFileContent(gen *protogen.Plugin, file *protogen.File, g *proto
 	return nil
 }
 
-func genService(_ *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, omitempty bool, omitemptyPrefix string, rules *httpbinding.Set) error {
+func genService(
+	_ *protogen.Plugin,
+	file *protogen.File,
+	g *protogen.GeneratedFile,
+	service *protogen.Service,
+	omitempty bool,
+	omitemptyPrefix string,
+	rules *httpbinding.Set,
+) error {
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 		g.P("//")
 		g.P(deprecationComment)

@@ -26,7 +26,7 @@ func TestErrorStatusRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := new(errors.Status)
-	if err := proto.Unmarshal(wire, got); err != nil {
+	if err = proto.Unmarshal(wire, got); err != nil {
 		t.Fatal(err)
 	}
 	if !proto.Equal(got, want) {

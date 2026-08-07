@@ -4,12 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	errorapi "github.com/sylphylabs/forge/api/errors/v1"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
+
+	errorapi "github.com/sylphylabs/forge/api/errors/v1"
 )
 
 func TestGenerateForgeErrorAnnotations(t *testing.T) {

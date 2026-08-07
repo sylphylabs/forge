@@ -40,10 +40,10 @@ func TestGeneratedMiddlewareCompilesAndRuns(t *testing.T) {
 	tmp := t.TempDir()
 	bin := filepath.Join(tmp, "bin")
 	out := filepath.Join(tmp, "consumer")
-	if err := os.MkdirAll(bin, 0o755); err != nil {
+	if err = os.MkdirAll(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(out, 0o755); err != nil {
+	if err = os.MkdirAll(out, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	testutil.RunCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go"), "google.golang.org/protobuf/cmd/protoc-gen-go")
@@ -67,7 +67,8 @@ func TestGeneratedMiddlewareCompilesAndRuns(t *testing.T) {
 	}
 	cmd := exec.Command("protoc", args...)
 	cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	if output, err := cmd.CombinedOutput(); err != nil {
+	output, err := cmd.CombinedOutput()
+	if err != nil {
 		t.Fatalf("protoc failed: %v\n%s", err, output)
 	}
 
@@ -226,10 +227,10 @@ func TestHTTPMethodSetModesMustMatch(t *testing.T) {
 		middlewareMode string
 		wantCompile    bool
 	}{
-		{name: "annotated", httpOmitEmpty: true, middlewareMode: "annotated", wantCompile: true},
-		{name: "all", httpOmitEmpty: false, middlewareMode: "all", wantCompile: true},
-		{name: "HTTP annotated middleware all", httpOmitEmpty: true, middlewareMode: "all"},
-		{name: "HTTP all middleware annotated", httpOmitEmpty: false, middlewareMode: "annotated"},
+		{name: modeAnnotated, httpOmitEmpty: true, middlewareMode: modeAnnotated, wantCompile: true},
+		{name: modeAll, httpOmitEmpty: false, middlewareMode: modeAll, wantCompile: true},
+		{name: "HTTP annotated middleware all", httpOmitEmpty: true, middlewareMode: modeAll},
+		{name: "HTTP all middleware annotated", httpOmitEmpty: false, middlewareMode: modeAnnotated},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -257,7 +258,7 @@ func TestHTTPMethodSetModesMustMatch(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(filepath.Join(out, "api", "consumer_test.go"), consumer, 0o644); err != nil {
+			if err = os.WriteFile(filepath.Join(out, "api", "consumer_test.go"), consumer, 0o644); err != nil {
 				t.Fatal(err)
 			}
 			goMod := fmt.Sprintf(`module methodset.test
@@ -274,7 +275,7 @@ replace github.com/sylphylabs/forge/api => %s
 
 replace github.com/sylphylabs/forge => %s
 `, apiRoot, root)
-			if err := os.WriteFile(filepath.Join(out, "go.mod"), []byte(goMod), 0o644); err != nil {
+			if err = os.WriteFile(filepath.Join(out, "go.mod"), []byte(goMod), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			cmd = exec.Command("go", "test", "-mod=mod", "./...")

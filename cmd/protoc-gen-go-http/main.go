@@ -5,10 +5,11 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/sylphylabs/forge/cmd/internal/generator"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/pluginpb"
+
+	"github.com/sylphylabs/forge/cmd/internal/generator"
 )
 
 var (

@@ -14,12 +14,10 @@ type (
 	MatchFunc   func(ctx context.Context, operation string) bool
 )
 
-var (
-	// clientTransporter is get client transport.Transporter from ctx
-	clientTransporter transporter = func(ctx context.Context) (transport.Transporter, bool) {
-		return transport.FromClientContext(ctx)
-	}
-)
+// clientTransporter is get client transport.Transporter from ctx
+var clientTransporter transporter = func(ctx context.Context) (transport.Transporter, bool) {
+	return transport.FromClientContext(ctx)
+}
 
 // Builder is a selector builder
 type Builder struct {

@@ -636,17 +636,17 @@ func serveMuxCaptureNames(pattern string) []string {
 			break
 		}
 		open += cursor
-		close := strings.IndexByte(pattern[open+1:], '}')
-		if close < 0 {
+		end := strings.IndexByte(pattern[open+1:], '}')
+		if end < 0 {
 			break
 		}
-		close += open + 1
-		name := pattern[open+1 : close]
+		end += open + 1
+		name := pattern[open+1 : end]
 		name = strings.TrimSuffix(name, "...")
 		if name != "$" {
 			names = append(names, name)
 		}
-		cursor = close + 1
+		cursor = end + 1
 	}
 	return names
 }
@@ -658,16 +658,16 @@ func usesGoogleTemplate(template string) bool {
 			break
 		}
 		open += cursor
-		close := strings.IndexByte(template[open+1:], '}')
-		if close < 0 {
+		end := strings.IndexByte(template[open+1:], '}')
+		if end < 0 {
 			return true
 		}
-		close += open + 1
-		content := template[open+1 : close]
+		end += open + 1
+		content := template[open+1 : end]
 		if strings.ContainsRune(content, '=') || !strings.ContainsRune(content, ':') && !strings.HasSuffix(content, "...") {
 			return true
 		}
-		cursor = close + 1
+		cursor = end + 1
 	}
 	for _, segment := range strings.Split(template, "/") {
 		if segment == "*" || segment == "**" {

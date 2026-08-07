@@ -13,14 +13,14 @@ import (
 func TestRecoveryStreamRecoversPanic(t *testing.T) {
 	defer func() {
 		if recover() != nil {
-			t.Error("panic escaped RecoveryStream")
+			t.Error("panic escaped Stream")
 		}
 	}()
 
 	next := func(any, middleware.ServerStream) error {
 		panic("panic reason")
 	}
-	err := RecoveryStream(WithHandler(func(ctx context.Context, _, rerr any) error {
+	err := Stream(WithHandler(func(ctx context.Context, _, rerr any) error {
 		if _, ok := ctx.Value(Latency{}).(float64); !ok {
 			t.Error("latency missing from context")
 		}
@@ -28,10 +28,10 @@ func TestRecoveryStreamRecoversPanic(t *testing.T) {
 	}))(next)(nil, &testStream{ctx: t.Context()})
 
 	if err == nil {
-		t.Fatal("RecoveryStream() error = nil, want error")
+		t.Fatal("Stream() error = nil, want error")
 	}
 	if !strings.Contains(err.Error(), "panic reason") {
-		t.Errorf("RecoveryStream() error = %v, want containing %q", err, "panic reason")
+		t.Errorf("Stream() error = %v, want containing %q", err, "panic reason")
 	}
 }
 
@@ -40,7 +40,7 @@ func TestRecoveryStreamPassesRequestToHandler(t *testing.T) {
 		panic("boom")
 	}
 	var got any
-	_ = RecoveryStream(WithHandler(func(_ context.Context, req, _ any) error {
+	_ = Stream(WithHandler(func(_ context.Context, req, _ any) error {
 		got = req
 		return ErrUnknownRequest
 	}))(next)("initial", &testStream{ctx: t.Context()})
@@ -54,8 +54,8 @@ func TestRecoveryStreamWithoutPanic(t *testing.T) {
 	next := func(_ any, stream middleware.ServerStream) error {
 		return stream.SendMsg("reply")
 	}
-	if err := RecoveryStream()(next)(nil, &testStream{ctx: t.Context()}); err != nil {
-		t.Errorf("RecoveryStream() error = %v, want nil", err)
+	if err := Stream()(next)(nil, &testStream{ctx: t.Context()}); err != nil {
+		t.Errorf("Stream() error = %v, want nil", err)
 	}
 }
 
@@ -64,8 +64,8 @@ func TestRecoveryStreamPropagatesHandlerError(t *testing.T) {
 	next := func(any, middleware.ServerStream) error {
 		return want
 	}
-	if err := RecoveryStream()(next)(nil, &testStream{ctx: t.Context()}); err != want {
-		t.Errorf("RecoveryStream() error = %v, want %v", err, want)
+	if err := Stream()(next)(nil, &testStream{ctx: t.Context()}); err != want {
+		t.Errorf("Stream() error = %v, want %v", err, want)
 	}
 }
 
@@ -73,9 +73,9 @@ func TestRecoveryStreamDefaultHandler(t *testing.T) {
 	next := func(any, middleware.ServerStream) error {
 		panic("boom")
 	}
-	err := RecoveryStream()(next)(nil, &testStream{ctx: t.Context()})
+	err := Stream()(next)(nil, &testStream{ctx: t.Context()})
 	if !errors.Is(err, ErrUnknownRequest) {
-		t.Errorf("RecoveryStream() error = %v, want %v", err, ErrUnknownRequest)
+		t.Errorf("Stream() error = %v, want %v", err, ErrUnknownRequest)
 	}
 }
 

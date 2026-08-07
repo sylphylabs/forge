@@ -4,13 +4,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sylphylabs/forge/internal/httprule"
 	"google.golang.org/genproto/googleapis/api/annotations"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
+
+	"github.com/sylphylabs/forge/internal/httprule"
 )
 
 func TestAnalyze(t *testing.T) {
@@ -120,20 +121,41 @@ func testMethod(t *testing.T, rule *annotations.HttpRule) protoreflect.MethodDes
 			{
 				Name: proto.String("Data"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{Name: proto.String("value"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+					{
+						Name:   proto.String("value"),
+						Number: proto.Int32(1),
+						Label:  descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+						Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+					},
 				},
 			},
 			{
 				Name: proto.String("Request"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{Name: proto.String("name"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
-					{Name: proto.String("data"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(), TypeName: proto.String(".test.Data")},
+					{
+						Name:   proto.String("name"),
+						Number: proto.Int32(1),
+						Label:  descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+						Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+					},
+					{
+						Name:     proto.String("data"),
+						Number:   proto.Int32(2),
+						Label:    descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+						Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+						TypeName: proto.String(".test.Data"),
+					},
 				},
 			},
 			{
 				Name: proto.String("Reply"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{Name: proto.String("result"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+					{
+						Name:   proto.String("result"),
+						Number: proto.Int32(1),
+						Label:  descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+						Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+					},
 				},
 			},
 		},
@@ -141,7 +163,12 @@ func testMethod(t *testing.T, rule *annotations.HttpRule) protoreflect.MethodDes
 			{
 				Name: proto.String("API"),
 				Method: []*descriptorpb.MethodDescriptorProto{
-					{Name: proto.String("Call"), InputType: proto.String(".test.Request"), OutputType: proto.String(".test.Reply"), Options: options},
+					{
+						Name:       proto.String("Call"),
+						InputType:  proto.String(".test.Request"),
+						OutputType: proto.String(".test.Reply"),
+						Options:    options,
+					},
 				},
 			},
 		},

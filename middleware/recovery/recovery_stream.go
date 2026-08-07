@@ -2,21 +2,20 @@ package recovery
 
 import (
 	"context"
+	"log/slog"
 	"runtime"
 	"time"
-
-	"log/slog"
 
 	"github.com/sylphylabs/forge/middleware"
 )
 
-// RecoveryStream is a server middleware that recovers from any panics raised
+// Stream is a server middleware that recovers from any panics raised
 // during a stream lifecycle.
 //
 // The handler argument passed to HandlerFunc is the initial request for
 // server-streaming methods and nil for client and bidirectional streaming
 // methods, matching [middleware.StreamHandler].
-func RecoveryStream(opts ...Option) middleware.StreamMiddleware {
+func Stream(opts ...Option) middleware.StreamMiddleware {
 	op := options{
 		handler: func(context.Context, any, any) error {
 			return ErrUnknownRequest

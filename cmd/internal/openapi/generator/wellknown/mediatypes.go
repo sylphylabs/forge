@@ -19,7 +19,7 @@ import (
 	v3 "github.com/google/gnostic/openapiv3"
 )
 
-func NewGoogleApiHttpBodyMediaType() *v3.MediaTypes {
+func NewGoogleAPIHTTPBodyMediaType() *v3.MediaTypes {
 	return &v3.MediaTypes{
 		AdditionalProperties: []*v3.NamedMediaType{
 			{
@@ -30,7 +30,7 @@ func NewGoogleApiHttpBodyMediaType() *v3.MediaTypes {
 	}
 }
 
-func NewApplicationJsonMediaType(schema *v3.SchemaOrReference) *v3.MediaTypes {
+func NewApplicationJSONMediaType(schema *v3.SchemaOrReference) *v3.MediaTypes {
 	return &v3.MediaTypes{
 		AdditionalProperties: []*v3.NamedMediaType{
 			{

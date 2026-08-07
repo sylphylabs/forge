@@ -182,7 +182,9 @@ func (a *App) Run() error {
 		if registrationClosed {
 			dctx := context.WithoutCancel(sctx)
 			if err = a.deregister(dctx, instance); err != nil {
-				recordLifecycleErr(err)
+				// Recorded for Run's return value; the error is not
+				// propagated here because shutdown is already underway.
+				_ = recordLifecycleErr(err)
 			}
 			return finish(nil)
 		}

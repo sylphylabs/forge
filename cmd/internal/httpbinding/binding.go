@@ -6,10 +6,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/sylphylabs/forge/internal/httprule"
 	"google.golang.org/genproto/googleapis/api/annotations"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+
+	"github.com/sylphylabs/forge/internal/httprule"
 )
 
 // Binding is one normalized google.api.http rule for an RPC method.

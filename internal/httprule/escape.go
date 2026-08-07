@@ -84,12 +84,14 @@ func isHex(c byte) bool {
 }
 
 func unhex(c byte) byte {
+	// Hex letters decode to 10..15.
+	const hexLetterBase = 10
 	switch {
 	case '0' <= c && c <= '9':
 		return c - '0'
 	case 'a' <= c && c <= 'f':
-		return c - 'a' + 10
+		return c - 'a' + hexLetterBase
 	default:
-		return c - 'A' + 10
+		return c - 'A' + hexLetterBase
 	}
 }

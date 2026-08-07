@@ -59,7 +59,7 @@ func TestProtoJSONFieldProjection(t *testing.T) {
 			}
 
 			decoded := newProjectionMessage(t)
-			if err := json.Unmarshal(got, NewProtoJSONField(decoded.Interface(), tt.field)); err != nil {
+			if err = json.Unmarshal(got, NewProtoJSONField(decoded.Interface(), tt.field)); err != nil {
 				t.Fatal(err)
 			}
 			roundTrip, err := json.Marshal(NewProtoJSONField(decoded.Interface(), tt.field))
@@ -104,7 +104,8 @@ func TestProtoJSONOmitsAndClearsPathFields(t *testing.T) {
 	}
 
 	decoded := newProjectionMessage(t)
-	if err := json.Unmarshal([]byte(`{"name":"body-name","child":{"id":"body-child"},"count":"7"}`), NewProtoJSON(decoded.Interface(), "name", "child.id")); err != nil {
+	body := []byte(`{"name":"body-name","child":{"id":"body-child"},"count":"7"}`)
+	if err := json.Unmarshal(body, NewProtoJSON(decoded.Interface(), "name", "child.id")); err != nil {
 		t.Fatal(err)
 	}
 	decodedFields := decoded.Descriptor().Fields()
@@ -162,7 +163,8 @@ func TestBuildPathRejectsUnsupportedQueryFields(t *testing.T) {
 	if _, err := BuildPath("/v1", message, WithQueryParams()); err == nil || !strings.Contains(err.Error(), `field "labels" is a map`) {
 		t.Fatalf("map query error = %v", err)
 	}
-	if _, err := BuildPath("/v1", message, WithQueryParams(), WithOmitFields("labels")); err == nil || !strings.Contains(err.Error(), `field "children" is a repeated message`) {
+	_, err := BuildPath("/v1", message, WithQueryParams(), WithOmitFields("labels"))
+	if err == nil || !strings.Contains(err.Error(), `field "children" is a repeated message`) {
 		t.Fatalf("repeated message query error = %v", err)
 	}
 }
@@ -205,7 +207,11 @@ func newProjectionMessage(t testing.TB) protoreflect.Message {
 					{Name: proto.String("name"), Number: proto.Int32(1), Label: &optional, Type: &stringKind},
 					{Name: proto.String("count"), Number: proto.Int32(2), Label: &optional, Type: &int64Kind},
 					{Name: proto.String("tags"), Number: proto.Int32(3), Label: &repeated, Type: &stringKind},
-					{Name: proto.String("labels"), Number: proto.Int32(4), Label: &repeated, Type: &messageKind, TypeName: proto.String(".sylphy.test.Projection.LabelsEntry")},
+					{
+						Name: proto.String("labels"), Number: proto.Int32(4),
+						Label: &repeated, Type: &messageKind,
+						TypeName: proto.String(".sylphy.test.Projection.LabelsEntry"),
+					},
 					{Name: proto.String("child"), Number: proto.Int32(5), Label: &optional, Type: &messageKind, TypeName: proto.String(".sylphy.test.Child")},
 					{Name: proto.String("data"), Number: proto.Int32(6), Label: &optional, Type: &bytesKind},
 					{Name: proto.String("score"), Number: proto.Int32(7), Label: &optional, Type: &doubleKind},

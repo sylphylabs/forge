@@ -32,6 +32,7 @@ import (
 	any_pb "google.golang.org/protobuf/types/known/anypb"
 
 	v3 "github.com/google/gnostic/openapiv3"
+
 	"github.com/sylphylabs/forge/cmd/internal/httpbinding"
 	wk "github.com/sylphylabs/forge/cmd/internal/openapi/generator/wellknown"
 )
@@ -55,6 +56,19 @@ const (
 	defaultOpenAPIVersion   = "3.2.0"
 	defaultErrorSchemaName  = "sylphy.errors.v1.Status"
 	defaultErrorDescription = "Forge error response"
+)
+
+// Fully qualified protobuf type names that require special handling.
+const (
+	protobufValueTypeName = ".google.protobuf.Value"
+	httpBodyTypeName      = ".google.api.HttpBody"
+)
+
+const (
+	// inQuery is the OpenAPI parameter location for query string parameters.
+	inQuery = "query"
+	// defaultResponseName is the OpenAPI name of the default (catch-all) response.
+	defaultResponseName = "default"
 )
 
 // In order to dynamically add google.rpc.Status schemas for user-declared
@@ -251,7 +265,7 @@ func (g *OpenAPIv3Generator) filterCommentString(c protogen.Comments) string {
 
 func (g *OpenAPIv3Generator) findField(name string, inMessage *protogen.Message) *protogen.Field {
 	for _, field := range inMessage.Fields {
-		if string(field.Desc.Name()) == name || string(field.Desc.JSONName()) == name {
+		if string(field.Desc.Name()) == name || field.Desc.JSONName() == name {
 			return field
 		}
 	}
@@ -287,14 +301,9 @@ func (g *OpenAPIv3Generator) buildQueryParamsV3(field *protogen.Field, coveredFi
 }
 
 // depths are used to keep track of how many times a message's fields has been seen
-func (g *OpenAPIv3Generator) _buildQueryParamsV3(
-	field *protogen.Field,
-	fieldPath string,
-	depths map[string]int,
-	coveredFields []string,
-) []*v3.ParameterOrReference {
+func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, fieldPath string, depths map[string]int, covered []string) []*v3.ParameterOrReference {
 	parameters := []*v3.ParameterOrReference{}
-	if contains(coveredFields, fieldPath) {
+	if contains(covered, fieldPath) {
 		return parameters
 	}
 
@@ -302,15 +311,14 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(
 	fieldDescription := g.filterCommentString(field.Comments.Leading)
 
 	if field.Desc.IsMap() {
-		// Map types are not allowed in query parameteres
+		// Map types are not allowed in query parameters
 		return parameters
-
 	} else if field.Desc.Kind() == protoreflect.MessageKind {
 		typeName := g.reflect.fullMessageTypeName(field.Desc.Message())
 
 		coveredDescendant := false
-		for _, covered := range coveredFields {
-			if strings.HasPrefix(covered, fieldPath+".") {
+		for _, coveredPath := range covered {
+			if strings.HasPrefix(coveredPath, fieldPath+".") {
 				coveredDescendant = true
 				break
 			}
@@ -321,14 +329,14 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(
 			// Expand the message below so a nested path field can be excluded while
 			// its unbound siblings remain query parameters.
 
-		case typeName == ".google.protobuf.Value":
+		case typeName == protobufValueTypeName:
 			fieldSchema := g.reflect.schemaOrReferenceForField(field.Desc)
 			parameters = append(parameters,
 				&v3.ParameterOrReference{
 					Oneof: &v3.ParameterOrReference_Parameter{
 						Parameter: &v3.Parameter{
 							Name:        queryFieldName,
-							In:          "query",
+							In:          inQuery,
 							Description: fieldDescription,
 							Required:    false,
 							Schema:      fieldSchema,
@@ -349,7 +357,7 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(
 					Oneof: &v3.ParameterOrReference_Parameter{
 						Parameter: &v3.Parameter{
 							Name:        queryFieldName,
-							In:          "query",
+							In:          inQuery,
 							Description: fieldDescription,
 							Required:    false,
 							Schema:      fieldSchema,
@@ -365,7 +373,7 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(
 					Oneof: &v3.ParameterOrReference_Parameter{
 						Parameter: &v3.Parameter{
 							Name:        queryFieldName,
-							In:          "query",
+							In:          inQuery,
 							Description: fieldDescription,
 							Required:    false,
 							Schema:      fieldSchema,
@@ -380,7 +388,7 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(
 					Oneof: &v3.ParameterOrReference_Parameter{
 						Parameter: &v3.Parameter{
 							Name:        queryFieldName,
-							In:          "query",
+							In:          inQuery,
 							Description: fieldDescription,
 							Required:    false,
 							Schema:      fieldSchema,
@@ -403,7 +411,7 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(
 					Oneof: &v3.ParameterOrReference_Parameter{
 						Parameter: &v3.Parameter{
 							Name:        queryFieldName,
-							In:          "query",
+							In:          inQuery,
 							Description: fieldDescription,
 							Required:    false,
 							Schema:      fieldSchema,
@@ -425,7 +433,7 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(
 			if seen < *g.conf.CircularDepth {
 				depths[subFieldFullName]++
 				subFieldPath := fieldPath + "." + string(subField.Desc.Name())
-				subParams := g._buildQueryParamsV3(subField, subFieldPath, depths, coveredFields)
+				subParams := g._buildQueryParamsV3(subField, subFieldPath, depths, covered)
 				for _, subParam := range subParams {
 					if param, ok := subParam.Oneof.(*v3.ParameterOrReference_Parameter); ok {
 						param.Parameter.Name = queryFieldName + "." + param.Parameter.Name
@@ -434,7 +442,6 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(
 				}
 			}
 		}
-
 	} else if field.Desc.Kind() != protoreflect.GroupKind {
 		// schemaOrReferenceForField also handles array types
 		fieldSchema := g.reflect.schemaOrReferenceForField(field.Desc)
@@ -444,7 +451,7 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(
 				Oneof: &v3.ParameterOrReference_Parameter{
 					Parameter: &v3.Parameter{
 						Name:        queryFieldName,
-						In:          "query",
+						In:          inQuery,
 						Description: fieldDescription,
 						Required:    false,
 						Schema:      fieldSchema,
@@ -456,17 +463,21 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(
 	return parameters
 }
 
+// operationRequest carries the inputs needed to build a single OpenAPI operation.
+type operationRequest struct {
+	operationID   string
+	tagName       string
+	description   string
+	defaultHost   string
+	binding       *httpbinding.Binding
+	inputMessage  *protogen.Message
+	outputMessage *protogen.Message
+}
+
 // buildOperationV3 constructs an operation for a set of values.
-func (g *OpenAPIv3Generator) buildOperationV3(
-	d *v3.Document,
-	operationID string,
-	tagName string,
-	description string,
-	defaultHost string,
-	binding *httpbinding.Binding,
-	inputMessage *protogen.Message,
-	outputMessage *protogen.Message,
-) (*v3.Operation, string) {
+func (g *OpenAPIv3Generator) buildOperationV3(d *v3.Document, req operationRequest) (*v3.Operation, string) {
+	operationID, tagName, description, defaultHost := req.operationID, req.tagName, req.description, req.defaultHost
+	binding, inputMessage, outputMessage := req.binding, req.inputMessage, req.outputMessage
 	path := binding.Path
 	// coveredParameters tracks the parameters that have been used in the body or path.
 	coveredParameters := make([]string, 0)
@@ -602,7 +613,7 @@ func (g *OpenAPIv3Generator) buildOperationV3(
 	// Add the default response if needed.
 	if *g.conf.DefaultResponse {
 		defaultResponse := &v3.NamedResponseOrReference{
-			Name: "default",
+			Name: defaultResponseName,
 			Value: &v3.ResponseOrReference{
 				Oneof: &v3.ResponseOrReference_Response{
 					Response: &v3.Response{
@@ -641,18 +652,18 @@ func (g *OpenAPIv3Generator) buildOperationV3(
 		if binding.Body == "*" {
 			// Pass the entire request message as the request body.
 			requestSchema = g.reflect.schemaOrReferenceForMessage(inputMessage.Desc)
-			if g.reflect.fullMessageTypeName(inputMessage.Desc) == ".google.api.HttpBody" {
-				requestContent = wk.NewGoogleApiHttpBodyMediaType()
+			if g.reflect.fullMessageTypeName(inputMessage.Desc) == httpBodyTypeName {
+				requestContent = wk.NewGoogleAPIHTTPBodyMediaType()
 			}
 		} else {
 			requestSchema = g.reflect.schemaOrReferenceForField(binding.BodyField)
 			if binding.BodyField.Kind() == protoreflect.MessageKind &&
-				g.reflect.fullMessageTypeName(binding.BodyField.Message()) == ".google.api.HttpBody" {
-				requestContent = wk.NewGoogleApiHttpBodyMediaType()
+				g.reflect.fullMessageTypeName(binding.BodyField.Message()) == httpBodyTypeName {
+				requestContent = wk.NewGoogleAPIHTTPBodyMediaType()
 			}
 		}
 		if requestContent == nil {
-			requestContent = wk.NewApplicationJsonMediaType(requestSchema)
+			requestContent = wk.NewApplicationJSONMediaType(requestSchema)
 		}
 
 		op.RequestBody = &v3.RequestBodyOrReference{
@@ -712,7 +723,7 @@ func (g *OpenAPIv3Generator) forgeErrorSchemaName() string {
 func (g *OpenAPIv3Generator) forgeErrorContent(d *v3.Document) *v3.MediaTypes {
 	schemaName := g.forgeErrorSchemaName()
 	g.addSchemaToDocumentV3(d, wk.NewForgeErrorStatusSchema(schemaName))
-	return wk.NewApplicationJsonMediaType(&v3.SchemaOrReference{
+	return wk.NewApplicationJSONMediaType(&v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Reference{
 			Reference: &v3.Reference{XRef: "#/components/schemas/" + schemaName},
 		},
@@ -736,7 +747,7 @@ func (g *OpenAPIv3Generator) applyForgeErrorResponses(d *v3.Document, op *v3.Ope
 }
 
 func isErrorResponseName(name string) bool {
-	if name == "default" {
+	if name == defaultResponseName {
 		return true
 	}
 	code, err := strconv.Atoi(name)
@@ -779,8 +790,15 @@ func (g *OpenAPIv3Generator) addPathsToDocumentV3(d *v3.Document, services []*pr
 					return fmt.Errorf("RPC %s additional binding %d: %w", method.Desc.FullName(), binding.Index, err)
 				}
 
-				op, openAPIPath := g.buildOperationV3(
-					d, operationID, service.GoName, comment, defaultHost, binding, inputMessage, outputMessage)
+				op, openAPIPath := g.buildOperationV3(d, operationRequest{
+					operationID:   operationID,
+					tagName:       service.GoName,
+					description:   comment,
+					defaultHost:   defaultHost,
+					binding:       binding,
+					inputMessage:  inputMessage,
+					outputMessage: outputMessage,
+				})
 
 				// Merge any `Operation` annotations with the current.
 				extOperation := proto.GetExtension(method.Desc.Options(), v3.E_Operation)
@@ -836,7 +854,7 @@ func (g *OpenAPIv3Generator) addSchemasForMessagesToDocumentV3(d *v3.Document, m
 
 		// `google.protobuf.Value` and `google.protobuf.Any` have special JSON transcoding
 		// so we can't just reflect on the message descriptor.
-		if typeName == ".google.protobuf.Value" {
+		if typeName == protobufValueTypeName {
 			g.addSchemaToDocumentV3(d, wk.NewGoogleProtobufValueSchema(schemaName))
 			continue
 		} else if typeName == ".google.protobuf.Any" {
@@ -845,7 +863,7 @@ func (g *OpenAPIv3Generator) addSchemasForMessagesToDocumentV3(d *v3.Document, m
 		} else if typeName == ".google.rpc.Status" {
 			anySchemaName := g.reflect.formatMessageName(anyProtoDesc)
 			g.addSchemaToDocumentV3(d, wk.NewGoogleProtobufAnySchema(anySchemaName))
-			g.addSchemaToDocumentV3(d, wk.NewGoogleRpcStatusSchema(schemaName, anySchemaName))
+			g.addSchemaToDocumentV3(d, wk.NewGoogleRPCStatusSchema(schemaName, anySchemaName))
 			continue
 		}
 

@@ -54,7 +54,7 @@ type Transporter interface {
 	// name.
 	//
 	// Callers MUST treat the value as opaque and MUST NOT parse it. It is
-	// meant for labelling and keying — span names, rate-limit dimensions,
+	// meant for labeling and keying — span names, rate-limit dimensions,
 	// selector matching, log fields. Dispatch on Kind and read the concrete
 	// transport type when structure is required.
 	Operation() string

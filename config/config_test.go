@@ -230,7 +230,7 @@ func TestConfigWatchReloadsCrossSourceReferences(t *testing.T) {
 		t.Fatalf("initial endpoint = %q, %v", value, err)
 	}
 	updated := make(chan string, 1)
-	if err := c.Watch("endpoint", func(_ string, value Value) {
+	if err = c.Watch("endpoint", func(_ string, value Value) {
 		got, _ := value.String()
 		updated <- got
 	}); err != nil {

@@ -5,9 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"google.golang.org/protobuf/compiler/protogen"
+
 	"github.com/sylphylabs/forge/cmd/internal/generator"
 	openapigen "github.com/sylphylabs/forge/cmd/internal/openapi/generator"
-	"google.golang.org/protobuf/compiler/protogen"
 )
 
 const (

@@ -7,8 +7,6 @@ import (
 	"testing"
 
 	v3 "github.com/google/gnostic/openapiv3"
-	"github.com/sylphylabs/forge/cmd/internal/generator"
-	openapigen "github.com/sylphylabs/forge/cmd/internal/openapi/generator"
 	"github.com/pb33f/libopenapi"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"google.golang.org/genproto/googleapis/api/annotations"
@@ -19,6 +17,9 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/pluginpb"
+
+	"github.com/sylphylabs/forge/cmd/internal/generator"
+	openapigen "github.com/sylphylabs/forge/cmd/internal/openapi/generator"
 )
 
 func TestGenerateOpenAPI32UsesForgeErrorEnvelope(t *testing.T) {
@@ -371,7 +372,7 @@ func validateOpenAPI32(t *testing.T, content string) {
 		t.Fatalf("decode official OpenAPI 3.2 schema: %v", err)
 	}
 	const schemaURL = "https://spec.openapis.org/oas/3.2/schema/2025-09-17"
-	if err := compiler.AddResource(schemaURL, officialSchema); err != nil {
+	if err = compiler.AddResource(schemaURL, officialSchema); err != nil {
 		t.Fatalf("load official OpenAPI 3.2 schema: %v", err)
 	}
 	schema, err := compiler.Compile(schemaURL)
@@ -404,43 +405,43 @@ func projectionTestFile() *descriptorpb.FileDescriptorProto {
 			{
 				Name: proto.String("Resource"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{Name: proto.String("name"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
-					{Name: proto.String("zone"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+					stringField("name", 1),
+					stringField("zone", 2),
 				},
 			},
 			{
 				Name: proto.String("NestedRequest"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{Name: proto.String("resource"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(), TypeName: proto.String(".test.v1.Resource")},
+					messageField("resource", 1, ".test.v1.Resource"),
 				},
 			},
 			{
 				Name: proto.String("ScalarRequest"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{Name: proto.String("name"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
-					{Name: proto.String("value"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_INT32.Enum()},
+					stringField("name", 1),
+					scalarField("value", 2, descriptorpb.FieldDescriptorProto_TYPE_INT32),
 				},
 			},
 			{
 				Name: proto.String("RepeatedRequest"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{Name: proto.String("name"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
-					{Name: proto.String("values"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+					stringField("name", 1),
+					repeatedField("values", 2, descriptorpb.FieldDescriptorProto_TYPE_STRING, ""),
 				},
 			},
 			{
 				Name: proto.String("MapRequest"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{Name: proto.String("name"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
-					{Name: proto.String("values"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(), TypeName: proto.String(".test.v1.MapRequest.ValuesEntry")},
+					stringField("name", 1),
+					repeatedField("values", 2, descriptorpb.FieldDescriptorProto_TYPE_MESSAGE, ".test.v1.MapRequest.ValuesEntry"),
 				},
 				NestedType: []*descriptorpb.DescriptorProto{
 					{
 						Name:    proto.String("ValuesEntry"),
 						Options: &descriptorpb.MessageOptions{MapEntry: proto.Bool(true)},
 						Field: []*descriptorpb.FieldDescriptorProto{
-							{Name: proto.String("key"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
-							{Name: proto.String("value"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+							stringField("key", 1),
+							stringField("value", 2),
 						},
 					},
 				},
@@ -448,7 +449,7 @@ func projectionTestFile() *descriptorpb.FileDescriptorProto {
 			{
 				Name: proto.String("Reply"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{Name: proto.String("result"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+					stringField("result", 1),
 				},
 			},
 		},
@@ -456,10 +457,22 @@ func projectionTestFile() *descriptorpb.FileDescriptorProto {
 			{
 				Name: proto.String("Projection"),
 				Method: []*descriptorpb.MethodDescriptorProto{
-					{Name: proto.String("Nested"), InputType: proto.String(".test.v1.NestedRequest"), OutputType: proto.String(".test.v1.Reply"), Options: httpRuleOptions(&annotations.HttpRule{Pattern: &annotations.HttpRule_Get{Get: "/v1/nested/{resource.name}"}})},
-					{Name: proto.String("Scalar"), InputType: proto.String(".test.v1.ScalarRequest"), OutputType: proto.String(".test.v1.Reply"), Options: httpRuleOptions(&annotations.HttpRule{Pattern: &annotations.HttpRule_Post{Post: "/v1/scalar/{name}"}, Body: "value", ResponseBody: "result"})},
-					{Name: proto.String("Repeated"), InputType: proto.String(".test.v1.RepeatedRequest"), OutputType: proto.String(".test.v1.Reply"), Options: httpRuleOptions(&annotations.HttpRule{Pattern: &annotations.HttpRule_Post{Post: "/v1/repeated/{name}"}, Body: "values"})},
-					{Name: proto.String("Mapped"), InputType: proto.String(".test.v1.MapRequest"), OutputType: proto.String(".test.v1.Reply"), Options: httpRuleOptions(&annotations.HttpRule{Pattern: &annotations.HttpRule_Post{Post: "/v1/mapped/{name}"}, Body: "values"})},
+					httpMethod("Nested", ".test.v1.NestedRequest", ".test.v1.Reply", &annotations.HttpRule{
+						Pattern: &annotations.HttpRule_Get{Get: "/v1/nested/{resource.name}"},
+					}),
+					httpMethod("Scalar", ".test.v1.ScalarRequest", ".test.v1.Reply", &annotations.HttpRule{
+						Pattern:      &annotations.HttpRule_Post{Post: "/v1/scalar/{name}"},
+						Body:         "value",
+						ResponseBody: "result",
+					}),
+					httpMethod("Repeated", ".test.v1.RepeatedRequest", ".test.v1.Reply", &annotations.HttpRule{
+						Pattern: &annotations.HttpRule_Post{Post: "/v1/repeated/{name}"},
+						Body:    "values",
+					}),
+					httpMethod("Mapped", ".test.v1.MapRequest", ".test.v1.Reply", &annotations.HttpRule{
+						Pattern: &annotations.HttpRule_Post{Post: "/v1/mapped/{name}"},
+						Body:    "values",
+					}),
 				},
 			},
 		},
@@ -479,14 +492,14 @@ func httpBodyTestFile() *descriptorpb.FileDescriptorProto {
 			{
 				Name: proto.String("MediaRequest"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{Name: proto.String("name"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
-					{Name: proto.String("body"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(), TypeName: proto.String(".google.api.HttpBody")},
+					stringField("name", 1),
+					messageField("body", 2, ".google.api.HttpBody"),
 				},
 			},
 			{
 				Name: proto.String("MediaReply"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{Name: proto.String("body"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(), TypeName: proto.String(".google.api.HttpBody")},
+					messageField("body", 1, ".google.api.HttpBody"),
 				},
 			},
 		},
@@ -532,18 +545,73 @@ func bindingTestFile(rules ...*annotations.HttpRule) *descriptorpb.FileDescripto
 			{
 				Name: proto.String("BindingRequest"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{Name: proto.String("name"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
-					{Name: proto.String("other"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+					stringField("name", 1),
+					stringField("other", 2),
 				},
 			},
 			{
 				Name: proto.String("BindingReply"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{Name: proto.String("result"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum()},
+					stringField("result", 1),
 				},
 			},
 		},
 		Service: []*descriptorpb.ServiceDescriptorProto{{Name: proto.String("Bindings"), Method: methods}},
+	}
+}
+
+// stringField builds an optional proto3 string field descriptor.
+func stringField(name string, number int32) *descriptorpb.FieldDescriptorProto {
+	return &descriptorpb.FieldDescriptorProto{
+		Name:   proto.String(name),
+		Number: proto.Int32(number),
+		Label:  descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+		Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+	}
+}
+
+// scalarField builds an optional proto3 field descriptor of the given scalar type.
+func scalarField(name string, number int32, kind descriptorpb.FieldDescriptorProto_Type) *descriptorpb.FieldDescriptorProto {
+	return &descriptorpb.FieldDescriptorProto{
+		Name:   proto.String(name),
+		Number: proto.Int32(number),
+		Label:  descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+		Type:   kind.Enum(),
+	}
+}
+
+// messageField builds an optional proto3 message-typed field descriptor.
+func messageField(name string, number int32, typeName string) *descriptorpb.FieldDescriptorProto {
+	return &descriptorpb.FieldDescriptorProto{
+		Name:     proto.String(name),
+		Number:   proto.Int32(number),
+		Label:    descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+		Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+		TypeName: proto.String(typeName),
+	}
+}
+
+// repeatedField builds a repeated proto3 field descriptor of the given type.
+func repeatedField(name string, number int32, kind descriptorpb.FieldDescriptorProto_Type, typeName string) *descriptorpb.FieldDescriptorProto {
+	field := &descriptorpb.FieldDescriptorProto{
+		Name:   proto.String(name),
+		Number: proto.Int32(number),
+		Label:  descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum(),
+		Type:   kind.Enum(),
+	}
+	if typeName != "" {
+		field.TypeName = proto.String(typeName)
+	}
+	return field
+}
+
+// httpMethod builds a method descriptor carrying the given google.api.http rule.
+func httpMethod(name, inputType, outputType string, rule *annotations.HttpRule) *descriptorpb.MethodDescriptorProto {
+	return &descriptorpb.MethodDescriptorProto{
+		Name:       proto.String(name),
+		InputType:  proto.String(inputType),
+		OutputType: proto.String(outputType),
+		Options:    httpRuleOptions(rule),
 	}
 }
 

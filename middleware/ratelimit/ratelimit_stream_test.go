@@ -15,7 +15,6 @@ func TestServerStreamAllows(t *testing.T) {
 		called = true
 		return nil
 	})(nil, &testStream{ctx: t.Context()})
-
 	if err != nil {
 		t.Fatalf("ServerStream() error = %v, want nil", err)
 	}
@@ -55,7 +54,6 @@ func TestServerStreamTakesOneTokenPerStream(t *testing.T) {
 		}
 		return nil
 	})(nil, &testStream{ctx: t.Context()})
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +75,6 @@ func TestPerMessageServerStreamTakesOneTokenPerMessage(t *testing.T) {
 		// Sends must not consume tokens.
 		return stream.SendMsg("out")
 	})(nil, underlying)
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +98,6 @@ func TestPerMessageServerStreamRejectsMessageAndKeepsStreamOpen(t *testing.T) {
 		// The handler stays in control after a rejected message.
 		return nil
 	})(nil, &testStream{ctx: t.Context()})
-
 	if err != nil {
 		t.Errorf("PerMessageServerStream() error = %v, want nil; the stream stays open", err)
 	}
@@ -116,7 +112,6 @@ func TestPerMessageServerStreamDoesNotLimitStreamStart(t *testing.T) {
 	err := PerMessageServerStream(WithLimiter(limiter))(
 		func(any, middleware.ServerStream) error { return nil },
 	)(nil, &testStream{ctx: t.Context()})
-
 	if err != nil {
 		t.Fatal(err)
 	}

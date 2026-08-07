@@ -20,40 +20,61 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// OpenAPI schema type names.
+const (
+	typeString  = "string"
+	typeInteger = "integer"
+	typeObject  = "object"
+)
+
+// fieldCode is the name of the status code property shared by the
+// google.rpc.Status and Forge error envelope schemas.
+const fieldCode = "code"
+
 func NewStringSchema() *v3.SchemaOrReference {
 	return &v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Schema{
-			Schema: &v3.Schema{Type: "string"}}}
+			Schema: &v3.Schema{Type: typeString},
+		},
+	}
 }
 
 func NewBooleanSchema() *v3.SchemaOrReference {
 	return &v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Schema{
-			Schema: &v3.Schema{Type: "boolean"}}}
+			Schema: &v3.Schema{Type: "boolean"},
+		},
+	}
 }
 
 func NewBytesSchema() *v3.SchemaOrReference {
 	return &v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Schema{
-			Schema: &v3.Schema{Type: "string", Format: "bytes"}}}
+			Schema: &v3.Schema{Type: typeString, Format: "bytes"},
+		},
+	}
 }
 
 func NewIntegerSchema(format string) *v3.SchemaOrReference {
 	return &v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Schema{
-			Schema: &v3.Schema{Type: "integer", Format: format}}}
+			Schema: &v3.Schema{Type: typeInteger, Format: format},
+		},
+	}
 }
 
 func NewNumberSchema(format string) *v3.SchemaOrReference {
 	return &v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Schema{
-			Schema: &v3.Schema{Type: "number", Format: format}}}
+			Schema: &v3.Schema{Type: "number", Format: format},
+		},
+	}
 }
 
-func NewEnumSchema(enum_type *string, field protoreflect.FieldDescriptor) *v3.SchemaOrReference {
+func NewEnumSchema(enumType *string, field protoreflect.FieldDescriptor) *v3.SchemaOrReference {
 	schema := &v3.Schema{Format: "enum"}
-	if enum_type != nil && *enum_type == "string" {
-		schema.Type = "string"
+	if enumType != nil && *enumType == typeString {
+		schema.Type = typeString
 		schema.Enum = make([]*v3.Any, 0, field.Enum().Values().Len())
 		for i := 0; i < field.Enum().Values().Len(); i++ {
 			schema.Enum = append(schema.Enum, &v3.Any{
@@ -61,19 +82,21 @@ func NewEnumSchema(enum_type *string, field protoreflect.FieldDescriptor) *v3.Sc
 			})
 		}
 	} else {
-		schema.Type = "integer"
+		schema.Type = typeInteger
 	}
 	return &v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Schema{
-			Schema: schema}}
+			Schema: schema,
+		},
+	}
 }
 
-func NewListSchema(item_schema *v3.SchemaOrReference) *v3.SchemaOrReference {
+func NewListSchema(itemSchema *v3.SchemaOrReference) *v3.SchemaOrReference {
 	return &v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Schema{
 			Schema: &v3.Schema{
 				Type:  "array",
-				Items: &v3.ItemsItem{SchemaOrReference: []*v3.SchemaOrReference{item_schema}},
+				Items: &v3.ItemsItem{SchemaOrReference: []*v3.SchemaOrReference{itemSchema}},
 			},
 		},
 	}
@@ -81,17 +104,21 @@ func NewListSchema(item_schema *v3.SchemaOrReference) *v3.SchemaOrReference {
 
 // google.api.HttpBody will contain POST body data
 // This is based on how Envoy handles google.api.HttpBody
-func NewGoogleApiHttpBodySchema() *v3.SchemaOrReference {
+func NewGoogleAPIHTTPBodySchema() *v3.SchemaOrReference {
 	return &v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Schema{
-			Schema: &v3.Schema{Type: "string"}}}
+			Schema: &v3.Schema{Type: typeString},
+		},
+	}
 }
 
 // google.protobuf.Timestamp is serialized as a string
 func NewGoogleProtobufTimestampSchema() *v3.SchemaOrReference {
 	return &v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Schema{
-			Schema: &v3.Schema{Type: "string", Format: "date-time"}}}
+			Schema: &v3.Schema{Type: typeString, Format: "date-time"},
+		},
+	}
 }
 
 // google.protobuf.Duration is serialized as a string
@@ -122,7 +149,7 @@ func NewGoogleProtobufDurationSchema() *v3.SchemaOrReference {
 			//
 			// This leads to the regex below limiting range from -315.576,000,000s to 315,576,000,000s
 			// allowing -0.999,999,999s to 0.999,999,999s in the floating precision range.
-			// That full range cannot be expressed precisly in float64 as demonstrated in
+			// That full range cannot be expressed precisely in float64 as demonstrated in
 			// the example at https://go.dev/play/p/XNtuhwdyu8Y for your reference.
 			// So the well known type google.protobuf.Duration needs a string.
 			//
@@ -130,9 +157,11 @@ func NewGoogleProtobufDurationSchema() *v3.SchemaOrReference {
 			// a different syntax starting with "P", supports daylight saving times and other
 			// different features, so it is NOT compatible.
 			Schema: &v3.Schema{
-				Type:        "string",
-				Pattern:     `^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$`,
-				Description: "Represents a a duration between -315,576,000,000s and 315,576,000,000s (around 10000 years). Precision is in nanoseconds. 1 nanosecond is represented as 0.000000001s",
+				Type:    typeString,
+				Pattern: `^-?(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,9})?s$`,
+				Description: "Represents a a duration between -315,576,000,000s and 315,576,000,000s " +
+					"(around 10000 years). Precision is in nanoseconds. " +
+					"1 nanosecond is represented as 0.000000001s",
 			},
 		},
 	}
@@ -142,28 +171,36 @@ func NewGoogleProtobufDurationSchema() *v3.SchemaOrReference {
 func NewGoogleTypeDateSchema() *v3.SchemaOrReference {
 	return &v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Schema{
-			Schema: &v3.Schema{Type: "string", Format: "date"}}}
+			Schema: &v3.Schema{Type: typeString, Format: "date"},
+		},
+	}
 }
 
 // google.type.DateTime is serialized as a string
 func NewGoogleTypeDateTimeSchema() *v3.SchemaOrReference {
 	return &v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Schema{
-			Schema: &v3.Schema{Type: "string", Format: "date-time"}}}
+			Schema: &v3.Schema{Type: typeString, Format: "date-time"},
+		},
+	}
 }
 
 // google.protobuf.FieldMask masks is serialized as a string
 func NewGoogleProtobufFieldMaskSchema() *v3.SchemaOrReference {
 	return &v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Schema{
-			Schema: &v3.Schema{Type: "string", Format: "field-mask"}}}
+			Schema: &v3.Schema{Type: typeString, Format: "field-mask"},
+		},
+	}
 }
 
 // google.protobuf.Struct is equivalent to a JSON object
 func NewGoogleProtobufStructSchema() *v3.SchemaOrReference {
 	return &v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Schema{
-			Schema: &v3.Schema{Type: "object"}}}
+			Schema: &v3.Schema{Type: typeObject},
+		},
+	}
 }
 
 // google.protobuf.Value is handled specially
@@ -180,7 +217,8 @@ func NewGoogleProtobufValueSchema(name string) *v3.NamedSchemaOrReference {
 		Value: &v3.SchemaOrReference{
 			Oneof: &v3.SchemaOrReference_Schema{
 				Schema: &v3.Schema{
-					Description: "Represents a dynamically typed value which can be either null, a number, a string, a boolean, a recursive struct value, or a list of values.",
+					Description: "Represents a dynamically typed value which can be either null, " +
+						"a number, a string, a boolean, a recursive struct value, or a list of values.",
 				},
 			},
 		},
@@ -197,7 +235,7 @@ func NewGoogleProtobufAnySchema(name string) *v3.NamedSchemaOrReference {
 		Value: &v3.SchemaOrReference{
 			Oneof: &v3.SchemaOrReference_Schema{
 				Schema: &v3.Schema{
-					Type:        "object",
+					Type:        typeObject,
 					Description: "Contains an arbitrary serialized message along with a @type that describes the type of the serialized message.",
 					Properties: &v3.Properties{
 						AdditionalProperties: []*v3.NamedSchemaOrReference{
@@ -206,7 +244,7 @@ func NewGoogleProtobufAnySchema(name string) *v3.NamedSchemaOrReference {
 								Value: &v3.SchemaOrReference{
 									Oneof: &v3.SchemaOrReference_Schema{
 										Schema: &v3.Schema{
-											Type:        "string",
+											Type:        typeString,
 											Description: "The type of the serialized message.",
 										},
 									},
@@ -226,22 +264,27 @@ func NewGoogleProtobufAnySchema(name string) *v3.NamedSchemaOrReference {
 }
 
 // google.rpc.Status is handled specially
-func NewGoogleRpcStatusSchema(name string, any_name string) *v3.NamedSchemaOrReference {
+func NewGoogleRPCStatusSchema(name string, anyName string) *v3.NamedSchemaOrReference {
 	return &v3.NamedSchemaOrReference{
 		Name: name,
 		Value: &v3.SchemaOrReference{
 			Oneof: &v3.SchemaOrReference_Schema{
 				Schema: &v3.Schema{
-					Type:        "object",
-					Description: "The `Status` type defines a logical error model that is suitable for different programming environments, including REST APIs and RPC APIs. It is used by [gRPC](https://github.com/grpc). Each `Status` message contains three pieces of data: error code, error message, and error details. You can find out more about this error model and how to work with it in the [API Design Guide](https://cloud.google.com/apis/design/errors).",
+					Type: typeObject,
+					Description: "The `Status` type defines a logical error model that is suitable for " +
+						"different programming environments, including REST APIs and RPC APIs. It is used by " +
+						"[gRPC](https://github.com/grpc). Each `Status` message contains three pieces of data: " +
+						"error code, error message, and error details. You can find out more about this error " +
+						"model and how to work with it in the " +
+						"[API Design Guide](https://cloud.google.com/apis/design/errors).",
 					Properties: &v3.Properties{
 						AdditionalProperties: []*v3.NamedSchemaOrReference{
 							{
-								Name: "code",
+								Name: fieldCode,
 								Value: &v3.SchemaOrReference{
 									Oneof: &v3.SchemaOrReference_Schema{
 										Schema: &v3.Schema{
-											Type:        "integer",
+											Type:        typeInteger,
 											Format:      "int32",
 											Description: "The status code, which should be an enum value of [google.rpc.Code][google.rpc.Code].",
 										},
@@ -253,8 +296,11 @@ func NewGoogleRpcStatusSchema(name string, any_name string) *v3.NamedSchemaOrRef
 								Value: &v3.SchemaOrReference{
 									Oneof: &v3.SchemaOrReference_Schema{
 										Schema: &v3.Schema{
-											Type:        "string",
-											Description: "A developer-facing error message, which should be in English. Any user-facing error message should be localized and sent in the [google.rpc.Status.details][google.rpc.Status.details] field, or localized by the client.",
+											Type: typeString,
+											Description: "A developer-facing error message, which should be in " +
+												"English. Any user-facing error message should be localized and sent in " +
+												"the [google.rpc.Status.details][google.rpc.Status.details] field, or " +
+												"localized by the client.",
 										},
 									},
 								},
@@ -270,7 +316,7 @@ func NewGoogleRpcStatusSchema(name string, any_name string) *v3.NamedSchemaOrRef
 													{
 														Oneof: &v3.SchemaOrReference_Reference{
 															Reference: &v3.Reference{
-																XRef: "#/components/schemas/" + any_name,
+																XRef: "#/components/schemas/" + anyName,
 															},
 														},
 													},
@@ -297,17 +343,17 @@ func NewForgeErrorStatusSchema(name string) *v3.NamedSchemaOrReference {
 		Value: &v3.SchemaOrReference{
 			Oneof: &v3.SchemaOrReference_Schema{
 				Schema: &v3.Schema{
-					Type:        "object",
+					Type:        typeObject,
 					Description: "Forge HTTP JSON error envelope. gRPC transports project the same error into google.rpc.Status with google.rpc.ErrorInfo details.",
-					Required:    []string{"code"},
+					Required:    []string{fieldCode},
 					Properties: &v3.Properties{
 						AdditionalProperties: []*v3.NamedSchemaOrReference{
 							{
-								Name: "code",
+								Name: fieldCode,
 								Value: &v3.SchemaOrReference{
 									Oneof: &v3.SchemaOrReference_Schema{
 										Schema: &v3.Schema{
-											Type:        "integer",
+											Type:        typeInteger,
 											Format:      "int32",
 											Description: "HTTP status code carried by the Forge error.",
 										},
@@ -319,7 +365,7 @@ func NewForgeErrorStatusSchema(name string) *v3.NamedSchemaOrReference {
 								Value: &v3.SchemaOrReference{
 									Oneof: &v3.SchemaOrReference_Schema{
 										Schema: &v3.Schema{
-											Type:        "string",
+											Type:        typeString,
 											Description: "Stable machine-readable error reason, normally generated from an annotated protobuf enum value.",
 										},
 									},
@@ -330,7 +376,7 @@ func NewForgeErrorStatusSchema(name string) *v3.NamedSchemaOrReference {
 								Value: &v3.SchemaOrReference{
 									Oneof: &v3.SchemaOrReference_Schema{
 										Schema: &v3.Schema{
-											Type:        "string",
+											Type:        typeString,
 											Description: "Human-readable error message.",
 										},
 									},
@@ -341,7 +387,7 @@ func NewForgeErrorStatusSchema(name string) *v3.NamedSchemaOrReference {
 								Value: &v3.SchemaOrReference{
 									Oneof: &v3.SchemaOrReference_Schema{
 										Schema: &v3.Schema{
-											Type:        "object",
+											Type:        typeObject,
 											Description: "Bounded string metadata attached to the error.",
 											AdditionalProperties: &v3.AdditionalPropertiesItem{
 												Oneof: &v3.AdditionalPropertiesItem_SchemaOrReference{
@@ -360,13 +406,14 @@ func NewForgeErrorStatusSchema(name string) *v3.NamedSchemaOrReference {
 	}
 }
 
-func NewGoogleProtobufMapFieldEntrySchema(value_field_schema *v3.SchemaOrReference) *v3.SchemaOrReference {
+func NewGoogleProtobufMapFieldEntrySchema(valueFieldSchema *v3.SchemaOrReference) *v3.SchemaOrReference {
 	return &v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Schema{
-			Schema: &v3.Schema{Type: "object",
+			Schema: &v3.Schema{
+				Type: typeObject,
 				AdditionalProperties: &v3.AdditionalPropertiesItem{
 					Oneof: &v3.AdditionalPropertiesItem_SchemaOrReference{
-						SchemaOrReference: value_field_schema,
+						SchemaOrReference: valueFieldSchema,
 					},
 				},
 			},

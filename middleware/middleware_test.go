@@ -57,7 +57,12 @@ func TestComposeUnaryRejectsNil(t *testing.T) {
 	}{
 		{name: "handler", want: "nil unary handler"},
 		{name: "middleware", next: func(context.Context, any) (any, error) { return nil, nil }, mw: []UnaryMiddleware{nil}, want: "nil unary middleware at index 0"},
-		{name: "returned handler", next: func(context.Context, any) (any, error) { return nil, nil }, mw: []UnaryMiddleware{func(UnaryHandler) UnaryHandler { return nil }}, want: "returned a nil handler"},
+		{
+			name: "returned handler",
+			next: func(context.Context, any) (any, error) { return nil, nil },
+			mw:   []UnaryMiddleware{func(UnaryHandler) UnaryHandler { return nil }},
+			want: "returned a nil handler",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -126,7 +131,12 @@ func TestComposeStreamRejectsNil(t *testing.T) {
 	}{
 		{name: "handler", want: "nil stream handler"},
 		{name: "middleware", next: func(any, ServerStream) error { return nil }, mw: []StreamMiddleware{nil}, want: "nil stream middleware at index 0"},
-		{name: "returned handler", next: func(any, ServerStream) error { return nil }, mw: []StreamMiddleware{func(StreamHandler) StreamHandler { return nil }}, want: "returned a nil handler"},
+		{
+			name: "returned handler",
+			next: func(any, ServerStream) error { return nil },
+			mw:   []StreamMiddleware{func(StreamHandler) StreamHandler { return nil }},
+			want: "returned a nil handler",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

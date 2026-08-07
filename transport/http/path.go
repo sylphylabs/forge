@@ -263,11 +263,11 @@ func BuildPath(pathTemplate string, msg proto.Message, opts ...BuildPathOption) 
 		if len(template.Variables()) > 0 {
 			return "", stderrors.New("build HTTP path: request message is nil")
 		}
-		path, err := template.Expand(func(string) (string, error) {
+		path, expandErr := template.Expand(func(string) (string, error) {
 			return "", stderrors.New("request message is nil")
 		})
-		if err != nil {
-			return "", mapPathError(err)
+		if expandErr != nil {
+			return "", mapPathError(expandErr)
 		}
 		return path, nil
 	}
@@ -285,7 +285,7 @@ func BuildPath(pathTemplate string, msg proto.Message, opts ...BuildPathOption) 
 	for _, variable := range template.Variables() {
 		pathFields[variable.FieldPath] = struct{}{}
 	}
-	if err := validateQueryParameters(msg.ProtoReflect().Descriptor(), "", "", pathFields, options.omitFields); err != nil {
+	if err = validateQueryParameters(msg.ProtoReflect().Descriptor(), "", "", pathFields, options.omitFields); err != nil {
 		return "", fmt.Errorf("build HTTP query: %w", err)
 	}
 
@@ -308,8 +308,8 @@ func BuildPath(pathTemplate string, msg proto.Message, opts ...BuildPathOption) 
 	return path, nil
 }
 
-func validateQueryParameters(message protoreflect.MessageDescriptor, protoPrefix, jsonPrefix string, pathFields map[string]struct{}, omitFields []string) error {
-	fields := message.Fields()
+func validateQueryParameters(msg protoreflect.MessageDescriptor, protoPrefix, jsonPrefix string, pathFields map[string]struct{}, omitFields []string) error {
+	fields := msg.Fields()
 	for i := range fields.Len() {
 		field := fields.Get(i)
 		name := string(field.Name())

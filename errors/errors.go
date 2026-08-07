@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 
-	errorapi "github.com/sylphylabs/forge/api/errors/v1"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/status"
+
+	errorapi "github.com/sylphylabs/forge/api/errors/v1"
 
 	httpstatus "github.com/sylphylabs/forge/transport/http/status"
 )

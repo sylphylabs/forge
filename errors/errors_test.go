@@ -8,11 +8,12 @@ import (
 	"reflect"
 	"testing"
 
-	errorapi "github.com/sylphylabs/forge/api/errors/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+
+	errorapi "github.com/sylphylabs/forge/api/errors/v1"
 )
 
 type TestError struct{ message string }

@@ -44,7 +44,6 @@ func TestValidatorStreamAcceptsValidInitialRequest(t *testing.T) {
 		called = true
 		return nil
 	})(&streamMessage{}, &recvStream{ctx: t.Context()})
-
 	if err != nil {
 		t.Fatalf("ValidatorStream() error = %v, want nil", err)
 	}
@@ -59,7 +58,6 @@ func TestValidatorStreamSkipsNilRequest(t *testing.T) {
 		validatorCalls++
 		return nil
 	})(func(any, middleware.ServerStream) error { return nil })(nil, &recvStream{ctx: t.Context()})
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +73,6 @@ func TestValidatorStreamDoesNotValidateMessages(t *testing.T) {
 		// ValidatorStream only checks the initial request, so a bad message passes.
 		return s.RecvMsg(new(streamMessage))
 	})(nil, stream)
-
 	if err != nil {
 		t.Errorf("ValidatorStream() error = %v, want nil; messages are not validated", err)
 	}
@@ -91,7 +88,6 @@ func TestPerMessageValidatorStreamValidatesEachMessage(t *testing.T) {
 		// The handler stays in control after a rejected message.
 		return nil
 	})(nil, stream)
-
 	if err != nil {
 		t.Errorf("PerMessageValidatorStream() error = %v, want nil; the stream stays open", err)
 	}
@@ -106,7 +102,6 @@ func TestPerMessageValidatorStreamAcceptsValidMessages(t *testing.T) {
 	err := PerMessageValidatorStream()(func(_ any, s middleware.ServerStream) error {
 		return s.RecvMsg(new(streamMessage))
 	})(nil, stream)
-
 	if err != nil {
 		t.Errorf("PerMessageValidatorStream() error = %v, want nil", err)
 	}
@@ -123,7 +118,6 @@ func TestPerMessageValidatorStreamRunsCustomValidators(t *testing.T) {
 			return nil
 		},
 	)(nil, stream)
-
 	if err != nil {
 		t.Fatal(err)
 	}

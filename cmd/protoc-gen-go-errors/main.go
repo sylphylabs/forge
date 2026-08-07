@@ -4,8 +4,9 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/sylphylabs/forge/cmd/internal/generator"
 	"google.golang.org/protobuf/compiler/protogen"
+
+	"github.com/sylphylabs/forge/cmd/internal/generator"
 )
 
 var showVersion = flag.Bool("version", false, "print the version and exit")

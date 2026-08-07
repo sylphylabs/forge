@@ -28,16 +28,21 @@ const (
 	httpAll
 )
 
+const (
+	modeAnnotated = "annotated"
+	modeAll       = "all"
+)
+
 func parseHTTPMode(value string) (httpMode, error) {
 	switch value {
 	case "":
 		return httpDisabled, nil
-	case "annotated":
+	case modeAnnotated:
 		return httpAnnotated, nil
-	case "all":
+	case modeAll:
 		return httpAll, nil
 	default:
-		return httpDisabled, fmt.Errorf("go-middleware: invalid http mode %q, want annotated or all", value)
+		return httpDisabled, fmt.Errorf("go-middleware: invalid http mode %q, want %s or %s", value, modeAnnotated, modeAll)
 	}
 }
 
@@ -186,7 +191,8 @@ func generateHTTPMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.
 	}
 
 	g.P("// Wrap", service.GoName, "HTTPServer snapshots plan and composes every HTTP handler before registration.")
-	g.P("func Wrap", service.GoName, "HTTPServer(srv ", service.GoName, "HTTPServer, plan ", service.GoName, "Middleware) (", service.GoName, "HTTPServer, error) {")
+	g.P("func Wrap", service.GoName, "HTTPServer(srv ", service.GoName, "HTTPServer, plan ", service.GoName, "Middleware) (",
+		service.GoName, "HTTPServer, error) {")
 	g.P("if srv == nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: nil "+service.GoName+" HTTP server"), ") }")
 	g.P("wrapped := &", wrapper, "{", service.GoName, "HTTPServer: srv}")
 	for _, method := range methods {
@@ -254,7 +260,8 @@ func generateComposeBlock(g *protogen.GeneratedFile, service *protogen.Service, 
 		g.P("middlewares = append(middlewares, plan.Methods.", method.GoName, "...)")
 		g.P("handler, err := ", middlewarePackage.Ident("ComposeUnary"), "(func(ctx ", contextPackage.Ident("Context"), ", request any) (any, error) {")
 		g.P("typed, ok := request.(*", method.Input.GoIdent, ")")
-		g.P("if !ok { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: "+qualified+" request type %T, want *"+method.Input.GoIdent.GoName), ", request) }")
+		g.P("if !ok { return nil, ", fmtPackage.Ident("Errorf"), "(",
+			strconv.Quote("forge: "+qualified+" request type %T, want *"+method.Input.GoIdent.GoName), ", request) }")
 		g.P("return ", serviceVar, ".", method.GoName, "(ctx, typed)")
 		g.P("}, middlewares...)")
 	}
@@ -279,60 +286,54 @@ func generateStreamTerminal(g *protogen.GeneratedFile, service *protogen.Service
 		return
 	}
 	g.P("typed, ok := request.(*", method.Input.GoIdent, ")")
-	g.P("if !ok { return ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: "+qualified+" request type %T, want *"+method.Input.GoIdent.GoName), ", request) }")
+	g.P("if !ok { return ", fmtPackage.Ident("Errorf"), "(",
+		strconv.Quote("forge: "+qualified+" request type %T, want *"+method.Input.GoIdent.GoName), ", request) }")
 	g.P("return ", serviceVar, ".", method.GoName, "(typed, typedStream)")
 }
 
 func generateHTTPWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, wrapper string) {
-	field := "handler" + method.GoName
-	if !isStreaming(method) {
-		g.P("func (s *", wrapper, ") ", method.GoName, "(ctx ", contextPackage.Ident("Context"), ", request *", method.Input.GoIdent, ") (*", method.Output.GoIdent, ", error) {")
-		g.P("reply, err := s.", field, "(ctx, request)")
-		g.P("if err != nil { return nil, err }")
-		g.P("typed, ok := reply.(*", method.Output.GoIdent, ")")
-		g.P("if !ok { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: "+string(service.Desc.FullName())+"/"+string(method.Desc.Name())+" HTTP reply type %T, want *"+method.Output.GoIdent.GoName), ", reply) }")
-		g.P("return typed, nil")
-		g.P("}")
-		g.P()
-		return
-	}
-	streamType := service.GoName + "_" + method.GoName + "HTTPServer"
-	adapter := streamAdapterName(service, method, "HTTP")
-	if method.Desc.IsStreamingClient() {
-		g.P("func (s *", wrapper, ") ", method.GoName, "(stream ", streamType, ") error {")
-		g.P("base := &", adapter, "{ServerStream: stream, ctx: ", contextPackage.Ident("WithValue"), "(stream.Context(), ", adapter, "Key{}, ", transportHTTPPackage.Ident("ServerStream"), "(stream))}")
-		g.P("return s.", field, "(nil, base)")
-	} else {
-		g.P("func (s *", wrapper, ") ", method.GoName, "(request *", method.Input.GoIdent, ", stream ", streamType, ") error {")
-		g.P("base := &", adapter, "{ServerStream: stream, ctx: ", contextPackage.Ident("WithValue"), "(stream.Context(), ", adapter, "Key{}, ", transportHTTPPackage.Ident("ServerStream"), "(stream))}")
-		g.P("return s.", field, "(request, base)")
-	}
-	g.P("}")
-	g.P()
+	generateWrapperMethod(g, service, method, wrapper, "HTTP",
+		service.GoName+"_"+method.GoName+"HTTPServer", transportHTTPPackage.Ident("ServerStream"))
 }
 
 func generateGRPCWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, wrapper string) {
+	generateWrapperMethod(g, service, method, wrapper, "gRPC",
+		service.GoName+"_"+method.GoName+"Server", grpcPackage.Ident("ServerStream"))
+}
+
+func generateWrapperMethod(
+	g *protogen.GeneratedFile,
+	service *protogen.Service,
+	method *protogen.Method,
+	wrapper, transport, streamType string,
+	nativeStream protogen.GoIdent,
+) {
 	field := "handler" + method.GoName
 	if !isStreaming(method) {
-		g.P("func (s *", wrapper, ") ", method.GoName, "(ctx ", contextPackage.Ident("Context"), ", request *", method.Input.GoIdent, ") (*", method.Output.GoIdent, ", error) {")
+		g.P("func (s *", wrapper, ") ", method.GoName, "(ctx ", contextPackage.Ident("Context"),
+			", request *", method.Input.GoIdent, ") (*", method.Output.GoIdent, ", error) {")
 		g.P("reply, err := s.", field, "(ctx, request)")
 		g.P("if err != nil { return nil, err }")
 		g.P("typed, ok := reply.(*", method.Output.GoIdent, ")")
-		g.P("if !ok { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: "+string(service.Desc.FullName())+"/"+string(method.Desc.Name())+" gRPC reply type %T, want *"+method.Output.GoIdent.GoName), ", reply) }")
+		g.P("if !ok { return nil, ", fmtPackage.Ident("Errorf"), "(",
+			strconv.Quote("forge: "+string(service.Desc.FullName())+"/"+string(method.Desc.Name())+
+				" "+transport+" reply type %T, want *"+method.Output.GoIdent.GoName), ", reply) }")
 		g.P("return typed, nil")
 		g.P("}")
 		g.P()
 		return
 	}
-	streamType := service.GoName + "_" + method.GoName + "Server"
-	adapter := streamAdapterName(service, method, "gRPC")
+	adapter := streamAdapterName(service, method, transport)
 	if method.Desc.IsStreamingClient() {
 		g.P("func (s *", wrapper, ") ", method.GoName, "(stream ", streamType, ") error {")
-		g.P("base := &", adapter, "{ServerStream: stream, ctx: ", contextPackage.Ident("WithValue"), "(stream.Context(), ", adapter, "Key{}, ", grpcPackage.Ident("ServerStream"), "(stream))}")
+		g.P("base := &", adapter, "{ServerStream: stream, ctx: ", contextPackage.Ident("WithValue"),
+			"(stream.Context(), ", adapter, "Key{}, ", nativeStream, "(stream))}")
 		g.P("return s.", field, "(nil, base)")
 	} else {
-		g.P("func (s *", wrapper, ") ", method.GoName, "(request *", method.Input.GoIdent, ", stream ", streamType, ") error {")
-		g.P("base := &", adapter, "{ServerStream: stream, ctx: ", contextPackage.Ident("WithValue"), "(stream.Context(), ", adapter, "Key{}, ", grpcPackage.Ident("ServerStream"), "(stream))}")
+		g.P("func (s *", wrapper, ") ", method.GoName, "(request *", method.Input.GoIdent,
+			", stream ", streamType, ") error {")
+		g.P("base := &", adapter, "{ServerStream: stream, ctx: ", contextPackage.Ident("WithValue"),
+			"(stream.Context(), ", adapter, "Key{}, ", nativeStream, "(stream))}")
 		g.P("return s.", field, "(request, base)")
 	}
 	g.P("}")

@@ -93,14 +93,16 @@ func TestServerDeliveryCarriesTransport(t *testing.T) {
 
 	sub := newRecordingSubscriber()
 	srv := NewServer(sub, Endpoint("nats://127.0.0.1:4222"))
-	srv.Handle("orders.*", func(ctx context.Context, _ string, _ *Message) error {
+	if err := srv.Handle("orders.*", func(ctx context.Context, _ string, _ *Message) error {
 		if tr, ok := transport.FromServerContext(ctx); ok {
 			gotKind = tr.Kind()
 			gotOperation = tr.Operation()
 			gotEndpoint = tr.Endpoint()
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -134,7 +136,9 @@ func TestMessageMiddlewareSeesTransport(t *testing.T) {
 			return next(ctx, destination, msg)
 		}
 	}))
-	srv.Handle("orders.created", func(context.Context, string, *Message) error { return nil })
+	if err := srv.Handle("orders.created", func(context.Context, string, *Message) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
 
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
