@@ -45,7 +45,7 @@ Individual upstream review outcomes and provenance are tracked in
 | P2C selection | Adopted and validated | Use concurrency-safe `math/rand/v2` package functions instead of a per-balancer random-number lock. |
 | Codec content subtype | Implemented and validated | Fast-path exact JSON and scan remaining delimiters with `IndexByte`. |
 | Go 1.27 HTTP/2 | Validated | Use the standard-library-backed HTTP/2 path through a current `golang.org/x/net`; do not retain the legacy build tag. |
-| Future Go APIs | Watch | Evaluate only accepted, shipped APIs against concrete Kratos call sites and benchmarks. |
+| Future Go APIs | Watch | Evaluate only accepted, shipped APIs against concrete Forge call sites and benchmarks. |
 
 ## HTTP Routing
 

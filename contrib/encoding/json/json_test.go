@@ -143,13 +143,13 @@ func TestJSON_Unmarshal(t *testing.T) {
 
 func TestJSON_UnmarshalPointerToProtoMessage(t *testing.T) {
 	var msg *wrapperspb.StringValue
-	if err := (codec{}).Unmarshal([]byte(`"kratos"`), &msg); err != nil {
+	if err := (codec{}).Unmarshal([]byte(`"forge"`), &msg); err != nil {
 		t.Fatalf("Unmarshal() error = %v", err)
 	}
 	if msg == nil {
 		t.Fatal("Unmarshal() message = nil, want allocated message")
 	}
-	if got, want := msg.Value, "kratos"; got != want {
+	if got, want := msg.Value, "forge"; got != want {
 		t.Fatalf("Unmarshal() value = %s, want %s", got, want)
 	}
 }

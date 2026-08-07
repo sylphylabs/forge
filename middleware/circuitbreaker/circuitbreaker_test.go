@@ -5,7 +5,7 @@ import (
 	stderrors "errors"
 	"testing"
 
-	kratoserrors "github.com/sylphylabs/forge/errors"
+	forgeerrors "github.com/sylphylabs/forge/errors"
 	"github.com/sylphylabs/forge/transport"
 )
 
@@ -120,7 +120,7 @@ func TestClientMarksServerErrorAsFailed(t *testing.T) {
 	breaker := &circuitBreakerMock{}
 	ctx := transport.NewClientContext(context.Background(), &transportMock{operation: "/foo"})
 	next := func(context.Context, any) (any, error) {
-		return nil, kratoserrors.InternalServer("", "")
+		return nil, forgeerrors.InternalServer("", "")
 	}
 
 	_, _ = Client(WithBreakerFactory(func() CircuitBreaker {

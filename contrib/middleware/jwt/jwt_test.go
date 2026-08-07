@@ -506,7 +506,7 @@ func TestNewContextAndFromContext(t *testing.T) {
 		name   string
 		claims jwt.MapClaims
 	}{
-		{"val not nil", jwt.MapClaims{"name": "kratos"}},
+		{"val not nil", jwt.MapClaims{"name": "forge"}},
 		{"val nil", nil},
 	}
 	for _, test := range tests {
@@ -736,7 +736,7 @@ func TestWithParserOptionsEmpty(t *testing.T) {
 	}
 
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"name": "kratos",
+		"name": "forge",
 	}).SignedString([]byte(testKey))
 	if err != nil {
 		t.Fatal(err)

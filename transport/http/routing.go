@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"unicode"
 
-	kratoserrors "github.com/sylphylabs/forge/errors"
+	forgeerrors "github.com/sylphylabs/forge/errors"
 	"github.com/sylphylabs/forge/internal/httprule"
 	"github.com/sylphylabs/forge/transport"
 )
@@ -434,10 +434,10 @@ func (r *routeMux) serveRouteError(w http.ResponseWriter, req *http.Request, err
 	}
 	var escape url.EscapeError
 	if stderrors.As(err, &escape) {
-		encode(w, req, kratoserrors.BadRequest("HTTP_TRANSCODING", err.Error()))
+		encode(w, req, forgeerrors.BadRequest("HTTP_TRANSCODING", err.Error()))
 		return
 	}
-	encode(w, req, kratoserrors.InternalServer("HTTP_TRANSCODING", err.Error()))
+	encode(w, req, forgeerrors.InternalServer("HTTP_TRANSCODING", err.Error()))
 }
 
 func routeTemplate(req *http.Request) string {

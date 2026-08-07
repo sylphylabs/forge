@@ -17,7 +17,7 @@ import (
 	"github.com/sylphylabs/forge/registry"
 )
 
-var ErrServiceInstanceNameEmpty = errors.New("kratos/nacos: ServiceInstance.Name can not be empty")
+var ErrServiceInstanceNameEmpty = errors.New("forge/nacos: ServiceInstance.Name can not be empty")
 
 const (
 	defaultKind = "grpc"

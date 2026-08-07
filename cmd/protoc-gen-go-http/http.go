@@ -48,13 +48,13 @@ func generateHTTPFile(gen *protogen.Plugin, file *protogen.File, omitempty bool,
 	return g, nil
 }
 
-// generateHTTPFileContent generates the kratos errors definitions, excluding the package statement.
+// generateHTTPFileContent generates the forge errors definitions, excluding the package statement.
 func generateHTTPFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, omitempty bool, omitemptyPrefix string) error {
 	if len(file.Services) == 0 {
 		return nil
 	}
 	g.P("// This is a compile-time assertion to ensure that this generated file")
-	g.P("// is compatible with the kratos package it is being compiled against.")
+	g.P("// is compatible with the forge package it is being compiled against.")
 	g.P("var _ = new(", contextPackage.Ident("Context"), ")")
 	g.P("const _ = ", transportHTTPPackage.Ident("SupportPackageIsVersion5"))
 	g.P()

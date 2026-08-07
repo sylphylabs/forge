@@ -7,11 +7,11 @@ Last reviewed: July 23, 2026
 ## Purpose
 
 This document defines the source, package, release, and dependency boundary for
-public Forge Protobuf contracts. It also defines how the inherited Kratos
+public Forge Protobuf contracts. It also defines how the inherited Forge
 error schemas are replaced by one Forge-owned contract.
 
-Forge is treated as a new framework. Kratos source compatibility is not a
-constraint on the core API. Users that adopt Forge from Kratos receive an
+Forge is treated as a new framework. Forge source compatibility is not a
+constraint on the core API. Users that adopt Forge from Forge receive an
 explicit migration path; legacy names and duplicate schemas do not remain in
 the new framework solely to make that migration invisible.
 
@@ -70,7 +70,7 @@ It does not own:
 - application configuration, credentials, secrets, or provider SDKs;
 - generated service bindings for a business repository;
 - vendored Google, Envoy, Buf, validation, or OpenAPI schemas;
-- migration-only aliases for old Kratos packages.
+- migration-only aliases for old Forge packages.
 
 This boundary keeps the schema dependency small. A business repository can use
 Forge annotations without importing the complete framework runtime.
@@ -324,14 +324,14 @@ third_party/errors/errors.proto
 ```
 
 The current checkout contains none of them or the inherited named Buf module
-configurations `buf.build/kratos/apis` and
+configurations `buf.build/forge/apis` and
 `buf.build/go-kratos/protoc-gen-go-errors`. Release checks reject a second local
 schema. The runtime and generator compile against the sibling API module through
 an explicitly local pre-publication replacement. Historical names remain only
 in migration documentation, design records, tests that reject their return, and
 repository history.
 
-No Forge release job publishes new content under a Kratos-owned BSR name.
+No Forge release job publishes new content under a Forge-owned BSR name.
 
 ## Release Contract
 
@@ -371,7 +371,7 @@ or a repository-relative replacement.
 
 ## Migration Boundary
 
-Kratos migration is supported, but it is not implemented as a permanent core
+Forge migration is supported, but it is not implemented as a permanent core
 compatibility layer.
 
 Migration support may provide:
@@ -448,7 +448,7 @@ local repository state.
 ### Phase 5: Migration support
 
 - Add a migration specification with exact rewrite rules.
-- Test migration on at least one realistic Kratos service repository.
+- Test migration on at least one realistic Forge service repository.
 - Require idempotent dry-run and apply modes.
 - Keep migration fixtures outside the runtime dependency graph.
 

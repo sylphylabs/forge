@@ -1,4 +1,4 @@
-# Forge Compatibility with Kratos
+# Forge Compatibility with Forge
 
 Status: pre-release
 
@@ -6,9 +6,9 @@ Last verified: July 25, 2026
 
 Forge is an independent fork of `go-kratos/kratos`. It is not a drop-in
 replacement for Kratos v3 and does not promise source, behavior, or release
-compatibility with future Kratos versions.
+compatibility with future Forge versions.
 
-Forge also does not retain a Kratos API solely for compatibility. An API
+Forge also does not retain a Forge API solely for compatibility. An API
 may be removed when a clearer or more efficient replacement is available and
 the change is technically justified. Such removals are intentional breaking
 changes and must ship with executable migration guidance.
@@ -36,10 +36,10 @@ upstream revision explicitly.
 | Root module | `github.com/go-kratos/kratos/v3` | `github.com/sylphylabs/forge` | Source breaking |
 | Release line | v3 | v0 pre-release | Release breaking |
 | Minimum Go version | Go 1.25 | Go 1.27 | Build requirement |
-| Module count | 28, including `cmd/kratos` | 27 | Release and tooling change |
+| Module count | 28, including `cmd/forge` | 27 | Release and tooling change |
 | Asynchronous message transport | No protocol-neutral async contract | Root module exposes `transport/message`; broker SDK adapters remain optional nested modules | New API; no broker wire compatibility claim |
-| Project CLI | `cmd/kratos` | Removed | Workflow breaking |
-| Protobuf generators | Kratos module paths | Forge module paths | Install path change |
+| Project CLI | `cmd/forge` | Removed | Workflow breaking |
+| Protobuf generators | Forge module paths | Forge module paths | Install path change |
 | Contrib provider SDKs | Older provider majors and archived direct dependencies | Current stable majors and standard maintained replacements | Source and dependency graph change |
 | UUID generation | `google/uuid` and `gofrs/uuid` | Standard-library `uuid` | Source and generated-ID behavior change |
 | HTTP protobuf generation | Open API field access | Editions 2023 Open and Opaque API accessors | New generated-code capability |
@@ -90,7 +90,7 @@ root does not test nested modules; use the repository commands documented in
 
 ## Project CLI and Code Generation
 
-Forge does not ship the general `kratos` CLI. The removed module included
+Forge does not ship the general `forge` CLI. The removed module included
 project scaffolding, source generation wrappers, an application runner, an
 upgrader, and a changelog helper.
 
@@ -104,11 +104,11 @@ Use explicit tools instead:
 
 | Removed command | Replacement |
 | --- | --- |
-| `kratos new` | Create a normal Go module or use an auditable repository template |
-| `kratos run` | `go run ./cmd/server -conf ./configs` |
-| `kratos proto ...` | A repository-owned Buf or `protoc` configuration |
-| `kratos upgrade` | `go get`, `go install`, and `go mod tidy` |
-| `kratos changelog` | Git history and GitHub release notes |
+| `forge new` | Create a normal Go module or use an auditable repository template |
+| `forge run` | `go run ./cmd/server -conf ./configs` |
+| `forge proto ...` | A repository-owned Buf or `protoc` configuration |
+| `forge upgrade` | `go get`, `go install`, and `go mod tidy` |
+| `forge changelog` | Git history and GitHub release notes |
 
 Three atomic Forge Protobuf commands share one deterministic source module:
 
@@ -318,7 +318,7 @@ watchers silently skip hidden files rather than surfacing them as reload errors.
 OpenTelemetry tracing uses semantic conventions v1.41. HTTP and gRPC attributes
 are emitted separately, peer ports are integers, gRPC methods are validated,
 and invalid original method strings remain available for diagnosis. The former
-custom `rpc.status_code` field is now `kratos.error.code`, avoiding collision
+custom `rpc.status_code` field is now `forge.error.code`, avoiding collision
 with standard RPC semantic attributes.
 
 Metrics are transport-native and duration-only. HTTP uses the stable v1.41
@@ -362,7 +362,7 @@ the v3 design rather than providing a direct v2 compatibility layer.
 Every change that alters a public API, default behavior, wire format, module,
 tool, or supported Go version must update this document in the same change.
 
-Kratos compatibility is not a reason by itself to retain an inferior public
+Forge compatibility is not a reason by itself to retain an inferior public
 API. A breaking replacement is acceptable only when its rationale, replacement
 API, old and new code examples, regeneration requirements, and validation steps
 are documented in the migration guide before the implementation is merged.

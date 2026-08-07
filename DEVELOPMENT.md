@@ -96,7 +96,7 @@ Do not push upstream Kratos tags to `origin`.
 
 ## Documentation Contract
 
-`COMPATIBILITY.md` is the source of truth for accepted differences from Kratos;
+`COMPATIBILITY.md` is the source of truth for accepted differences from Forge;
 `COMPATIBILITY_zh.md` is its maintained translation. Update both in the same
 change whenever a public API, default behavior, wire format, module, tool, or
 minimum Go version changes. A breaking change also requires an executable

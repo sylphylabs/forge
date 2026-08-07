@@ -83,7 +83,7 @@ func main() {
 
 ## Upstream Baseline
 
-Forge started from Kratos v3. Existing Kratos users should treat the module-path change and all future Forge releases as an explicit migration, not as an in-place Kratos upgrade.
+Forge started from Kratos v3. Existing Kratos users should treat the module-path change and all future Forge releases as an explicit migration, not as an in-place Forge upgrade.
 
 ## Further Reading
 
@@ -113,7 +113,7 @@ Use a private GitHub security advisory in the Forge repository. Do not report Fo
 
 Forge preserves the complete Kratos Git history and original MIT copyright notice. The upstream Kratos project and its contributors created the foundation of this codebase.
 
-The following projects influenced the original Kratos design:
+The following projects influenced the original Forge design:
 
 - [go-kit/kit](https://github.com/go-kit/kit)
 - [go-micro](https://github.com/asim/go-micro)

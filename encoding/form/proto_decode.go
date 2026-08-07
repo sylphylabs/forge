@@ -112,7 +112,7 @@ func getFieldDescriptor(v protoreflect.Message, fieldName string) protoreflect.F
 		case len(fieldName) > 2 && strings.HasSuffix(fieldName, "[]"):
 			fd = getDescriptorByFieldAndName(fields, strings.TrimSuffix(fieldName, "[]"))
 		default:
-			// If the type is map, you get the string "map[kratos]", where "map" is a field of proto and "kratos" is a key of map
+			// If the type is map, you get the string "map[forge]", where "map" is a field of proto and "forge" is a key of map
 			// Use symbol . for separating fields/structs. (eg. structfield.field)
 			// ref: https://github.com/go-playground/form
 			field, _, err := parseURLQueryMapKey(fieldName)

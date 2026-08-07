@@ -175,7 +175,7 @@ never suppressed.
 ## Migration and Validation
 
 Each public phase updates `COMPATIBILITY.md`, `COMPATIBILITY_zh.md`, the two
-Kratos migration guides, and runnable examples together. Validation includes:
+Forge migration guides, and runnable examples together. Validation includes:
 
 - focused unit tests and `go test -race` for the root package;
 - HTTP, gRPC, and message transport lifecycle tests;

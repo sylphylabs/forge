@@ -10,9 +10,9 @@ import (
 	"github.com/sylphylabs/forge/config"
 )
 
-const testPath = "kratos/test/config"
+const testPath = "forge/test/config"
 
-const testKey = "kratos/test/config/key"
+const testKey = "forge/test/config/key"
 
 func TestConfig(t *testing.T) {
 	client, err := api.NewClient(&api.Config{
@@ -72,7 +72,7 @@ func TestExtToFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tp := "kratos/test/ext"
+	tp := "forge/test/ext"
 	tn := "a.bird.json"
 	tk := tp + "/" + tn
 	tc := `{"a":1}`

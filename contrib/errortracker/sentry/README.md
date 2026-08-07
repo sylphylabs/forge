@@ -1,4 +1,4 @@
-# Sentry middleware for Kratos
+# Sentry middleware for Forge
 This middleware helps you to catch panics and report them to [sentry](https://sentry.io/)
 
 ## Quick Start

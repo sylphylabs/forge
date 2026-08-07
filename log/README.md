@@ -33,7 +33,7 @@ log.InfoContext(ctx, "user created", "user_id", userID)
 ### Builder
 
 `log.NewHandler` builds a default handler. `log.NewLogger` wraps an existing
-handler with Kratos decorators. Attach fixed service attrs with `logger.With`.
+handler with Forge decorators. Attach fixed service attrs with `logger.With`.
 
 ```go
 logger := log.NewLogger(
@@ -72,7 +72,7 @@ log.SetDefault(logger)
 ```
 
 The `github.com/sylphylabs/forge/contrib/otel/log` handler bridges slog records to
-OpenTelemetry Logs. Use the core log builder when you need Kratos logger options:
+OpenTelemetry Logs. Use the core log builder when you need Forge logger options:
 
 ```go
 import (

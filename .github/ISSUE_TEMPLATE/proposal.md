@@ -17,7 +17,7 @@ behavior. Keep the smallest interface that solves the problem.
 
 ### Compatibility and migration
 
-Compare current Kratos and Forge behavior. Describe source, behavior,
+Compare current Forge and Forge behavior. Describe source, behavior,
 wire, toolchain, and release impact together with an executable migration path.
 
 ### Validation

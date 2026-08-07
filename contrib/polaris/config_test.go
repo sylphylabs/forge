@@ -198,7 +198,7 @@ func (client *configClient) publishConfigFile(name string) error {
 }
 
 func TestConfig(t *testing.T) {
-	name := "kratos-polaris-test.yaml"
+	name := "forge-polaris-test.yaml"
 	client, err := newConfigClient()
 	if err != nil {
 		t.Fatal(err)
@@ -270,7 +270,7 @@ func TestConfig(t *testing.T) {
 }
 
 func TestExtToFormat(t *testing.T) {
-	name := "kratos-polaris-ext.yaml"
+	name := "forge-polaris-ext.yaml"
 	client, err := newConfigClient()
 	if err != nil {
 		t.Fatal(err)
@@ -323,7 +323,7 @@ func TestGetMultipleConfig(t *testing.T) {
 	client, err := newConfigClient()
 	files := make([]File, 0, 3)
 	for i := 0; i < 3; i++ {
-		name := fmt.Sprintf("kratos-polaris-test-%d.yaml", i)
+		name := fmt.Sprintf("forge-polaris-test-%d.yaml", i)
 		if err != nil {
 			t.Fatal(err)
 		}

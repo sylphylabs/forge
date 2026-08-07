@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	kratoserrors "github.com/sylphylabs/forge/errors"
+	forgeerrors "github.com/sylphylabs/forge/errors"
 	"github.com/sylphylabs/forge/internal/host"
 	"github.com/sylphylabs/forge/log"
 	"github.com/sylphylabs/forge/transport"
@@ -55,7 +55,7 @@ func TestServeHTTP(t *testing.T) {
 	mux := NewServer(Listener(ln))
 	mux.HandleFunc("/index", h)
 	mux.Route("/errors").GET("/cause", func(Context) error {
-		return kratoserrors.BadRequest("xxx", "zzz").
+		return forgeerrors.BadRequest("xxx", "zzz").
 			WithMetadata(map[string]string{"foo": "bar"}).
 			WithCause(errors.New("error cause"))
 	})
@@ -71,7 +71,7 @@ func TestServeHTTP(t *testing.T) {
 	srv := http.Server{Handler: mux}
 	go func() {
 		if err := srv.Serve(ln); err != nil {
-			if kratoserrors.Is(err, http.ErrServerClosed) {
+			if forgeerrors.Is(err, http.ErrServerClosed) {
 				return
 			}
 			panic(err)
@@ -93,7 +93,7 @@ func TestServer(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(testData{Path: r.RequestURI})
 	})
 	srv.Route("/errors").GET("/cause", func(Context) error {
-		return kratoserrors.BadRequest("xxx", "zzz").
+		return forgeerrors.BadRequest("xxx", "zzz").
 			WithMetadata(map[string]string{"foo": "bar"}).
 			WithCause(errors.New("error cause"))
 	})
@@ -141,7 +141,7 @@ func testAccept(t *testing.T, srv *Server) {
 		}
 		req.Header.Set("Content-Type", test.contentType)
 		resp, err := client.Do(req)
-		if kratoserrors.Code(err) != 400 {
+		if forgeerrors.Code(err) != 400 {
 			t.Errorf("expected 400 got %v", err)
 		}
 		if err == nil {
@@ -210,7 +210,7 @@ func testClient(t *testing.T, srv *Server) {
 			t.Fatal(err)
 		}
 		resp, err := client.Do(req)
-		if kratoserrors.Code(err) != test.code {
+		if forgeerrors.Code(err) != test.code {
 			t.Fatalf("want %v, but got %v", test, err)
 		}
 		if err != nil {
@@ -236,7 +236,7 @@ func testClient(t *testing.T, srv *Server) {
 	for _, test := range tests {
 		var res testData
 		err := client.Invoke(context.Background(), test.method, test.path, nil, &res)
-		if kratoserrors.Code(err) != test.code {
+		if forgeerrors.Code(err) != test.code {
 			t.Fatalf("want %v, but got %v", test, err)
 		}
 		if err != nil {
@@ -350,7 +350,7 @@ func TestMatchedRoutePreservesRequestSemantics(t *testing.T) {
 		if got := request.Pattern; got != "/context/{name}" {
 			t.Fatalf("request pattern = %q, want %q", got, "/context/{name}")
 		}
-		if got := request.PathValue("name"); got != "kratos" {
+		if got := request.PathValue("name"); got != "forge" {
 			t.Fatalf("path value = %q", got)
 		}
 		if got := request.PathValue("__forge0"); got != "" {
@@ -380,7 +380,7 @@ func TestMatchedRoutePreservesRequestSemantics(t *testing.T) {
 		return nil
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/context/kratos", nil).WithContext(parent)
+	req := httptest.NewRequest(http.MethodGet, "/context/forge", nil).WithContext(parent)
 	srv.ServeHTTP(httptest.NewRecorder(), req)
 }
 

@@ -23,7 +23,7 @@ func TestRouter(t *testing.T) {
 	data := `
 [
     {
-        "name":"kratos",
+        "name":"forge",
         "enable":false,
         "description":"123",
         "priority":2,
@@ -130,8 +130,8 @@ func TestRouter(t *testing.T) {
 	)
 
 	ins := &registry.ServiceInstance{
-		ID:      "kratos",
-		Name:    "kratos",
+		ID:      "forge",
+		Name:    "forge",
 		Version: "v1.0.0",
 		Endpoints: []string{
 			"grpc://127.0.0.1:8080",
@@ -189,7 +189,7 @@ func (m mockApp) ID() string {
 }
 
 func (m mockApp) Name() string {
-	return "kratos"
+	return "forge"
 }
 
 func (m mockApp) Version() string {

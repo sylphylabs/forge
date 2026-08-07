@@ -10,7 +10,7 @@ This document defines how Forge binds application middleware to generated
 services without publishing middleware names or execution policy in Protobuf.
 It covers server-side unary and streaming RPCs, HTTP and gRPC reuse,
 transport-specific escape hatches, registration-time composition, and migration
-from Kratos selectors.
+from Forge selectors.
 
 The public Protobuf module is defined in
 [`public-protobuf-api-module.md`](public-protobuf-api-module.md). The wider
@@ -402,7 +402,7 @@ identity.
 
 ## Migration
 
-Kratos selector middleware migrates to generated Go plans:
+Forge selector middleware migrates to generated Go plans:
 
 1. Resolve each selector to its exact protobuf method set.
 2. Assign existing unary middleware values to the generated unary RPC fields.
@@ -417,7 +417,7 @@ must not translate arbitrary regular expressions by textual guesswork. Migration
 evidence compares the exact selected method set, order, context propagation,
 reply, error, panic, and stream lifecycle behavior.
 
-The inherited Kratos gRPC stream implementation requires an explicit correction
+The inherited Forge gRPC stream implementation requires an explicit correction
 during migration: the stream-handler chain must be invoked, not constructed and
 discarded, and middleware must not be applied implicitly with different HTTP
 and gRPC per-message semantics.
@@ -459,7 +459,7 @@ and gRPC per-message semantics.
 
 ### Phase 4: Migration and evidence
 
-- [x] Add mechanically precise Kratos migration documentation.
+- [x] Add mechanically precise Forge migration documentation.
 - [x] Add a local external consumer using unary, server-streaming, client-streaming, and
   bidirectional methods over HTTP and gRPC.
 - [x] Record steady-state middleware dispatch benchmarks.

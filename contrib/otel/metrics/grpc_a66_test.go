@@ -26,9 +26,9 @@ import (
 	grpcotel "google.golang.org/grpc/stats/opentelemetry"
 	"google.golang.org/grpc/status"
 
-	kratostracing "github.com/sylphylabs/forge/contrib/otel/tracing"
+	forgetracing "github.com/sylphylabs/forge/contrib/otel/tracing"
 	pb "github.com/sylphylabs/forge/internal/testdata/helloworld"
-	kratosgrpc "github.com/sylphylabs/forge/transport/grpc"
+	forgegrpc "github.com/sylphylabs/forge/transport/grpc"
 )
 
 const a66RetryServiceConfig = `{
@@ -81,13 +81,13 @@ func Example_a66DurationOnly() {
 		// Leave TraceOptions unset so existing tracing remains the sole span owner.
 	}
 
-	_ = kratosgrpc.NewServer(
-		kratosgrpc.Options(grpcotel.ServerOption(otelOptions)),
+	_ = forgegrpc.NewServer(
+		forgegrpc.Options(grpcotel.ServerOption(otelOptions)),
 	)
-	conn, err := kratosgrpc.NewClient(
+	conn, err := forgegrpc.NewClient(
 		context.Background(),
-		kratosgrpc.WithEndpoint("dns:///example.invalid:443"),
-		kratosgrpc.WithOptions(grpcotel.DialOption(otelOptions)),
+		forgegrpc.WithEndpoint("dns:///example.invalid:443"),
+		forgegrpc.WithOptions(grpcotel.DialOption(otelOptions)),
 	)
 	if err != nil {
 		return
@@ -270,8 +270,8 @@ func TestGRPCA66ZeroTraceOptionsDoesNotDuplicateClientSpan(t *testing.T) {
 		t,
 		nil,
 		metricnoop.NewMeterProvider(),
-		kratosgrpc.WithMiddleware(kratostracing.Client(
-			kratostracing.WithTracerProvider(tracerProvider),
+		forgegrpc.WithMiddleware(forgetracing.Client(
+			forgetracing.WithTracerProvider(tracerProvider),
 		)),
 	)
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
@@ -317,7 +317,7 @@ func newA66FixtureWithProvider(
 	t *testing.T,
 	reader *sdkmetric.ManualReader,
 	provider otelmetric.MeterProvider,
-	extraClientOptions ...kratosgrpc.ClientOption,
+	extraClientOptions ...forgegrpc.ClientOption,
 ) *a66Fixture {
 	// Each fixture owns its server, client, and optional metric reader.
 	t.Helper()
@@ -330,12 +330,12 @@ func newA66FixtureWithProvider(
 	}
 	service := newA66GreeterServer()
 	streamService := newA66StreamService()
-	server := kratosgrpc.NewServer(
-		kratosgrpc.Listener(listener),
-		kratosgrpc.Timeout(10*time.Second),
-		kratosgrpc.CustomHealth(),
-		kratosgrpc.DisableReflection(),
-		kratosgrpc.Options(
+	server := forgegrpc.NewServer(
+		forgegrpc.Listener(listener),
+		forgegrpc.Timeout(10*time.Second),
+		forgegrpc.CustomHealth(),
+		forgegrpc.DisableReflection(),
+		forgegrpc.Options(
 			grpcotel.ServerOption(otelOptions),
 			grpc.UnknownServiceHandler(func(any, grpc.ServerStream) error {
 				return status.Error(codes.Unimplemented, "unknown method")
@@ -365,20 +365,20 @@ func newA66FixtureWithProvider(
 		}
 	})
 
-	clientOptions := make([]kratosgrpc.ClientOption, 0, 4+len(extraClientOptions))
+	clientOptions := make([]forgegrpc.ClientOption, 0, 4+len(extraClientOptions))
 	clientOptions = append(clientOptions,
-		kratosgrpc.WithEndpoint(listener.Addr().String()),
-		kratosgrpc.WithTimeout(10*time.Second),
-		kratosgrpc.WithHealthCheck(false),
-		kratosgrpc.WithOptions(
+		forgegrpc.WithEndpoint(listener.Addr().String()),
+		forgegrpc.WithTimeout(10*time.Second),
+		forgegrpc.WithHealthCheck(false),
+		forgegrpc.WithOptions(
 			grpcotel.DialOption(otelOptions),
 			grpc.WithDefaultServiceConfig(a66RetryServiceConfig),
 		),
 	)
 	clientOptions = append(clientOptions, extraClientOptions...)
-	conn, err := kratosgrpc.NewClient(t.Context(), clientOptions...)
+	conn, err := forgegrpc.NewClient(t.Context(), clientOptions...)
 	if err != nil {
-		t.Fatalf("kratosgrpc.NewClient() failed: %v", err)
+		t.Fatalf("forgegrpc.NewClient() failed: %v", err)
 	}
 	t.Cleanup(func() {
 		if err := conn.Close(); err != nil {

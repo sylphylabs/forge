@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	kratoserror "github.com/sylphylabs/forge/errors"
+	forgeerror "github.com/sylphylabs/forge/errors"
 )
 
 type (
@@ -39,19 +39,19 @@ func TestBindQuery(t *testing.T) {
 		{
 			name: "test",
 			args: args{
-				vars:   map[string][]string{"name": {"kratos"}, "url": {"https://go-kratos.dev/"}},
+				vars:   map[string][]string{"name": {"forge"}, "url": {"https://go-kratos.dev/"}},
 				target: &testBind{},
 			},
 			err:  nil,
-			want: &testBind{"kratos", "https://go-kratos.dev/"},
+			want: &testBind{"forge", "https://go-kratos.dev/"},
 		},
 		{
 			name: "test1",
 			args: args{
-				vars:   map[string][]string{"age": {"kratos"}, "url": {"https://go-kratos.dev/"}},
+				vars:   map[string][]string{"age": {"forge"}, "url": {"https://go-kratos.dev/"}},
 				target: &testBind2{},
 			},
-			err: kratoserror.BadRequest("CODEC", "Field Namespace:age ERROR:Invalid Integer Value 'kratos' Type 'int' Namespace 'age'"),
+			err: forgeerror.BadRequest("CODEC", "Field Namespace:age ERROR:Invalid Integer Value 'forge' Type 'int' Namespace 'age'"),
 		},
 		{
 			name: "test2",
@@ -66,7 +66,7 @@ func TestBindQuery(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := bindQuery(tt.args.vars, tt.args.target)
-			if !kratoserror.Is(err, tt.err) {
+			if !forgeerror.Is(err, tt.err) {
 				t.Fatalf("bindQuery() error = %v, err %v", err, tt.err)
 			}
 			if err == nil && !reflect.DeepEqual(tt.args.target, tt.want) {
@@ -89,7 +89,7 @@ func TestDefaultRequestQueryEmpty(t *testing.T) {
 
 func BenchmarkBindQuery(b *testing.B) {
 	values := url.Values{
-		"name": {"kratos"},
+		"name": {"forge"},
 		"url":  {"https://go-kratos.dev/"},
 	}
 	b.ReportAllocs()
@@ -140,12 +140,12 @@ func TestBindForm(t *testing.T) {
 				req: &http.Request{
 					Method: http.MethodPost,
 					Header: http.Header{"Content-Type": {"application/x-www-form-urlencoded; param=value"}},
-					Body:   io.NopCloser(strings.NewReader("name=kratos&url=https://go-kratos.dev/")),
+					Body:   io.NopCloser(strings.NewReader("name=forge&url=https://go-kratos.dev/")),
 				},
 				target: &testBind{},
 			},
 			err:  nil,
-			want: &testBind{"kratos", "https://go-kratos.dev/"},
+			want: &testBind{"forge", "https://go-kratos.dev/"},
 		},
 		{
 			name: "error BadRequest",
@@ -157,7 +157,7 @@ func TestBindForm(t *testing.T) {
 				},
 				target: &testBind2{},
 			},
-			err:  kratoserror.BadRequest("CODEC", "Field Namespace:age ERROR:Invalid Integer Value 'a' Type 'int' Namespace 'age'"),
+			err:  forgeerror.BadRequest("CODEC", "Field Namespace:age ERROR:Invalid Integer Value 'a' Type 'int' Namespace 'age'"),
 			want: nil,
 		},
 	}

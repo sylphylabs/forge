@@ -8,18 +8,18 @@ set -o nounset
 set -o pipefail
 
 GO111MODULE=on
-KRATOS_HOME=$(
+FORGE_HOME=$(
 	cd "$(dirname "${BASH_SOURCE[0]}")" &&
 		cd .. &&
 		pwd
 )
 
-source "${KRATOS_HOME}/hack/util.sh"
+source "${FORGE_HOME}/hack/util.sh"
 
-LINTER=${KRATOS_HOME}/bin/golangci-lint
-LINTER_CONFIG=${KRATOS_HOME}/.golangci.yml
-FAILURE_FILE=${KRATOS_HOME}/hack/.lintcheck_failures
-IGNORED_FILE=${KRATOS_HOME}/hack/.test_ignored_files
+LINTER=${FORGE_HOME}/bin/golangci-lint
+LINTER_CONFIG=${FORGE_HOME}/.golangci.yml
+FAILURE_FILE=${FORGE_HOME}/hack/.lintcheck_failures
+IGNORED_FILE=${FORGE_HOME}/hack/.test_ignored_files
 
 all_modules=$(util::find_modules)
 failing_modules=()

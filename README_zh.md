@@ -82,7 +82,7 @@ func main() {
 
 ## 上游基线
 
-Forge 以 Kratos v3 为起点。现有 Kratos 用户应将 module path 变化及后续 Forge 版本视为显式迁移，而不是 Kratos 的原地升级。
+Forge 以 Kratos v3 为起点。现有 Forge 用户应将 module path 变化及后续 Forge 版本视为显式迁移，而不是 Forge 的原地升级。
 
 ## 扩展阅读
 
@@ -110,9 +110,9 @@ make lint
 
 ## 致谢
 
-Forge 保留了完整的 Kratos Git 历史和原始 MIT 版权声明。上游 Kratos 项目及其贡献者构建了本项目的基础。
+Forge 保留了完整的 Forge Git 历史和原始 MIT 版权声明。上游 Kratos 项目及其贡献者构建了本项目的基础。
 
-以下项目对原始 Kratos 设计有重要影响：
+以下项目对原始 Forge 设计有重要影响：
 
 - [go-kit/kit](https://github.com/go-kit/kit)
 - [go-micro](https://github.com/asim/go-micro)

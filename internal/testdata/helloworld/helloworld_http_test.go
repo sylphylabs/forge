@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/sylphylabs/forge/middleware"
-	kratoshttp "github.com/sylphylabs/forge/transport/http"
+	forgehttp "github.com/sylphylabs/forge/transport/http"
 )
 
 type middlewareContextKey struct{}
@@ -37,7 +37,7 @@ func TestGeneratedUnaryMiddlewareIsPrecomposed(t *testing.T) {
 		}
 	}
 
-	srv := kratoshttp.NewServer(kratoshttp.Timeout(0))
+	srv := forgehttp.NewServer(forgehttp.Timeout(0))
 	service, err := WrapGreeterHTTPServer(middlewareGreeter{t: t}, GreeterMiddleware{
 		Methods: GreeterMethodMiddleware{SayHello: []middleware.UnaryMiddleware{m}},
 	})

@@ -23,41 +23,41 @@ func TestBuildPath(t *testing.T) {
 		{
 			name:         "path",
 			pathTemplate: "/helloworld/{name}",
-			request:      &binding.HelloRequest{Name: "kratos"},
-			want:         "/helloworld/kratos",
+			request:      &binding.HelloRequest{Name: "forge"},
+			want:         "/helloworld/forge",
 		},
 		{
 			name:         "query",
 			pathTemplate: "/helloworld/{name}",
-			request:      &binding.HelloRequest{Name: "kratos", Sub: &binding.Sub{Name: "go"}},
+			request:      &binding.HelloRequest{Name: "forge", Sub: &binding.Sub{Name: "go"}},
 			opts:         []BuildPathOption{WithQueryParams()},
-			want:         "/helloworld/kratos?sub.naming=go",
+			want:         "/helloworld/forge?sub.naming=go",
 		},
 		{
 			name:         "resource name",
 			pathTemplate: "/v1/{name=publishers/*/books/*}",
-			request:      &binding.HelloRequest{Name: "publishers/go/books/kratos"},
+			request:      &binding.HelloRequest{Name: "publishers/go/books/forge"},
 			opts:         []BuildPathOption{WithQueryParams()},
-			want:         "/v1/publishers/go/books/kratos",
+			want:         "/v1/publishers/go/books/forge",
 		},
 		{
 			name:         "omit body field query params",
 			pathTemplate: "/helloworld/{name}",
-			request:      &binding.HelloRequest{Name: "kratos", Sub: &binding.Sub{Name: "go"}},
+			request:      &binding.HelloRequest{Name: "forge", Sub: &binding.Sub{Name: "go"}},
 			opts:         []BuildPathOption{WithQueryParams(), WithOmitFields("sub")},
-			want:         "/helloworld/kratos",
+			want:         "/helloworld/forge",
 		},
 		{
 			name:         "escape single segment",
 			pathTemplate: "/helloworld/{name}",
-			request:      &binding.HelloRequest{Name: "kratos/admin?enabled=true#fragment"},
-			want:         "/helloworld/kratos%2Fadmin%3Fenabled%3Dtrue%23fragment",
+			request:      &binding.HelloRequest{Name: "forge/admin?enabled=true#fragment"},
+			want:         "/helloworld/forge%2Fadmin%3Fenabled%3Dtrue%23fragment",
 		},
 		{
 			name:         "preserve multi segment wildcard",
 			pathTemplate: "/v1/{name=**}",
-			request:      &binding.HelloRequest{Name: "publishers/go lang/books/kratos"},
-			want:         "/v1/publishers/go%20lang/books/kratos",
+			request:      &binding.HelloRequest{Name: "publishers/go lang/books/forge"},
+			want:         "/v1/publishers/go%20lang/books/forge",
 		},
 		{
 			name:         "reject mismatched resource structure safely",
@@ -69,11 +69,11 @@ func TestBuildPath(t *testing.T) {
 			name:         "proto text field name",
 			pathTemplate: "/v1/{opt_string}",
 			request: func() *binding.HelloRequest {
-				value := "open kratos"
+				value := "open forge"
 				return &binding.HelloRequest{OptString: &value}
 			}(),
 			opts: []BuildPathOption{WithQueryParams()},
-			want: "/v1/open%20kratos",
+			want: "/v1/open%20forge",
 		},
 		{
 			name:         "nested proto text field name",
@@ -129,13 +129,13 @@ func TestCompiledPath(t *testing.T) {
 		{
 			name:         "path",
 			pathTemplate: "/helloworld/{name}",
-			request:      &binding.HelloRequest{Name: "open kratos"},
+			request:      &binding.HelloRequest{Name: "open forge"},
 		},
 		{
 			name:         "nested path and query",
 			pathTemplate: "/helloworld/{name}/sub/{sub.name}",
 			request: &binding.HelloRequest{
-				Name:       "open kratos",
+				Name:       "open forge",
 				Sub:        &binding.Sub{Name: "nested"},
 				UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"name"}},
 			},
@@ -144,7 +144,7 @@ func TestCompiledPath(t *testing.T) {
 		{
 			name:         "omit query field",
 			pathTemplate: "/helloworld/{name}",
-			request:      &binding.HelloRequest{Name: "kratos", Sub: &binding.Sub{Name: "go"}},
+			request:      &binding.HelloRequest{Name: "forge", Sub: &binding.Sub{Name: "go"}},
 			opts:         []BuildPathOption{WithQueryParams(), WithOmitFields("sub")},
 		},
 	}
@@ -177,7 +177,7 @@ func TestCompiledPathRejectsInvalidUse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := compiled.Build(wrapperspb.String("kratos")); err == nil {
+	if _, err := compiled.Build(wrapperspb.String("forge")); err == nil {
 		t.Fatal("Build() accepted a different message type")
 	}
 	if _, err := (*CompiledPath)(nil).Build(new(binding.HelloRequest)); err == nil {
@@ -191,8 +191,8 @@ func TestMustCompilePathConcurrent(t *testing.T) {
 		new(binding.HelloRequest),
 		WithQueryParams(),
 	)
-	request := &binding.HelloRequest{Name: "kratos", Sub: &binding.Sub{Name: "go"}}
-	const want = "/helloworld/kratos/sub/go"
+	request := &binding.HelloRequest{Name: "forge", Sub: &binding.Sub{Name: "go"}}
+	const want = "/helloworld/forge/sub/go"
 
 	var wg sync.WaitGroup
 	for range 32 {
@@ -270,7 +270,7 @@ func TestBuildPathRejectsAbsoluteTemplates(t *testing.T) {
 		},
 		{
 			pathTemplate: "http://helloworld.Greeter/helloworld/sub/[{sub.naming}]",
-			request:      &binding.HelloRequest{Sub: &binding.Sub{Name: "kratos"}},
+			request:      &binding.HelloRequest{Sub: &binding.Sub{Name: "forge"}},
 		},
 	}
 
@@ -293,7 +293,7 @@ func BenchmarkBuildPath(b *testing.B) {
 			pathTemplate: "/helloworld/sub",
 			msg: &binding.HelloRequest{
 				Name: "test",
-				Sub:  &binding.Sub{Name: "kratos"},
+				Sub:  &binding.Sub{Name: "forge"},
 			},
 		},
 		{
@@ -301,7 +301,7 @@ func BenchmarkBuildPath(b *testing.B) {
 			pathTemplate: "/helloworld/sub",
 			msg: &binding.HelloRequest{
 				Name: "test",
-				Sub:  &binding.Sub{Name: "kratos"},
+				Sub:  &binding.Sub{Name: "forge"},
 				UpdateMask: &fieldmaskpb.FieldMask{
 					Paths: []string{"name", "sub.naming"},
 				},
@@ -313,7 +313,7 @@ func BenchmarkBuildPath(b *testing.B) {
 			pathTemplate: "/helloworld/{name}/sub/{sub.name}",
 			msg: &binding.HelloRequest{
 				Name: "test",
-				Sub:  &binding.Sub{Name: "kratos"},
+				Sub:  &binding.Sub{Name: "forge"},
 			},
 		},
 		{
@@ -321,7 +321,7 @@ func BenchmarkBuildPath(b *testing.B) {
 			pathTemplate: "/helloworld/{name}/sub/{sub.name}",
 			msg: &binding.HelloRequest{
 				Name: "test",
-				Sub:  &binding.Sub{Name: "kratos"},
+				Sub:  &binding.Sub{Name: "forge"},
 				UpdateMask: &fieldmaskpb.FieldMask{
 					Paths: []string{"name", "sub.naming"},
 				},
@@ -355,14 +355,14 @@ func BenchmarkCompiledPath(b *testing.B) {
 		{
 			name:         "NoParams",
 			pathTemplate: "/helloworld/sub",
-			msg:          &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "kratos"}},
+			msg:          &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "forge"}},
 		},
 		{
 			name:         "NoParamsWithQuery",
 			pathTemplate: "/helloworld/sub",
 			msg: &binding.HelloRequest{
 				Name:       "test",
-				Sub:        &binding.Sub{Name: "kratos"},
+				Sub:        &binding.Sub{Name: "forge"},
 				UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"name", "sub.name"}},
 			},
 			opts: []BuildPathOption{WithQueryParams()},
@@ -370,14 +370,14 @@ func BenchmarkCompiledPath(b *testing.B) {
 		{
 			name:         "WithParams",
 			pathTemplate: "/helloworld/{name}/sub/{sub.name}",
-			msg:          &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "kratos"}},
+			msg:          &binding.HelloRequest{Name: "test", Sub: &binding.Sub{Name: "forge"}},
 		},
 		{
 			name:         "WithParamsAndQuery",
 			pathTemplate: "/helloworld/{name}/sub/{sub.name}",
 			msg: &binding.HelloRequest{
 				Name:       "test",
-				Sub:        &binding.Sub{Name: "kratos"},
+				Sub:        &binding.Sub{Name: "forge"},
 				UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"name", "sub.name"}},
 			},
 			opts: []BuildPathOption{WithQueryParams()},

@@ -1,4 +1,4 @@
-# Forge 与 Kratos 兼容性说明
+# Forge 与 Forge 兼容性说明
 
 状态：预发布
 
@@ -8,9 +8,9 @@
 歧义，以英文规范版本为准。
 
 Forge 是 `go-kratos/kratos` 的独立 fork，不是 Kratos v3 的直接替代品，
-也不承诺与未来 Kratos 版本保持源码、行为或发布兼容。
+也不承诺与未来 Forge 版本保持源码、行为或发布兼容。
 
-Forge 也不会仅为了兼容 Kratos 而保留 API。如果已有更清晰或更高效的替代
+Forge 也不会仅为了兼容 Forge 而保留 API。如果已有更清晰或更高效的替代
 方案，并且变更有充分技术依据，就可以移除旧 API。这类移除属于有意的破坏性
 更新，必须同时提供可执行的迁移说明。
 
@@ -34,10 +34,10 @@ Forge 也不会仅为了兼容 Kratos 而保留 API。如果已有更清晰或�
 | 根 module | `github.com/go-kratos/kratos/v3` | `github.com/sylphylabs/forge` | 源码不兼容 |
 | 版本线 | v3 | v0 预发布 | 发布不兼容 |
 | 最低 Go 版本 | Go 1.25 | Go 1.27 | 构建要求变化 |
-| Module 数量 | 28，包含 `cmd/kratos` | 27 | 发布和工具变化 |
+| Module 数量 | 28，包含 `cmd/forge` | 27 | 发布和工具变化 |
 | 异步消息 Transport | 没有协议中立的异步契约 | 根 module 提供 `transport/message`；broker SDK 适配器仍是可选嵌套 module | 新增 API；不承诺 broker wire 兼容 |
-| 项目 CLI | `cmd/kratos` | 已移除 | 工作流不兼容 |
-| Protobuf generator | Kratos module 路径 | Forge module 路径 | 安装路径变化 |
+| 项目 CLI | `cmd/forge` | 已移除 | 工作流不兼容 |
+| Protobuf generator | Forge module 路径 | Forge module 路径 | 安装路径变化 |
 | Contrib provider SDK | 旧 provider major 与已归档直接依赖 | 当前稳定 major 与受维护的标准替代 | 源码与依赖图变化 |
 | UUID 生成 | `google/uuid` 与 `gofrs/uuid` | 标准库 `uuid` | 源码与生成 ID 行为变化 |
 | HTTP protobuf 生成 | Open API 字段访问 | Editions 2023 Open/Opaque API accessor | 新增生成能力 |
@@ -84,7 +84,7 @@ Forge 要求 Go 1.27。在 final 工具链发布前，开发与 CI 使用 Go 1.2
 
 ## 项目 CLI 与代码生成
 
-Forge 不提供通用 `kratos` CLI。被移除的 module 曾包含项目脚手架、源码
+Forge 不提供通用 `forge` CLI。被移除的 module 曾包含项目脚手架、源码
 生成封装、应用运行器、升级器和 changelog 辅助功能。
 
 上游脚手架会复制模板，并对复制后的所有文件执行不受约束的字节替换。该操作
@@ -93,11 +93,11 @@ panic。Forge 不保留或修补这种隐式改写源码的工作流。
 
 | 已移除命令 | 替代方案 |
 | --- | --- |
-| `kratos new` | 创建普通 Go module，或使用可审查的仓库模板 |
-| `kratos run` | `go run ./cmd/server -conf ./configs` |
-| `kratos proto ...` | 项目自身的 Buf 或 `protoc` 配置 |
-| `kratos upgrade` | `go get`、`go install` 与 `go mod tidy` |
-| `kratos changelog` | Git 历史与 GitHub release notes |
+| `forge new` | 创建普通 Go module，或使用可审查的仓库模板 |
+| `forge run` | `go run ./cmd/server -conf ./configs` |
+| `forge proto ...` | 项目自身的 Buf 或 `protoc` 配置 |
+| `forge upgrade` | `go get`、`go install` 与 `go mod tidy` |
+| `forge changelog` | Git 历史与 GitHub release notes |
 
 三个原子化 Forge Protobuf 命令共享一个确定性的源码 module：
 
@@ -222,7 +222,7 @@ pattern，匹配变量仍可通过 `transport/http.Context.Vars()` 和
 - 冲突 pattern 在注册时 panic，不再静默选择第一个路由；
 - 支持 AIP 变量、末尾 `**`、末尾 custom verb 和单路径段旧式正则；
 - 拒绝跨多个路径段的任意 Gorilla 正则，应改写为 AIP 模板；
-- 已移除继承自 Kratos 且不产生效果的 `StrictSlash` 选项；从 server 构造中删除
+- 已移除继承自 Forge 且不产生效果的 `StrictSlash` 选项；从 server 构造中删除
   该选项，路径清理和尾部斜杠重定向遵循标准库；
 - `HandlePrefix` 使用路径段前缀语义，而不是任意字符串前缀；
 - 未匹配请求不会落入进程级 `http.DefaultServeMux`；确有需要时应将其显式传给
@@ -274,7 +274,7 @@ File watcher 会直接跳过隐藏文件，不再把它们作为 reload error �
 
 OpenTelemetry tracing 使用 semantic conventions v1.41。HTTP 与 gRPC 属性分开
 发出，peer port 使用整数，gRPC method 会被严格校验，同时保留非法原始 method
-便于诊断。原自定义 `rpc.status_code` 字段改为 `kratos.error.code`，避免与标准
+便于诊断。原自定义 `rpc.status_code` 字段改为 `forge.error.code`，避免与标准
 RPC semantic attribute 冲突。
 
 Metrics 改为按 transport 区分且首版只提供 duration histogram。HTTP 使用 v1.41
@@ -314,7 +314,7 @@ Kratos v2 应用还需要先处理 v2 到 v3 的 API 变化，因为 Forge 从 v
 任何修改公开 API、默认行为、wire format、module、工具或最低 Go 版本的变更，
 都必须在同一变更中更新英文规范文档和本文。
 
-与 Kratos 兼容本身不是保留较差公开 API 的理由。破坏性替代只有在迁移文档已
+与 Forge 兼容本身不是保留较差公开 API 的理由。破坏性替代只有在迁移文档已
 说明技术依据、替代 API、新旧代码示例、重新生成要求与验证步骤后才能合并。
 
 - 本文只记录当前事实，不记录愿望；

@@ -14,7 +14,7 @@ compatibility fact only after its acceptance gates pass and
 
 Forge is positioned as a standard-library-first, protocol-correct,
 embeddable, and verifiable protobuf service runtime. Lower request cost matters,
-but "faster Kratos" is not a sufficient product boundary. A router can be much
+but "faster Forge" is not a sufficient product boundary. A router can be much
 faster in isolation while producing only a small end-to-end improvement once
 serialization, middleware, telemetry, network I/O, and business work dominate a
 request. The larger opportunity is to make ownership explicit, move repeatable
@@ -459,7 +459,7 @@ examples that this document intentionally leaves open.
 ## Migration Rules
 
 - Current shipped behavior remains documented by `COMPATIBILITY.md`, but the
-  new core design is not required to preserve Kratos source compatibility.
+  new core design is not required to preserve Forge source compatibility.
 - Every source or behavior break adds an executable or mechanically precise
   migration step under `docs/migration/`.
 - Legacy adapters belong in migration-only packages or tools. New core code
@@ -506,7 +506,7 @@ must separately cover:
 Report throughput and latency percentiles only with the load model, connection
 reuse, concurrency, payload, duration, warmup, and resource limits stated.
 Compare against the previous Forge commit on identical hardware. Upstream
-Kratos, plain `net/http`, Echo, Connect, or other frameworks may be informative
+Forge, plain `net/http`, Echo, Connect, or other frameworks may be informative
 comparisons, but they are not acceptance baselines unless behavior and enabled
 features are equivalent.
 

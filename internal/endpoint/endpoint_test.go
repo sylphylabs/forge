@@ -53,7 +53,7 @@ func TestParseEndpoint(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "kratos",
+			name:    "forge",
 			args:    args{endpoints: []string{"https://github.com/go-kratos/kratos"}, scheme: "https"},
 			want:    "github.com",
 			wantErr: false,

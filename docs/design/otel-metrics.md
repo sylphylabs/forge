@@ -107,16 +107,16 @@ serverFilter, err := metrics.NewHTTPServerFilter(provider)
 if err != nil {
 	return err
 }
-server := kratoshttp.NewServer(kratoshttp.Filter(serverFilter))
+server := forgehttp.NewServer(forgehttp.Filter(serverFilter))
 
 clientMetrics, err := metrics.NewHTTPClientWrapper(provider)
 if err != nil {
 	return err
 }
-client, err := kratoshttp.NewClient(
+client, err := forgehttp.NewClient(
 	ctx,
-	kratoshttp.WithEndpoint(endpoint),
-	kratoshttp.WithRoundTripperWrapper(clientMetrics),
+	forgehttp.WithEndpoint(endpoint),
+	forgehttp.WithRoundTripperWrapper(clientMetrics),
 )
 ```
 
@@ -223,7 +223,7 @@ The server records 4xx as status only. Server 5xx records both
 The client records `error.type` as the decimal status code for both 4xx and 5xx.
 
 Transport errors use the bounded value returned by `semconv.ErrorType(err)`.
-The error message, wrapped error string, and Kratos `reason` are never metric
+The error message, wrapped error string, and Forge `reason` are never metric
 attributes. A panic uses `_OTHER`. Successful requests have no `error.type`.
 
 ## gRPC A66 Integration
@@ -244,12 +244,12 @@ otelOptions := grpcotel.Options{
 	},
 }
 
-server := kratosgrpc.NewServer(
-	kratosgrpc.Options(grpcotel.ServerOption(otelOptions)),
+server := forgegrpc.NewServer(
+	forgegrpc.Options(grpcotel.ServerOption(otelOptions)),
 )
-conn, err := kratosgrpc.NewClient(
+conn, err := forgegrpc.NewClient(
 	ctx,
-	kratosgrpc.WithOptions(grpcotel.DialOption(otelOptions)),
+	forgegrpc.WithOptions(grpcotel.DialOption(otelOptions)),
 )
 ```
 

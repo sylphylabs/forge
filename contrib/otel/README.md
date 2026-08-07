@@ -1,6 +1,6 @@
 # OpenTelemetry contrib
 
-This module keeps OpenTelemetry integrations out of the core Kratos module.
+This module keeps OpenTelemetry integrations out of the core Forge module.
 
 ## Packages
 
@@ -20,16 +20,16 @@ serverMetrics, err := metrics.NewHTTPServerFilter(provider)
 if err != nil {
 	return err
 }
-server := kratoshttp.NewServer(kratoshttp.Filter(serverMetrics))
+server := forgehttp.NewServer(forgehttp.Filter(serverMetrics))
 
 clientMetrics, err := metrics.NewHTTPClientWrapper(provider)
 if err != nil {
 	return err
 }
-client, err := kratoshttp.NewClient(
+client, err := forgehttp.NewClient(
 	ctx,
-	kratoshttp.WithEndpoint(endpoint),
-	kratoshttp.WithRoundTripperWrapper(clientMetrics),
+	forgehttp.WithEndpoint(endpoint),
+	forgehttp.WithRoundTripperWrapper(clientMetrics),
 )
 ```
 
@@ -56,12 +56,12 @@ otelOptions := grpcotel.Options{
 	},
 }
 
-server := kratosgrpc.NewServer(
-	kratosgrpc.Options(grpcotel.ServerOption(otelOptions)),
+server := forgegrpc.NewServer(
+	forgegrpc.Options(grpcotel.ServerOption(otelOptions)),
 )
-conn, err := kratosgrpc.NewClient(
+conn, err := forgegrpc.NewClient(
 	ctx,
-	kratosgrpc.WithOptions(grpcotel.DialOption(otelOptions)),
+	forgegrpc.WithOptions(grpcotel.DialOption(otelOptions)),
 )
 ```
 
@@ -117,7 +117,7 @@ import (
 logger := log.NewLogger(otel.NewHandler("helloworld"))
 ```
 
-Use the core Kratos log builder when the logger also needs fixed attrs or
+Use the core Forge log builder when the logger also needs fixed attrs or
 filtering:
 
 ```go

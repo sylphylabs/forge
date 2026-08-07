@@ -12,7 +12,7 @@ func TestEscapeSegment(t *testing.T) {
 	}{
 		{name: "unreserved", value: "publishers_1-books.go~", want: "publishers_1-books.go~"},
 		{name: "reserved", value: "go lang/books?", want: "go%20lang%2Fbooks%3F"},
-		{name: "utf8", value: "Kratos\xe8\xb7\xaf\xe5\xbe\x84", want: "Kratos%E8%B7%AF%E5%BE%84"},
+		{name: "utf8", value: "Forge\xe8\xb7\xaf\xe5\xbe\x84", want: "Forge%E8%B7%AF%E5%BE%84"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if got := escapeSegment(test.value); got != test.want {

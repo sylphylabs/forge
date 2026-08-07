@@ -25,7 +25,7 @@ type Tracer struct {
 func NewTracer(kind trace.SpanKind, opts ...Option) *Tracer {
 	op := options{
 		propagator: propagation.NewCompositeTextMapPropagator(Metadata{}, propagation.Baggage{}, propagation.TraceContext{}),
-		tracerName: "kratos",
+		tracerName: "forge",
 	}
 	for _, o := range opts {
 		o(&op)
@@ -64,7 +64,7 @@ func (t *Tracer) End(_ context.Context, span trace.Span, m any, err error) {
 	if err != nil {
 		span.RecordError(err)
 		if e := errors.FromError(err); e != nil {
-			span.SetAttributes(attribute.Key("kratos.error.code").Int64(int64(e.Code)))
+			span.SetAttributes(attribute.Key("forge.error.code").Int64(int64(e.Code)))
 		}
 		span.SetStatus(codes.Error, err.Error())
 	} else {

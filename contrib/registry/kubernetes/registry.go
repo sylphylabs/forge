@@ -26,12 +26,12 @@ import (
 )
 
 // Defines the key name of specific fields
-// Kratos needs to cooperate with the following fields to run properly on Kubernetes:
-// kratos-service-id: define the ID of the service
-// kratos-service-app: define the name of the service
-// kratos-service-version: define the version of the service
-// kratos-service-metadata: define the metadata of the service
-// kratos-service-protocols: define the protocols of the service
+// Forge needs to cooperate with the following fields to run properly on Kubernetes:
+// forge-service-id: define the ID of the service
+// forge-service-app: define the name of the service
+// forge-service-version: define the version of the service
+// forge-service-metadata: define the metadata of the service
+// forge-service-protocols: define the protocols of the service
 //
 // Example Deployment:
 /*
@@ -50,13 +50,13 @@ template:
   metadata:
     labels:
       app: nginx
-      kratos-service-id: "56991810-c77f-4a95-8190-393efa9c1a61"
-      kratos-service-app: "nginx"
-      kratos-service-version: "v3.5.0"
+      forge-service-id: "56991810-c77f-4a95-8190-393efa9c1a61"
+      forge-service-app: "nginx"
+      forge-service-version: "v3.5.0"
     annotations:
-      kratos-service-protocols: |
+      forge-service-protocols: |
         {"80": "http"}
-      kratos-service-metadata: |
+      forge-service-metadata: |
         {"region": "sh", "zone": "sh001", "cluster": "pd"}
   spec:
     containers:
@@ -67,17 +67,17 @@ template:
 */
 const (
 	// LabelsKeyServiceID is used to define the ID of the service
-	LabelsKeyServiceID = "kratos-service-id"
+	LabelsKeyServiceID = "forge-service-id"
 	// LabelsKeyServiceName is used to define the name of the service
-	LabelsKeyServiceName = "kratos-service-app"
+	LabelsKeyServiceName = "forge-service-app"
 	// LabelsKeyServiceVersion is used to define the version of the service
-	LabelsKeyServiceVersion = "kratos-service-version"
+	LabelsKeyServiceVersion = "forge-service-version"
 	// AnnotationsKeyMetadata is used to define the metadata of the service
-	AnnotationsKeyMetadata = "kratos-service-metadata"
+	AnnotationsKeyMetadata = "forge-service-metadata"
 	// AnnotationsKeyProtocolMap is used to define the protocols of the service
-	// Through the value of this field, Kratos can obtain the application layer protocol corresponding to the port
+	// Through the value of this field, Forge can obtain the application layer protocol corresponding to the port
 	// Example value: {"80": "http", "8081": "grpc"}
-	AnnotationsKeyProtocolMap = "kratos-service-protocols"
+	AnnotationsKeyProtocolMap = "forge-service-protocols"
 )
 
 // The Registry simply implements service discovery based on Kubernetes

@@ -74,8 +74,8 @@ func TestDefaultRequestVarsProto(t *testing.T) {
 	})
 
 	response := httptest.NewRecorder()
-	srv.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/hello/kratos", nil))
-	if response.Code != http.StatusOK || response.Body.String() != "kratos" {
+	srv.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/hello/forge", nil))
+	if response.Code != http.StatusOK || response.Body.String() != "forge" {
 		t.Fatalf("status = %d, body = %q", response.Code, response.Body.String())
 	}
 }
@@ -145,7 +145,7 @@ func TestDefaultRequestDecoderProtoJSONMessageFieldPointer(t *testing.T) {
 }
 
 func TestDefaultRequestDecoderProtoJSONRejectsScalarField(t *testing.T) {
-	r, _ := http.NewRequest(http.MethodPost, "", io.NopCloser(bytes.NewBufferString(`"kratos"`)))
+	r, _ := http.NewRequest(http.MethodPost, "", io.NopCloser(bytes.NewBufferString(`"forge"`)))
 	r.Header.Set("Content-Type", "application/protojson")
 
 	var name string
@@ -163,7 +163,7 @@ func TestDefaultResponseEncoderProtoJSONRejectsScalarField(t *testing.T) {
 	r, _ := http.NewRequest(http.MethodGet, "", nil)
 	r.Header.Set("Accept", "application/protojson")
 
-	err := DefaultResponseEncoder(w, r, "kratos")
+	err := DefaultResponseEncoder(w, r, "forge")
 	if err == nil {
 		t.Fatal("expected scalar protojson response to fail")
 	}
@@ -192,7 +192,7 @@ func TestDefaultResponseDecoderProtoJSONRejectsScalarField(t *testing.T) {
 	resp := &http.Response{
 		Header:     http.Header{"Content-Type": []string{"application/protojson"}},
 		StatusCode: http.StatusOK,
-		Body:       io.NopCloser(bytes.NewBufferString(`"kratos"`)),
+		Body:       io.NopCloser(bytes.NewBufferString(`"forge"`)),
 	}
 
 	var name string

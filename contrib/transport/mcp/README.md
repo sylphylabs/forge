@@ -1,6 +1,6 @@
 # MCP Transport
 
-This module implements the MCP server in Kratos based on mcp-go.
+This module implements the MCP server in Forge based on mcp-go.
 
 [![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/sylphylabs/forge/contrib/transport/mcp)
 
@@ -30,7 +30,7 @@ func Health(next http.Handler) http.Handler {
 }
 
 func main() {
-    srv := tm.NewServer("kratos-mcp", "v1.0.0", tm.Address(":8000"), tm.Middleware(Health))
+    srv := tm.NewServer("forge-mcp", "v1.0.0", tm.Address(":8000"), tm.Middleware(Health))
     tool := mcp.NewTool("hello_world",
         mcp.WithDescription("Say hello to someone"),
         mcp.WithString("name",
@@ -40,9 +40,9 @@ func main() {
     )
     // Add tool handler
     srv.AddTool(tool, helloHandler)
-    // creates a kratos application
+    // creates a forge application
     app := forge.New(
-        forge.Name("kratos-app"),
+        forge.Name("forge-app"),
         forge.Server(srv),
     )
     if err := app.Run(); err != nil {

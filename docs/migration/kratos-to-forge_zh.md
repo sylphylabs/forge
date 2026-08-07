@@ -1,8 +1,8 @@
 # 从 Kratos v3 迁移到 Forge
 
-Forge 是预发布的独立 fork，并不是 Kratos 的原地升级版本。请在独立分支中
+Forge 是预发布的独立 fork，并不是 Forge 的原地升级版本。请在独立分支中
 执行迁移，并在修改依赖前阅读 [`COMPATIBILITY.md`](../../COMPATIBILITY.md)。
-Forge 可能直接替换 Kratos API，而不是保留兼容 shim；每项已接受的移除都会
+Forge 可能直接替换 Forge API，而不是保留兼容 shim；每项已接受的移除都会
 在本文记录替代方案与验证步骤。
 
 ## 1. 建立迁移基线
@@ -81,7 +81,7 @@ API import path `github.com/sylphylabs/forge/api/errors/v1` 声明的 package �
 `errors`。runtime 内部将其 alias 为 `errorapi`，并在 `errors.Error` 中嵌入
 `errorapi.Status`，因此 `err.Code`、`err.Reason`、`err.Message` 与
 `err.Metadata` 等字段访问保持不变。待 Forge API module 发布后，还需更新
-`.proto` import 与 enum annotation；不应继续保留或 vendor 继承自 Kratos 的任一份
+`.proto` import 与 enum annotation；不应继续保留或 vendor 继承自 Forge 的任一份
 `errors/errors.proto`。
 
 schema 的具体改写如下：
@@ -171,18 +171,18 @@ go mod tidy
 已经不再导出。升级 runtime 前必须重新生成 client 与 server；只升级 runtime
 module 不会改写已有生成代码。
 
-## 4. 替换 Kratos CLI 工作流
+## 4. 替换 Forge CLI 工作流
 
-Forge 不提供通用的 `kratos` 可执行文件。
+Forge 不提供通用的 `forge` 可执行文件。
 
 | 原工作流 | Forge 工作流 |
 | --- | --- |
-| `kratos new` | 创建普通 Go module，或使用经过审查的仓库模板 |
-| `kratos run` | 使用 `go run` 启动服务 |
-| `kratos proto ...` | 使用项目自身的 Buf 或 `protoc` 流程 |
-| `kratos upgrade` | 使用 Go module 工具链 |
+| `forge new` | 创建普通 Go module，或使用经过审查的仓库模板 |
+| `forge run` | 使用 `go run` 启动服务 |
+| `forge proto ...` | 使用项目自身的 Buf 或 `protoc` 流程 |
+| `forge upgrade` | 使用 Go module 工具链 |
 
-传统 Kratos 项目布局通常可以直接运行：
+传统 Forge 项目布局通常可以直接运行：
 
 ```shell
 go run ./cmd/server -conf ./configs
@@ -210,7 +210,7 @@ Forge 使用标准库 `http.ServeMux` 的优先级规则，不再依赖 Gorilla 
 Forge 直接移除 server 侧 selector API，不保留运行时兼容路径。先完成以下
 机械重命名：
 
-| Kratos 名称 | Forge 名称 |
+| Forge 名称 | Forge 名称 |
 | --- | --- |
 | `middleware.Handler` | `middleware.UnaryHandler` |
 | `middleware.Middleware` | `middleware.UnaryMiddleware` |
@@ -347,16 +347,16 @@ serverMetrics, err := metrics.NewHTTPServerFilter(provider)
 if err != nil {
 	return err
 }
-server := kratoshttp.NewServer(kratoshttp.Filter(serverMetrics))
+server := forgehttp.NewServer(forgehttp.Filter(serverMetrics))
 
 clientMetrics, err := metrics.NewHTTPClientWrapper(provider)
 if err != nil {
 	return err
 }
-client, err := kratoshttp.NewClient(
+client, err := forgehttp.NewClient(
 	ctx,
-	kratoshttp.WithEndpoint(endpoint),
-	kratoshttp.WithRoundTripperWrapper(clientMetrics),
+	forgehttp.WithEndpoint(endpoint),
+	forgehttp.WithRoundTripperWrapper(clientMetrics),
 )
 ```
 
@@ -379,12 +379,12 @@ otelOptions := grpcotel.Options{
 	},
 }
 
-server := kratosgrpc.NewServer(
-	kratosgrpc.Options(grpcotel.ServerOption(otelOptions)),
+server := forgegrpc.NewServer(
+	forgegrpc.Options(grpcotel.ServerOption(otelOptions)),
 )
-conn, err := kratosgrpc.NewClient(
+conn, err := forgegrpc.NewClient(
 	ctx,
-	kratosgrpc.WithOptions(grpcotel.DialOption(otelOptions)),
+	forgegrpc.WithOptions(grpcotel.DialOption(otelOptions)),
 )
 ```
 
@@ -394,7 +394,7 @@ message size 指标，并可能在 grpc-go 升级后自动采用新的默认项�
 
 旧 API 对应关系如下：
 
-| Kratos API | Forge 替代方式 |
+| Forge API | Forge 替代方式 |
 | --- | --- |
 | `metrics.Server(...)` | HTTP 使用 `metrics.NewHTTPServerFilter(provider, ...)`；gRPC 使用 `grpcotel.ServerOption` |
 | `metrics.Client(...)` | HTTP 使用 `metrics.NewHTTPClientWrapper(provider, ...)`；gRPC 使用 `grpcotel.DialOption` |
@@ -441,7 +441,7 @@ exemplar 策略应配置在 SDK MeterProvider 上。
 
 HTTP 计时边界也发生变化。Server duration 覆盖完整 `ServeHTTP` 调用；Client
 duration 在收到 response header 或 transport 失败时结束，不再包含 response body
-读取和 Kratos decoder。Redirect 的每次 `RoundTrip` 独立计量。迁移 latency SLO
+读取和 Forge decoder。Redirect 的每次 `RoundTrip` 独立计量。迁移 latency SLO
 时不能把新旧 client 时序视为等价数据。
 
 完整的属性、状态、路由、基数与生命周期合同见
@@ -470,7 +470,7 @@ go vet ./...
 - [ ] 固定 Forge generator 版本。
 - [ ] 从源文件重新生成所有 Go 代码。
 - [ ] 确认生成的 HTTP 文件断言 `SupportPackageIsVersion5`。
-- [ ] 使用 Go 与 Buf 命令替代 `kratos` CLI。
+- [ ] 使用 Go 与 Buf 命令替代 `forge` CLI。
 - [ ] 检查路由优先级、冲突、prefix、斜杠、404 与 405。
 - [ ] 重命名 unary middleware 类型并重新生成 service middleware plan。
 - [ ] 用生成的 method 字段与 wrapper 替换 server selector。

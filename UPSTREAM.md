@@ -15,7 +15,7 @@ The complete upstream commit history is preserved. Upstream semantic-version tag
 
 ## Synchronization
 
-The `upstream` remote is fetch-only and configured not to fetch tags. Upstream changes are reviewed and selected individually; Forge does not promise continuous merge compatibility with Kratos.
+The `upstream` remote is fetch-only and configured not to fetch tags. Upstream changes are reviewed and selected individually; Forge does not promise continuous merge compatibility with Forge.
 
 Security fixes and correctness fixes receive priority. Compatibility layers, dependency additions, and changes that conflict with the Forge architecture are not merged automatically.
 

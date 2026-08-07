@@ -92,8 +92,8 @@ func TestMatch(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "/example/kratos",
-			ctx:  transport.NewClientContext(context.Background(), &Transport{operation: "/example/kratos"}),
+			name: "/example/forge",
+			ctx:  transport.NewClientContext(context.Background(), &Transport{operation: "/example/forge"}),
 			want: true,
 		},
 	}
@@ -110,7 +110,7 @@ func TestMatch(t *testing.T) {
 				return "reply", nil
 			}
 			next = Client(markApplied).Prefix("/hello/").Regex(`/test/[0-9]+`).
-				Path("/example/kratos").Build()(next)
+				Path("/example/forge").Build()(next)
 			reply, err := next(test.ctx, test.name)
 			if err != nil {
 				t.Fatal(err)
@@ -146,8 +146,8 @@ func TestMatchClient(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "/example/kratos",
-			ctx:  transport.NewClientContext(context.Background(), &Transport{operation: "/example/kratos"}),
+			name: "/example/forge",
+			ctx:  transport.NewClientContext(context.Background(), &Transport{operation: "/example/forge"}),
 			want: true,
 		},
 	}
@@ -164,7 +164,7 @@ func TestMatchClient(t *testing.T) {
 				return "reply", nil
 			}
 			next = Client(markApplied).Prefix("/hello/").Regex(`/test/[0-9]+`).
-				Path("/example/kratos").Build()(next)
+				Path("/example/forge").Build()(next)
 			reply, err := next(test.ctx, test.name)
 			if err != nil {
 				t.Fatal(err)
@@ -240,7 +240,7 @@ func TestHeaderFunc(t *testing.T) {
 			name: "/hi.Create/world",
 			ctx: transport.NewClientContext(context.Background(), &Transport{
 				operation: "/hi.Create/world",
-				headers:   &mockHeader{map[string][]string{"X-Test": {"test2"}, "go-kratos": {"kratos"}}},
+				headers:   &mockHeader{map[string][]string{"X-Test": {"test2"}, "go-kratos": {"forge"}}},
 			}),
 		},
 		{
@@ -272,7 +272,7 @@ func TestHeaderFunc(t *testing.T) {
 				if tr.RequestHeader().Get("X-Test") == "test" {
 					return true
 				}
-				if tr.RequestHeader().Get("go-kratos") == "kratos" {
+				if tr.RequestHeader().Get("go-kratos") == "forge" {
 					return true
 				}
 				return false

@@ -25,7 +25,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
 	"github.com/sylphylabs/forge/registry"
-	kratoshttp "github.com/sylphylabs/forge/transport/http"
+	forgehttp "github.com/sylphylabs/forge/transport/http"
 )
 
 var durationBounds = []float64{
@@ -269,12 +269,12 @@ func TestHTTPServerForgeRouteIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewHTTPServerFilter() failed: %v", err)
 			}
-			server := kratoshttp.NewServer(kratoshttp.Filter(filter))
+			server := forgehttp.NewServer(forgehttp.Filter(filter))
 			router := server.Route("/")
-			router.GET("/v1/{message.name=publishers/*/books/*}", func(ctx kratoshttp.Context) error {
+			router.GET("/v1/{message.name=publishers/*/books/*}", func(ctx forgehttp.Context) error {
 				return ctx.String(http.StatusOK, "ok")
 			})
-			router.GET("/items/{id:[0-9]+}", func(ctx kratoshttp.Context) error {
+			router.GET("/items/{id:[0-9]+}", func(ctx forgehttp.Context) error {
 				return ctx.String(http.StatusOK, "ok")
 			})
 
@@ -905,17 +905,17 @@ func TestHTTPClientDiscoveryDirectDoUsesConfiguredAuthority(t *testing.T) {
 
 	const physicalNode = "192.0.2.20:18080"
 	var receivedAuthority string
-	client, err := kratoshttp.NewClient(
+	client, err := forgehttp.NewClient(
 		t.Context(),
-		kratoshttp.WithEndpoint("discovery:///catalog.service"),
-		kratoshttp.WithDiscovery(staticDiscovery{instances: []*registry.ServiceInstance{{
+		forgehttp.WithEndpoint("discovery:///catalog.service"),
+		forgehttp.WithDiscovery(staticDiscovery{instances: []*registry.ServiceInstance{{
 			ID:        "node-1",
 			Name:      "catalog.service",
 			Version:   "v1",
 			Endpoints: []string{"http://" + physicalNode},
 		}}}),
-		kratoshttp.WithBlock(),
-		kratoshttp.WithTransport(roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		forgehttp.WithBlock(),
+		forgehttp.WithTransport(roundTripperFunc(func(request *http.Request) (*http.Response, error) {
 			receivedAuthority = request.URL.Host
 			return &http.Response{
 				StatusCode: http.StatusOK,
@@ -926,8 +926,8 @@ func TestHTTPClientDiscoveryDirectDoUsesConfiguredAuthority(t *testing.T) {
 				Body:       http.NoBody,
 			}, nil
 		})),
-		kratoshttp.WithRoundTripperWrapper(wrapper),
-		kratoshttp.WithErrorDecoder(func(context.Context, *http.Response) error { return nil }),
+		forgehttp.WithRoundTripperWrapper(wrapper),
+		forgehttp.WithErrorDecoder(func(context.Context, *http.Response) error { return nil }),
 	)
 	if err != nil {
 		t.Fatalf("NewClient() failed: %v", err)
@@ -995,15 +995,15 @@ func TestHTTPClientDiscoveryUsesLogicalAuthorityAcrossRedirect(t *testing.T) {
 		Version:   "v1",
 		Endpoints: []string{"http://" + physicalNode},
 	}}}
-	client, err := kratoshttp.NewClient(
+	client, err := forgehttp.NewClient(
 		t.Context(),
-		kratoshttp.WithEndpoint("discovery:///catalog.service"),
-		kratoshttp.WithDiscovery(discovery),
-		kratoshttp.WithBlock(),
-		kratoshttp.WithTransport(base),
-		kratoshttp.WithRoundTripperWrapper(wrapper),
-		kratoshttp.WithResponseDecoder(func(context.Context, *http.Response, any) error { return nil }),
-		kratoshttp.WithErrorDecoder(func(context.Context, *http.Response) error { return nil }),
+		forgehttp.WithEndpoint("discovery:///catalog.service"),
+		forgehttp.WithDiscovery(discovery),
+		forgehttp.WithBlock(),
+		forgehttp.WithTransport(base),
+		forgehttp.WithRoundTripperWrapper(wrapper),
+		forgehttp.WithResponseDecoder(func(context.Context, *http.Response, any) error { return nil }),
+		forgehttp.WithErrorDecoder(func(context.Context, *http.Response) error { return nil }),
 	)
 	if err != nil {
 		t.Fatalf("NewClient() failed: %v", err)

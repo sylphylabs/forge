@@ -9,7 +9,7 @@ Last reviewed: July 24, 2026
 
 Forge adopts a small protocol-neutral asynchronous message contract in
 [`transport/message`](../../transport/message). It absorbs the useful parts of
-`tx7do/kratos-transport` without copying its broker abstraction or SDK
+`tx7do/forge-transport` without copying its broker abstraction or SDK
 implementations.
 
 The root module owns only:
@@ -90,7 +90,7 @@ explicit, bounded shutdown operation and must be idempotent.
 
 The server does not install signals, global loggers, telemetry providers, or
 background goroutines that outlive its parent context. It can therefore be
-embedded in an existing `kratos.App` or run independently in tests.
+embedded in an existing `forge.App` or run independently in tests.
 
 ## Message Ownership
 
@@ -209,7 +209,7 @@ but it is not the required starting point.
 - `context.Background()` inside delivery loops;
 - fake network endpoints for non-network keepalive transports;
 - implicit asynchronous publish success;
-- direct source copying from `tx7do/kratos-transport`.
+- direct source copying from `tx7do/forge-transport`.
 
 ## Acceptance Evidence
 

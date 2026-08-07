@@ -1,6 +1,6 @@
 ## Apollo config center
 
-This module implements the `config.Source` interface in kratos based apollo config management center.
+This module implements the `config.Source` interface in forge based apollo config management center.
 
 [![go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/sylphylabs/forge/contrib/config/apollo)
 
@@ -19,7 +19,7 @@ func main() {
 	c := config.New(
 		config.WithSource(
 			apollo.NewSource(
-				apollo.WithAppID("kratos"),
+				apollo.WithAppID("forge"),
 				apollo.WithCluster("dev"),
 				apollo.WithEndpoint("http://localhost:8080"),
 				apollo.WithNamespace("application,event.yaml,demo.json"),
@@ -81,7 +81,7 @@ apollo config center use `Namespace` to be part of the key. For example:
 }
 ```
 
-you got them in kratos config instance maybe look like:
+you got them in forge config instance maybe look like:
 
 ```go
 config := map[string]interface{}{

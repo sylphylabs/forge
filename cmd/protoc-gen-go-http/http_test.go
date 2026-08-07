@@ -345,7 +345,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	kratoshttp "github.com/sylphylabs/forge/transport/http"
+	forgehttp "github.com/sylphylabs/forge/transport/http"
 	openpb "opaque.test/openpb"
 	testpb "opaque.test/testpb"
 )
@@ -448,7 +448,7 @@ func (r *recordingTransport) snapshot() (string, string) {
 }
 
 func TestGeneratedGoogleHTTPConformance(t *testing.T) {
-	server := kratoshttp.NewServer()
+	server := forgehttp.NewServer()
 	openImpl := new(openService)
 	openpb.RegisterOpenServiceHTTPServer(server, openImpl)
 	testpb.RegisterOpaqueServiceHTTPServer(server, new(opaqueService))
@@ -456,7 +456,7 @@ func TestGeneratedGoogleHTTPConformance(t *testing.T) {
 	defer httpServer.Close()
 
 	recorder := new(recordingTransport)
-	client, err := kratoshttp.NewClient(t.Context(), kratoshttp.WithEndpoint(httpServer.URL), kratoshttp.WithTransport(recorder))
+	client, err := forgehttp.NewClient(t.Context(), forgehttp.WithEndpoint(httpServer.URL), forgehttp.WithTransport(recorder))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -575,43 +575,43 @@ func TestGeneratedGoogleHTTPConformance(t *testing.T) {
 		}
 	}
 
-	if _, err := openClient.AnyMethod(t.Context(), new(openpb.RouteRequest)); !errors.Is(err, kratoshttp.ErrUnspecifiedHTTPMethod) {
+	if _, err := openClient.AnyMethod(t.Context(), new(openpb.RouteRequest)); !errors.Is(err, forgehttp.ErrUnspecifiedHTTPMethod) {
 		t.Fatalf("AnyMethod error = %v", err)
 	}
-	if _, err := openClient.BareWildcard(t.Context(), new(openpb.RouteRequest)); !errors.Is(err, kratoshttp.ErrUnboundPathWildcard) {
+	if _, err := openClient.BareWildcard(t.Context(), new(openpb.RouteRequest)); !errors.Is(err, forgehttp.ErrUnboundPathWildcard) {
 		t.Fatalf("BareWildcard error = %v", err)
 	}
 }
 
 func echoField(in, out proto.Message, field string) {
-	data, err := json.Marshal(kratoshttp.NewProtoJSONField(in, field))
+	data, err := json.Marshal(forgehttp.NewProtoJSONField(in, field))
 	if err != nil {
 		panic(err)
 	}
-	if err := json.Unmarshal(data, kratoshttp.NewProtoJSONField(out, field)); err != nil {
+	if err := json.Unmarshal(data, forgehttp.NewProtoJSONField(out, field)); err != nil {
 		panic(err)
 	}
 }
 
 func echoMessage(in, out proto.Message) {
-	data, err := json.Marshal(kratoshttp.NewProtoJSON(in))
+	data, err := json.Marshal(forgehttp.NewProtoJSON(in))
 	if err != nil {
 		panic(err)
 	}
-	if err := json.Unmarshal(data, kratoshttp.NewProtoJSON(out)); err != nil {
+	if err := json.Unmarshal(data, forgehttp.NewProtoJSON(out)); err != nil {
 		panic(err)
 	}
 }
 
 func setFieldJSON(t *testing.T, message proto.Message, field, value string) {
 	t.Helper()
-	if err := json.Unmarshal([]byte(value), kratoshttp.NewProtoJSONField(message, field)); err != nil {
+	if err := json.Unmarshal([]byte(value), forgehttp.NewProtoJSONField(message, field)); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func fieldJSON(message proto.Message, field string) string {
-	data, err := json.Marshal(kratoshttp.NewProtoJSONField(message, field))
+	data, err := json.Marshal(forgehttp.NewProtoJSONField(message, field))
 	if err != nil {
 		panic(err)
 	}

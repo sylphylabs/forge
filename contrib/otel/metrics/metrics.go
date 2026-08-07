@@ -24,8 +24,8 @@ import (
 	"go.opentelemetry.io/otel/semconv/v1.41.0/httpconv"
 	"golang.org/x/net/http/httpguts"
 
-	kratostransport "github.com/sylphylabs/forge/transport"
-	kratoshttp "github.com/sylphylabs/forge/transport/http"
+	forgetransport "github.com/sylphylabs/forge/transport"
+	forgehttp "github.com/sylphylabs/forge/transport/http"
 )
 
 const (
@@ -95,7 +95,7 @@ func WithHTTPClientKnownMethods(methods ...string) HTTPClientOption {
 
 // NewHTTPServerFilter returns an HTTP filter that records
 // http.server.request.duration over the full ServeHTTP lifecycle.
-func NewHTTPServerFilter(provider metric.MeterProvider, opts ...HTTPServerOption) (kratoshttp.FilterFunc, error) {
+func NewHTTPServerFilter(provider metric.MeterProvider, opts ...HTTPServerOption) (forgehttp.FilterFunc, error) {
 	if isNil(provider) {
 		return nil, errors.New("metrics: HTTP server MeterProvider is nil")
 	}
@@ -155,7 +155,7 @@ func NewHTTPServerFilter(provider metric.MeterProvider, opts ...HTTPServerOption
 // NewHTTPClientWrapper returns a transport decorator that records
 // http.client.request.duration until response headers or a transport error are
 // returned.
-func NewHTTPClientWrapper(provider metric.MeterProvider, opts ...HTTPClientOption) (kratoshttp.RoundTripperWrapper, error) {
+func NewHTTPClientWrapper(provider metric.MeterProvider, opts ...HTTPClientOption) (forgehttp.RoundTripperWrapper, error) {
 	if isNil(provider) {
 		return nil, errors.New("metrics: HTTP client MeterProvider is nil")
 	}
@@ -502,8 +502,8 @@ func discoveryLogicalAuthority(request *http.Request) (string, bool) {
 	if request.Response != nil {
 		return "", false
 	}
-	info, ok := kratostransport.FromClientContext(request.Context())
-	if !ok || isNil(info) || info.Kind() != kratostransport.KindHTTP {
+	info, ok := forgetransport.FromClientContext(request.Context())
+	if !ok || isNil(info) || info.Kind() != forgetransport.KindHTTP {
 		return "", false
 	}
 	endpoint, err := url.Parse(info.Endpoint())

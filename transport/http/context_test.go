@@ -17,20 +17,20 @@ var testRouter = &Router{srv: NewServer()}
 func TestContextHeader(t *testing.T) {
 	w := wrapper{
 		router: testRouter,
-		req:    &http.Request{Header: map[string][]string{"name": {"kratos"}}},
+		req:    &http.Request{Header: map[string][]string{"name": {"forge"}}},
 		res:    nil,
 		w:      responseWriter{},
 	}
 	h := w.Header()
-	if !reflect.DeepEqual(h, http.Header{"name": {"kratos"}}) {
-		t.Errorf("expected %v, got %v", http.Header{"name": {"kratos"}}, h)
+	if !reflect.DeepEqual(h, http.Header{"name": {"forge"}}) {
+		t.Errorf("expected %v, got %v", http.Header{"name": {"forge"}}, h)
 	}
 }
 
 func TestContextForm(t *testing.T) {
 	w := wrapper{
 		router: testRouter,
-		req:    &http.Request{Header: map[string][]string{"name": {"kratos"}}, Method: http.MethodPost},
+		req:    &http.Request{Header: map[string][]string{"name": {"forge"}}, Method: http.MethodPost},
 		res:    nil,
 		w:      responseWriter{},
 	}
@@ -41,20 +41,20 @@ func TestContextForm(t *testing.T) {
 
 	w = wrapper{
 		router: testRouter,
-		req:    &http.Request{Form: map[string][]string{"name": {"kratos"}}},
+		req:    &http.Request{Form: map[string][]string{"name": {"forge"}}},
 		res:    nil,
 		w:      responseWriter{},
 	}
 	form = w.Form()
-	if !reflect.DeepEqual(form, url.Values{"name": {"kratos"}}) {
-		t.Errorf("expected %v, got %v", url.Values{"name": {"kratos"}}, form)
+	if !reflect.DeepEqual(form, url.Values{"name": {"forge"}}) {
+		t.Errorf("expected %v, got %v", url.Values{"name": {"forge"}}, form)
 	}
 }
 
 func TestContextQuery(t *testing.T) {
 	w := wrapper{
 		router: testRouter,
-		req:    &http.Request{URL: &url.URL{Scheme: "https", Host: "github.com", Path: "go-kratos/kratos", RawQuery: "page=1"}, Method: http.MethodPost},
+		req:    &http.Request{URL: &url.URL{Scheme: "https", Host: "github.com", Path: "sylphylabs/forge", RawQuery: "page=1"}, Method: http.MethodPost},
 		res:    nil,
 		w:      responseWriter{},
 	}

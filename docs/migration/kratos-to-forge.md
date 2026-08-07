@@ -1,9 +1,9 @@
 # Migrating from Kratos v3 to Forge
 
-Forge is a pre-release fork, not an in-place Kratos upgrade. Perform the
+Forge is a pre-release fork, not an in-place Forge upgrade. Perform the
 migration on a branch and review the current differences in
 [`COMPATIBILITY.md`](../../COMPATIBILITY.md) before changing dependencies.
-Forge may replace Kratos APIs instead of retaining compatibility shims;
+Forge may replace Forge APIs instead of retaining compatibility shims;
 each accepted removal is documented here with its replacement and validation
 steps.
 
@@ -178,18 +178,18 @@ sentinels are no longer exported. Regenerate clients and servers before
 upgrading the runtime; upgrading only the runtime module does not rewrite
 generated code.
 
-## 4. Replace Kratos CLI Workflows
+## 4. Replace Forge CLI Workflows
 
-Forge does not provide the general `kratos` executable.
+Forge does not provide the general `forge` executable.
 
 | Previous workflow | Forge workflow |
 | --- | --- |
-| `kratos new` | Create a normal Go module or use a reviewed repository template |
-| `kratos run` | Run the service with `go run` |
-| `kratos proto ...` | Run the repository's Buf or `protoc` pipeline |
-| `kratos upgrade` | Use the Go module toolchain |
+| `forge new` | Create a normal Go module or use a reviewed repository template |
+| `forge run` | Run the service with `go run` |
+| `forge proto ...` | Run the repository's Buf or `protoc` pipeline |
+| `forge upgrade` | Use the Go module toolchain |
 
-For the conventional Kratos layout, the direct run command is typically:
+For the conventional Forge layout, the direct run command is typically:
 
 ```shell
 go run ./cmd/server -conf ./configs
@@ -218,7 +218,7 @@ through `NotFoundHandler`.
 Forge removes the server-side selector API instead of retaining a runtime
 compatibility path. Apply these mechanical renames first:
 
-| Kratos name | Forge name |
+| Forge name | Forge name |
 | --- | --- |
 | `middleware.Handler` | `middleware.UnaryHandler` |
 | `middleware.Middleware` | `middleware.UnaryMiddleware` |
@@ -367,16 +367,16 @@ serverMetrics, err := metrics.NewHTTPServerFilter(provider)
 if err != nil {
 	return err
 }
-server := kratoshttp.NewServer(kratoshttp.Filter(serverMetrics))
+server := forgehttp.NewServer(forgehttp.Filter(serverMetrics))
 
 clientMetrics, err := metrics.NewHTTPClientWrapper(provider)
 if err != nil {
 	return err
 }
-client, err := kratoshttp.NewClient(
+client, err := forgehttp.NewClient(
 	ctx,
-	kratoshttp.WithEndpoint(endpoint),
-	kratoshttp.WithRoundTripperWrapper(clientMetrics),
+	forgehttp.WithEndpoint(endpoint),
+	forgehttp.WithRoundTripperWrapper(clientMetrics),
 )
 ```
 
@@ -399,12 +399,12 @@ otelOptions := grpcotel.Options{
 	},
 }
 
-server := kratosgrpc.NewServer(
-	kratosgrpc.Options(grpcotel.ServerOption(otelOptions)),
+server := forgegrpc.NewServer(
+	forgegrpc.Options(grpcotel.ServerOption(otelOptions)),
 )
-conn, err := kratosgrpc.NewClient(
+conn, err := forgegrpc.NewClient(
 	ctx,
-	kratosgrpc.WithOptions(grpcotel.DialOption(otelOptions)),
+	forgegrpc.WithOptions(grpcotel.DialOption(otelOptions)),
 )
 ```
 
@@ -415,7 +415,7 @@ the service can create duplicate spans.
 
 Replace the old API as follows:
 
-| Kratos API | Forge replacement |
+| Forge API | Forge replacement |
 | --- | --- |
 | `metrics.Server(...)` | `metrics.NewHTTPServerFilter(provider, ...)` for HTTP; `grpcotel.ServerOption` for gRPC |
 | `metrics.Client(...)` | `metrics.NewHTTPClientWrapper(provider, ...)` for HTTP; `grpcotel.DialOption` for gRPC |
@@ -467,7 +467,7 @@ with an SDK View and exemplar policy on the SDK MeterProvider.
 
 HTTP timing boundaries also change. Server duration covers the complete
 `ServeHTTP` call. Client duration ends when response headers arrive or the
-transport fails, so it no longer includes response-body reads or the Kratos
+transport fails, so it no longer includes response-body reads or the Forge
 decoder. Redirect attempts are independent `RoundTrip` measurements. Review
 latency SLOs rather than comparing the new and old client series as equivalent.
 
@@ -498,7 +498,7 @@ graceful shutdown in integration tests used by the service.
 - [ ] Pin the Forge generator revisions.
 - [ ] Regenerate all generated Go files from source.
 - [ ] Confirm generated HTTP files assert `SupportPackageIsVersion5`.
-- [ ] Replace `kratos` CLI commands with Go and Buf commands.
+- [ ] Replace `forge` CLI commands with Go and Buf commands.
 - [ ] Review route precedence, conflicts, prefixes, slashes, 404, and 405.
 - [ ] Rename unary middleware types and regenerate service middleware plans.
 - [ ] Replace server selectors with generated method fields and wrappers.

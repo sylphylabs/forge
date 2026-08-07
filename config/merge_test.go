@@ -68,12 +68,12 @@ func TestDefaultMerge(t *testing.T) {
 			dst:  map[string]any{},
 			src: map[any]any{
 				"service": map[any]any{
-					"name": "kratos",
+					"name": "forge",
 				},
 			},
 			want: map[string]any{
 				"service": map[string]any{
-					"name": "kratos",
+					"name": "forge",
 				},
 			},
 		},
@@ -92,7 +92,7 @@ func TestDefaultMerge(t *testing.T) {
 }
 
 func TestDefaultMergeClonesSourceValues(t *testing.T) {
-	srcMap := map[string]any{"name": "kratos"}
+	srcMap := map[string]any{"name": "forge"}
 	srcSlice := []any{map[string]any{"port": 8000}}
 	dst := map[string]any{}
 
@@ -107,7 +107,7 @@ func TestDefaultMergeClonesSourceValues(t *testing.T) {
 	srcSlice[0].(map[string]any)["port"] = 9000
 
 	want := map[string]any{
-		"server":    map[string]any{"name": "kratos"},
+		"server":    map[string]any{"name": "forge"},
 		"listeners": []any{map[string]any{"port": 8000}},
 	}
 	if !reflect.DeepEqual(dst, want) {

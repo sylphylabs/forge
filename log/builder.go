@@ -76,7 +76,7 @@ func WithFilter(opts ...FilterOption) Option {
 	return func(c *handlerConfig) { c.filter = append(c.filter, opts...) }
 }
 
-// NewHandler builds a composed [slog.Handler] with kratos defaults:
+// NewHandler builds a composed [slog.Handler] with forge defaults:
 //   - text encoding to stderr at LevelInfo
 //   - context attrs from [ContextWithAttrs] are merged in
 //
@@ -95,7 +95,7 @@ func NewHandler(opts ...Option) slog.Handler {
 	return newComposedHandler(h, cfg)
 }
 
-// NewLogger returns a slog logger backed by handler with kratos decorators
+// NewLogger returns a slog logger backed by handler with forge decorators
 // applied.
 func NewLogger(handler slog.Handler, opts ...Option) *slog.Logger {
 	cfg := &handlerConfig{

@@ -162,7 +162,7 @@ func TestApp(t *testing.T) {
 	hs := http.NewServer()
 	gs := grpc.NewServer()
 	app := New(
-		Name("kratos"),
+		Name("forge"),
 		Version("v1.0.0"),
 		Server(hs, gs),
 		BeforeStart(func(_ context.Context) error {
@@ -612,7 +612,7 @@ func TestApp_buildInstance(t *testing.T) {
 		endpoints []string
 	}{
 		id:      "1",
-		name:    "kratos",
+		name:    "forge",
 		version: "v1.0.0",
 		metadata: map[string]string{
 			"a": "1",
@@ -674,7 +674,7 @@ func TestApp_Context(t *testing.T) {
 	tests := []fields{
 		{
 			id:       "1",
-			name:     "kratos-v1",
+			name:     "forge-v1",
 			instance: &registry.ServiceInstance{Endpoints: []string{"https://go-kratos.dev", "localhost"}},
 			metadata: map[string]string{},
 			version:  "v1",
@@ -685,15 +685,15 @@ func TestApp_Context(t *testing.T) {
 				endpoint []string
 				metadata map[string]string
 			}{
-				id: "1", version: "v1", name: "kratos-v1", endpoint: []string{"https://go-kratos.dev", "localhost"},
+				id: "1", version: "v1", name: "forge-v1", endpoint: []string{"https://go-kratos.dev", "localhost"},
 				metadata: map[string]string{},
 			},
 		},
 		{
 			id:       "2",
-			name:     "kratos-v2",
+			name:     "forge-v2",
 			instance: &registry.ServiceInstance{Endpoints: []string{"test"}},
-			metadata: map[string]string{"kratos": "https://github.com/go-kratos/kratos"},
+			metadata: map[string]string{"forge": "https://github.com/go-kratos/kratos"},
 			version:  "v2",
 			want: struct {
 				id       string
@@ -702,13 +702,13 @@ func TestApp_Context(t *testing.T) {
 				endpoint []string
 				metadata map[string]string
 			}{
-				id: "2", version: "v2", name: "kratos-v2", endpoint: []string{"test"},
-				metadata: map[string]string{"kratos": "https://github.com/go-kratos/kratos"},
+				id: "2", version: "v2", name: "forge-v2", endpoint: []string{"test"},
+				metadata: map[string]string{"forge": "https://github.com/go-kratos/kratos"},
 			},
 		},
 		{
 			id:       "3",
-			name:     "kratos-v3",
+			name:     "forge-v3",
 			instance: nil,
 			metadata: make(map[string]string),
 			version:  "v3",
@@ -719,7 +719,7 @@ func TestApp_Context(t *testing.T) {
 				endpoint []string
 				metadata map[string]string
 			}{
-				id: "3", version: "v3", name: "kratos-v3", endpoint: nil,
+				id: "3", version: "v3", name: "forge-v3", endpoint: nil,
 				metadata: map[string]string{},
 			},
 		},

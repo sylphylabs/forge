@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"testing"
 
-	kratoserrors "github.com/sylphylabs/forge/errors"
+	forgeerrors "github.com/sylphylabs/forge/errors"
 )
 
 func TestCompileRoute(t *testing.T) {
@@ -144,7 +144,7 @@ func TestRouteMuxTranscodingErrorsUseConfiguredEncoder(t *testing.T) {
 	var encoded error
 	srv := NewServer(ErrorEncoder(func(w http.ResponseWriter, _ *http.Request, err error) {
 		encoded = err
-		w.WriteHeader(kratoserrors.Code(err))
+		w.WriteHeader(forgeerrors.Code(err))
 	}))
 	tests := []struct {
 		name string
@@ -163,7 +163,7 @@ func TestRouteMuxTranscodingErrorsUseConfiguredEncoder(t *testing.T) {
 			if encoded == nil {
 				t.Fatal("configured error encoder was not called")
 			}
-			if got := kratoserrors.Code(encoded); got != tt.code {
+			if got := forgeerrors.Code(encoded); got != tt.code {
 				t.Fatalf("code = %d, want %d", got, tt.code)
 			}
 		})
@@ -247,10 +247,10 @@ func TestRouteMuxPathValue(t *testing.T) {
 		}
 		return ctx.String(http.StatusOK, ctx.Request().PathValue("user.name"))
 	})
-	req := httptest.NewRequest(http.MethodGet, "/users/kratos", nil)
+	req := httptest.NewRequest(http.MethodGet, "/users/forge", nil)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
-	if got := w.Body.String(); got != "kratos" {
+	if got := w.Body.String(); got != "forge" {
 		t.Fatalf("body = %q", got)
 	}
 }

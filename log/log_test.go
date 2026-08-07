@@ -41,14 +41,14 @@ func TestWith(t *testing.T) {
 	handler := &captureHandler{}
 	SetDefault(slog.New(handler))
 
-	logger := With("service", "kratos", slog.Int("version", 2))
+	logger := With("service", "forge", slog.Int("version", 2))
 	logger.Info("hello", "kind", "test")
 
 	if len(handler.records) != 1 {
 		t.Fatalf("records len = %d, want 1", len(handler.records))
 	}
-	if got := handler.attrs[0]["service"]; got != "kratos" {
-		t.Fatalf("service = %v, want %q", got, "kratos")
+	if got := handler.attrs[0]["service"]; got != "forge" {
+		t.Fatalf("service = %v, want %q", got, "forge")
 	}
 	if got := handler.attrs[0]["version"]; got != int64(2) {
 		t.Fatalf("version = %v, want 2", got)

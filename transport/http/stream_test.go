@@ -44,7 +44,7 @@ func TestServerSentEventStream(t *testing.T) {
 	ctx.Reset(w, req)
 
 	stream := NewServerSentEventServerStream(ctx)
-	if err := stream.SendMsg(&binding.HelloRequest{Name: "kratos"}); err != nil {
+	if err := stream.SendMsg(&binding.HelloRequest{Name: "forge"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := stream.Close(nil); err != nil {
@@ -62,8 +62,8 @@ func TestServerSentEventStream(t *testing.T) {
 	if err := clientStream.Recv(&out); err != nil {
 		t.Fatal(err)
 	}
-	if out.GetName() != "kratos" {
-		t.Fatalf("expected %v, got %v", "kratos", out.GetName())
+	if out.GetName() != "forge" {
+		t.Fatalf("expected %v, got %v", "forge", out.GetName())
 	}
 	if err := clientStream.Recv(&out); !errors.Is(err, io.EOF) {
 		t.Fatalf("expected EOF, got %v", err)
@@ -115,7 +115,7 @@ func TestServerSentEventStreamUsesClientMiddleware(t *testing.T) {
 			return fmt.Errorf("expected middleware header, got %q", got)
 		}
 		stream := NewServerSentEventServerStream(ctx)
-		if err := stream.SendMsg(&binding.HelloRequest{Name: "kratos"}); err != nil {
+		if err := stream.SendMsg(&binding.HelloRequest{Name: "forge"}); err != nil {
 			return err
 		}
 		return stream.Close(nil)
@@ -151,8 +151,8 @@ func TestServerSentEventStreamUsesClientMiddleware(t *testing.T) {
 	if err := stream.Recv(&out); err != nil {
 		t.Fatal(err)
 	}
-	if out.GetName() != "kratos" {
-		t.Fatalf("expected %v, got %v", "kratos", out.GetName())
+	if out.GetName() != "forge" {
+		t.Fatalf("expected %v, got %v", "forge", out.GetName())
 	}
 }
 
@@ -188,8 +188,8 @@ func TestWebSocketStreamBindsPathQueryAndExchangesMessages(t *testing.T) {
 		if err := stream.RecvMsg(in); err != nil {
 			return stream.Close(err)
 		}
-		if in.GetName() != "kratos" {
-			return stream.Close(fmt.Errorf("expected path name kratos, got %s", in.GetName()))
+		if in.GetName() != "forge" {
+			return stream.Close(fmt.Errorf("expected path name forge, got %s", in.GetName()))
 		}
 		if in.GetSub().GetName() != "go" {
 			return stream.Close(fmt.Errorf("expected query sub go, got %s", in.GetSub().GetName()))
@@ -207,7 +207,7 @@ func TestWebSocketStreamBindsPathQueryAndExchangesMessages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stream, err := client.WebSocket(context.Background(), "/ws/kratos?sub.naming=go", Accept("application/protojson"))
+	stream, err := client.WebSocket(context.Background(), "/ws/forge?sub.naming=go", Accept("application/protojson"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,8 +219,8 @@ func TestWebSocketStreamBindsPathQueryAndExchangesMessages(t *testing.T) {
 	if err := stream.Recv(&out); err != nil {
 		t.Fatal(err)
 	}
-	if out.GetName() != "kratos" {
-		t.Fatalf("expected %v, got %v", "kratos", out.GetName())
+	if out.GetName() != "forge" {
+		t.Fatalf("expected %v, got %v", "forge", out.GetName())
 	}
 	if out.GetSub().GetName() != "go" {
 		t.Fatalf("expected %v, got %v", "go", out.GetSub().GetName())
@@ -243,8 +243,8 @@ func TestWebSocketStreamBindsNamedBodyField(t *testing.T) {
 			return stream.Close(err)
 		}
 		// name comes from the path var, the sub message from the streamed frame payload.
-		if in.GetName() != "kratos" {
-			return stream.Close(fmt.Errorf("expected path name kratos, got %s", in.GetName()))
+		if in.GetName() != "forge" {
+			return stream.Close(fmt.Errorf("expected path name forge, got %s", in.GetName()))
 		}
 		if in.GetSub().GetName() != "go" {
 			return stream.Close(fmt.Errorf("expected body sub go, got %s", in.GetSub().GetName()))
@@ -262,7 +262,7 @@ func TestWebSocketStreamBindsNamedBodyField(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stream, err := client.WebSocket(context.Background(), "/ws/kratos", Accept("application/protojson"))
+	stream, err := client.WebSocket(context.Background(), "/ws/forge", Accept("application/protojson"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,8 +276,8 @@ func TestWebSocketStreamBindsNamedBodyField(t *testing.T) {
 	if err := stream.Recv(&out); err != nil {
 		t.Fatal(err)
 	}
-	if out.GetName() != "kratos" {
-		t.Fatalf("expected %v, got %v", "kratos", out.GetName())
+	if out.GetName() != "forge" {
+		t.Fatalf("expected %v, got %v", "forge", out.GetName())
 	}
 	if out.GetSub().GetName() != "go" {
 		t.Fatalf("expected %v, got %v", "go", out.GetSub().GetName())
@@ -450,7 +450,7 @@ func TestWebSocketStreamNormalEOFReportsSelectorSuccess(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if err := stream.SendMsg(&binding.HelloRequest{Name: "kratos"}); err != nil {
+		if err := stream.SendMsg(&binding.HelloRequest{Name: "forge"}); err != nil {
 			return stream.Close(err)
 		}
 		return stream.Close(nil)
@@ -481,8 +481,8 @@ func TestWebSocketStreamNormalEOFReportsSelectorSuccess(t *testing.T) {
 	if err := stream.Recv(&out); err != nil {
 		t.Fatal(err)
 	}
-	if out.GetName() != "kratos" {
-		t.Fatalf("expected %v, got %v", "kratos", out.GetName())
+	if out.GetName() != "forge" {
+		t.Fatalf("expected %v, got %v", "forge", out.GetName())
 	}
 	if err := stream.Recv(&out); !errors.Is(err, io.EOF) {
 		t.Fatalf("expected EOF, got %v", err)
@@ -546,7 +546,7 @@ func TestWebSocketStreamSetWriteDeadline(t *testing.T) {
 		if err := stream.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
 			return stream.Close(err)
 		}
-		if err := stream.SendMsg(&binding.HelloRequest{Name: "kratos"}); err != nil {
+		if err := stream.SendMsg(&binding.HelloRequest{Name: "forge"}); err != nil {
 			return stream.Close(err)
 		}
 		return stream.Close(nil)
@@ -566,8 +566,8 @@ func TestWebSocketStreamSetWriteDeadline(t *testing.T) {
 	if err := stream.Recv(&out); err != nil {
 		t.Fatal(err)
 	}
-	if out.GetName() != "kratos" {
-		t.Fatalf("expected %v, got %v", "kratos", out.GetName())
+	if out.GetName() != "forge" {
+		t.Fatalf("expected %v, got %v", "forge", out.GetName())
 	}
 	if err := stream.Recv(&out); !errors.Is(err, io.EOF) {
 		t.Fatalf("expected EOF, got %v", err)
@@ -585,7 +585,7 @@ func TestServerSentEventStreamSetDeadlines(t *testing.T) {
 		if err := stream.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
 			setErr = err
 		}
-		if err := stream.SendMsg(&binding.HelloRequest{Name: "kratos"}); err != nil {
+		if err := stream.SendMsg(&binding.HelloRequest{Name: "forge"}); err != nil {
 			return stream.Close(err)
 		}
 		return stream.Close(nil)

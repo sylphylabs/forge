@@ -77,6 +77,9 @@ type discoveryInstance struct {
 	Status   int64             `json:"status"` // Status instance status, eg: 1UP 2Waiting
 }
 
+// _reservedInstanceIDKey keeps the upstream Kratos v2 spelling deliberately.
+// It is a wire key exchanged with an external discovery service, so renaming it
+// would break interoperability with instances registered by other clients.
 const _reservedInstanceIDKey = "kratos.v2.serviceinstance.id"
 
 // fromServerInstance convert registry.ServiceInstance into discoveryInstance
