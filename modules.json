@@ -157,6 +157,18 @@
       ]
     },
     {
+      "path": "contrib/middleware/session",
+      "module": "github.com/sylphylabs/forge/contrib/middleware/session",
+      "kind": "integration",
+      "support": "official",
+      "owner": "sylphylabs-maintainers",
+      "tagPrefix": "contrib/middleware/session",
+      "dependsOn": [
+        "github.com/sylphylabs/forge",
+        "github.com/sylphylabs/forge/api"
+      ]
+    },
+    {
       "path": "contrib/middleware/validate",
       "module": "github.com/sylphylabs/forge/contrib/middleware/validate",
       "kind": "integration",
