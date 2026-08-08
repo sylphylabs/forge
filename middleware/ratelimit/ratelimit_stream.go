@@ -15,7 +15,7 @@ func ServerStream(opts ...Option) middleware.StreamMiddleware {
 	options := newOptions(opts...)
 	return func(handler middleware.StreamHandler) middleware.StreamHandler {
 		return func(request any, stream middleware.ServerStream) error {
-			done, err := options.limiter.Allow()
+			done, err := options.limiterFor(stream.Context()).Allow()
 			if err != nil {
 				return ErrLimitExceed
 			}
@@ -39,7 +39,7 @@ func PerMessageServerStream(opts ...Option) middleware.StreamMiddleware {
 		return func(request any, stream middleware.ServerStream) error {
 			return handler(request, &limitedStream{
 				ServerStream: stream,
-				limiter:      options.limiter,
+				options:      options,
 			})
 		}
 	}
@@ -55,14 +55,16 @@ func newOptions(opts ...Option) *options {
 	return options
 }
 
-// limitedStream applies the limiter to every received message.
+// limitedStream applies the limiter to every received message. The limiter
+// is resolved per message, so a governance rule update takes effect on
+// streams that are already open.
 type limitedStream struct {
 	middleware.ServerStream
-	limiter Limiter
+	options *options
 }
 
 func (s *limitedStream) RecvMsg(m any) error {
-	done, err := s.limiter.Allow()
+	done, err := s.options.limiterFor(s.Context()).Allow()
 	if err != nil {
 		return ErrLimitExceed
 	}
