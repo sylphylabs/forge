@@ -18,7 +18,7 @@ import (
 // google/api/annotations.proto and its transitive dependencies and returns its
 // path. The descriptors come from the genproto module linked into the test
 // binary, so protoc resolves the google.api.http extension through
-// --descriptor_set_in at the version go.mod pins instead of a vendored tree.
+// --descriptor_set_in at the version go.mod pins.
 func AnnotationsDescriptorSet(t *testing.T) string {
 	t.Helper()
 	set := new(descriptorpb.FileDescriptorSet)

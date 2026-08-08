@@ -25,9 +25,12 @@ make lint
 make proto-check
 ```
 
-`make proto-check` runs the pinned Buf CLI against locked Google APIs and
+`make generate` regenerates the committed test fixtures through the pinned Buf
+CLI; `buf.gen.yaml` runs every generator, including the Forge plugins in `cmd/`,
+from source. `make proto-check` runs the same CLI against locked Google APIs and
 Protovalidate dependencies. Test fixtures remain part of `buf build` so imports
 and descriptors are verified, but are excluded from public API style linting.
+The public API module has its own pipeline: `make -C api generate`.
 
 [`modules.json`](modules.json) is the release inventory for every module. It
 records ownership, support tier, tag prefix, and internal release dependencies.
