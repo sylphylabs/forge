@@ -7,7 +7,6 @@ modules:
   - path: .
     excludes:
       - cmd
-      - third_party
       - api/proto
       # Consumer fixture: imports sylphy/errors/v1 relative to api/proto, so it
       # only resolves against that module root. Built via `make -C api`.
