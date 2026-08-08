@@ -265,7 +265,7 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 		"-I", "testdata",
 		"-I", protocInclude,
 		"-I", filepath.Join(protobufDir, "src"),
-		"-I", filepath.Join(root, "third_party"),
+		"--descriptor_set_in=" + testutil.AnnotationsDescriptorSet(t),
 		"--go_out=" + tmp,
 		"--go_opt=module=opaque.test",
 		"--go-http_out=" + tmp,
@@ -644,10 +644,6 @@ func TestInvalidHTTPRulesFailGeneration(t *testing.T) {
 			t.Skipf("%s is not installed: %v", tool, err)
 		}
 	}
-	root, err := filepath.Abs(filepath.Join("..", ".."))
-	if err != nil {
-		t.Fatal(err)
-	}
 	protocPath, err := exec.LookPath("protoc")
 	if err != nil {
 		t.Fatal(err)
@@ -755,7 +751,7 @@ service API { rpc Get(Request) returns (Reply) { option (google.api.http) = { ge
 				"protoc",
 				"-I", dir,
 				"-I", protocInclude,
-				"-I", filepath.Join(root, "third_party"),
+				"--descriptor_set_in="+testutil.AnnotationsDescriptorSet(t),
 				"--go-http_out="+dir,
 				"invalid.proto",
 			)

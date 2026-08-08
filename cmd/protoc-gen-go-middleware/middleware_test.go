@@ -54,7 +54,7 @@ func TestGeneratedMiddlewareCompilesAndRuns(t *testing.T) {
 	args := []string{
 		"-I", "testdata",
 		"-I", protocInclude,
-		"-I", filepath.Join(root, "third_party"),
+		"--descriptor_set_in=" + testutil.AnnotationsDescriptorSet(t),
 		"--go_out=" + out,
 		"--go_opt=module=middleware.test",
 		"--go-grpc_out=" + out,
@@ -173,7 +173,7 @@ func TestGeneratedMiddlewarePlanDoesNotRequireTransportWrappers(t *testing.T) {
 	cmd := exec.Command(
 		"protoc",
 		"-I", "testdata",
-		"-I", filepath.Join("..", "..", "third_party"),
+		"--descriptor_set_in="+testutil.AnnotationsDescriptorSet(t),
 		"--plugin=protoc-gen-go-middleware="+plugin,
 		"--go-middleware_out="+tmp,
 		"--go-middleware_opt=paths=source_relative",
@@ -240,7 +240,7 @@ func TestHTTPMethodSetModesMustMatch(t *testing.T) {
 			}
 			args := []string{
 				"-I", "testdata",
-				"-I", filepath.Join(root, "third_party"),
+				"--descriptor_set_in=" + testutil.AnnotationsDescriptorSet(t),
 				"--go_out=" + out,
 				"--go_opt=module=methodset.test",
 				"--go-http_out=" + out,
