@@ -23,7 +23,6 @@ function util::find_modules() {
 		\( \
 		-path './output' \
 		-o -path './.git' \
-		-o -path '*/third_party/*' \
 		-o -path '*/vendor/*' \
 		\) -prune \
 		\) -name 'go.mod' -print0 | xargs -0 -I {} dirname {}

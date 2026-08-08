@@ -16,7 +16,6 @@ scopes:
   - middleware
   - registry
   - selector
-  - third_party
   - transport
 types:
   - deps

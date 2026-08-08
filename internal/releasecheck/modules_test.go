@@ -69,7 +69,6 @@ func TestLegacyErrorSchemasRemoved(t *testing.T) {
 	for _, name := range []string{
 		"errors/errors.proto",
 		"cmd/protoc-gen-go-errors/errors/errors.proto",
-		"third_party/errors/errors.proto",
 	} {
 		_, err := os.Stat(filepath.Join(root, name))
 		if err == nil {
@@ -135,10 +134,10 @@ func TestLegacyBufModulesRemoved(t *testing.T) {
 			}
 		}
 	}
-	if _, err := os.Stat(filepath.Join(root, "third_party", "buf.yaml")); err == nil {
-		t.Error("legacy third_party/buf.yaml still exists")
+	if _, err := os.Stat(filepath.Join(root, "third_party")); err == nil {
+		t.Error("vendored third_party proto tree still exists; dependencies come from buf.lock")
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		t.Fatalf("stat third_party/buf.yaml: %v", err)
+		t.Fatalf("stat third_party: %v", err)
 	}
 }
 
@@ -160,7 +159,7 @@ func discoverModules(t *testing.T, root string) []string {
 		}
 		if entry.IsDir() && path != root {
 			switch entry.Name() {
-			case ".git", "output", "third_party", "vendor":
+			case ".git", "output", "vendor":
 				return filepath.SkipDir
 			}
 		}

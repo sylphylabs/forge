@@ -15,7 +15,8 @@ Current compatibility facts remain in [`COMPATIBILITY.md`](../../COMPATIBILITY.m
 Nothing in this document becomes a compatibility claim until its acceptance
 tests pass and that document is updated.
 
-The vendored [`google/api/http.proto`](../../third_party/google/api/http.proto)
+The [`google/api/http.proto`](https://github.com/googleapis/googleapis/blob/master/google/api/http.proto)
+contract, resolved from `buf.build/googleapis/googleapis` in `buf.lock`,
 is the normative source for path grammar, field classification, body projection,
 and additional bindings. Generated Go comments, grpc-gateway behavior, and other
 transcoders are comparison evidence, not substitutes for that contract.
