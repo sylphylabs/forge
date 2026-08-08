@@ -17,7 +17,11 @@ linters:
     - mnd
     - prealloc
     - revive
-    - staticcheck
+    # TODO: re-enable once staticcheck supports Go 1.27. v0.7.0 (the newest
+    # release, predating the 1.27 candidates) panics building IR for the
+    # linux/amd64 internal/poll: "unexpected expr: *ast.KeyValueExpr". Every
+    # module fails, and only on Linux — darwin/arm64 lacks the offending code.
+    # - staticcheck
     - unconvert
     - unused
     - wastedassign
