@@ -99,16 +99,48 @@ jobs:
     # not block this repository. The required toolchain is exercised by the
     # build job above.
     continue-on-error: true
+    # gotip compiles the toolchain from source, so this job is slower than the
+    # rest. Bound it rather than letting a hung build hold a runner.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+      # A released toolchain cannot serve this job: setup-go installs only the
+      # Go team's binaries, and every release is older than the 1.27 candidate
+      # the modules require. Build tip from source instead — that is the version
+      # this job exists to watch.
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
           go-version: stable
-          check-latest: true
+
+      # Key the cache on the commit gotip would build, so a new tip rebuilds
+      # and an unchanged one does not.
+      - name: Resolve tip
+        id: tip
+        run: echo "sha=$(git ls-remote https://go.googlesource.com/go refs/heads/master | cut -f1)" >>"$GITHUB_OUTPUT"
+      - name: Restore gotip
+        id: gotip-cache
+        uses: actions/cache@v5
+        with:
+          path: ~/sdk/gotip
+          key: ${{ runner.os }}-gotip-${{ steps.tip.outputs.sha }}
+
+      - name: Install gotip
+        run: |
+          go install golang.org/dl/gotip@latest
+          # download always reruns make.bash, so skip it when the cache already
+          # holds a built toolchain. The wrapper refuses to run without
+          # .unpacked-success, which installTip does not write, so create it
+          # here: a compiled bin/go is the evidence the build finished.
+          if [ -x "$HOME/sdk/gotip/bin/go" ]; then
+            touch "$HOME/sdk/gotip/.unpacked-success"
+          else
+            gotip download
+          fi
+          gotip version
       - name: Test core
-        run: go test ./...
+        run: gotip test ./...
       - name: Test generator modules
         run: |
           cd cmd
-          GOWORK=off go test ./...
+          GOWORK=off gotip test ./...
