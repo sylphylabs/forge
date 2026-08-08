@@ -20,6 +20,31 @@ import (
 	"github.com/sylphylabs/forge/registry"
 )
 
+// awaitService polls GetService until it returns want, or the deadline passes.
+//
+// Consul only marks an instance passing after its first health check, so a
+// registration is not immediately visible. Waiting for the state the test
+// needs, rather than for a fixed duration, keeps the assertion honest without
+// depending on how the check interval lines up with the registration.
+func awaitService(t *testing.T, r *Registry, name string, want []*registry.ServiceInstance) []*registry.ServiceInstance {
+	t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	var (
+		got []*registry.ServiceInstance
+		err error
+	)
+	for {
+		got, err = r.GetService(context.Background(), name)
+		if err == nil && reflect.DeepEqual(got, want) {
+			return got
+		}
+		if time.Now().After(deadline) {
+			return got
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 func tcpServer(lis net.Listener) {
 	for {
 		conn, err := lis.Accept()
@@ -342,12 +367,15 @@ func TestRegistry_GetService(t *testing.T) {
 				defer test.deferFunc(t)
 			}
 
-			service, err := test.fields.registry.GetService(context.Background(), test.args.serviceName)
-			if (err != nil) != test.wantErr {
-				t.Errorf("GetService() error = %v, wantErr %v", err, test.wantErr)
-				t.Errorf("GetService() got = %v", service)
+			if test.wantErr {
+				service, err := test.fields.registry.GetService(context.Background(), test.args.serviceName)
+				if err == nil {
+					t.Errorf("GetService() error = nil, wantErr true")
+					t.Errorf("GetService() got = %v", service)
+				}
 				return
 			}
+			service := awaitService(t, test.fields.registry, test.args.serviceName, test.want)
 			if !reflect.DeepEqual(service, test.want) {
 				t.Errorf("GetService() got = %v, want %v", service, test.want)
 			}
@@ -478,12 +506,22 @@ func TestRegistry_Watch(t *testing.T) {
 				tt.args.cancel()
 			}
 
-			service, err := watch.Next()
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetService() error = %v, wantErr %v", err, tt.wantErr)
-				t.Errorf("GetService() got = %v", service)
-				return
+			// Next returns the current set immediately, which can still be
+			// empty while Consul waits to run the instance's first health
+			// check. Keep reading until the watch reports what the test
+			// expects, so the assertion does not race the check interval.
+			deadline := time.Now().Add(20 * time.Second)
+			var service []*registry.ServiceInstance
+			for {
+				service, err = watch.Next()
+				if (err != nil) != tt.wantErr {
+					t.Errorf("GetService() error = %v, wantErr %v", err, tt.wantErr)
+					t.Errorf("GetService() got = %v", service)
+					return
+				}
+				if err != nil || reflect.DeepEqual(service, tt.want) || time.Now().After(deadline) {
+					break
+				}
 			}
 			if !reflect.DeepEqual(service, tt.want) {
 				t.Errorf("GetService() got = %v, want %v", service, tt.want)
