@@ -243,7 +243,7 @@ func (d *Discovery) renew(ctx context.Context, ins *discoveryInstance) (err erro
 		err = fmt.Errorf("discovery.renew failed ErrorCode: %d", res.Code)
 		if res.Code == _codeNotFound {
 			if err = d.register(ctx, ins); err != nil {
-				err = fmt.Errorf("Discovery.renew instance: failed to register: %w", err)
+				err = fmt.Errorf("discovery.renew instance: failed to register: %w", err)
 			}
 			return
 		}

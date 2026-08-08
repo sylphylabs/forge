@@ -70,7 +70,7 @@ func TestMessageServerLifecycleWithNATS(t *testing.T) {
 	ready := make(chan struct{})
 	server := message.NewServer(&readySubscriber{Client: client, ready: ready})
 	delivered := make(chan string, 1)
-	if err := server.Handle("orders.created", func(ctx context.Context, subject string, msg *message.Message) error {
+	if err := server.Handle("orders.created", func(_ context.Context, subject string, msg *message.Message) error {
 		delivered <- subject + ":" + string(msg.Body)
 		return nil
 	}); err != nil {
@@ -246,6 +246,7 @@ func TestValidationAndOwnership(t *testing.T) {
 	if _, err := New(WithURL("")); !errors.Is(err, ErrEmptyURL) {
 		t.Fatalf("empty URL New error = %v, want ErrEmptyURL", err)
 	}
+	//nolint:staticcheck // SA1012: passing nil is the behavior under test.
 	if err := client.Publish(nil, "events", message.New(nil)); !errors.Is(err, ErrNilContext) {
 		t.Fatalf("nil context Publish error = %v, want ErrNilContext", err)
 	}

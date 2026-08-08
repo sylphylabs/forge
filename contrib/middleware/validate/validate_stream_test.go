@@ -54,7 +54,6 @@ func TestProtoValidateStreamSkipsNilRequest(t *testing.T) {
 		called = true
 		return nil
 	})(nil, &recvStream{ctx: t.Context()})
-
 	if err != nil {
 		t.Fatalf("ProtoValidateStream() error = %v, want nil", err)
 	}
@@ -69,7 +68,6 @@ func TestProtoValidateStreamDoesNotValidateMessages(t *testing.T) {
 	err := ProtoValidateStream()(func(_ any, s middleware.ServerStream) error {
 		return s.RecvMsg(&testdata.Modern{})
 	})(nil, stream)
-
 	if err != nil {
 		t.Errorf("ProtoValidateStream() error = %v, want nil; messages are not validated", err)
 	}
@@ -84,7 +82,6 @@ func TestPerMessageProtoValidateStreamRejectsInvalidMessage(t *testing.T) {
 		// The handler stays in control after a rejected message.
 		return nil
 	})(nil, stream)
-
 	if err != nil {
 		t.Errorf("PerMessageProtoValidateStream() error = %v, want nil; the stream stays open", err)
 	}
@@ -102,7 +99,6 @@ func TestPerMessageProtoValidateStreamAcceptsValidMessage(t *testing.T) {
 	err := PerMessageProtoValidateStream()(func(_ any, s middleware.ServerStream) error {
 		return s.RecvMsg(&testdata.Modern{})
 	})(nil, stream)
-
 	if err != nil {
 		t.Errorf("PerMessageProtoValidateStream() error = %v, want nil", err)
 	}

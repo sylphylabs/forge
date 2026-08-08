@@ -182,7 +182,7 @@ func (c *Client) Publish(ctx context.Context, subject string, msg *message.Messa
 	if err := conn.PublishMsg(toNATSMsg(subject, msg)); err != nil {
 		return fmt.Errorf("nats: publish %q: %w", subject, err)
 	}
-	if err := c.flush(conn, ctx); err != nil {
+	if err := c.flush(ctx, conn); err != nil {
 		return fmt.Errorf("nats: flush publish %q: %w", subject, err)
 	}
 	return nil
@@ -230,8 +230,8 @@ func (c *Client) Subscribe(ctx context.Context, subject string, handler message.
 	callback := func(natsMsg *natsgo.Msg) {
 		msg := fromNATSMsg(natsMsg)
 		handlerCtx := metadata.NewServerContext(ctx, msg.Headers.Clone())
-		if err := handler(handlerCtx, natsMsg.Subject, msg); err != nil && c.errorHandler != nil {
-			c.errorHandler(handlerCtx, natsMsg.Subject, msg.Clone(), err)
+		if herr := handler(handlerCtx, natsMsg.Subject, msg); herr != nil && c.errorHandler != nil {
+			c.errorHandler(handlerCtx, natsMsg.Subject, msg.Clone(), herr)
 		}
 	}
 	var sub *natsgo.Subscription
@@ -243,7 +243,7 @@ func (c *Client) Subscribe(ctx context.Context, subject string, handler message.
 	if err != nil {
 		return nil, fmt.Errorf("nats: subscribe %q: %w", subject, err)
 	}
-	if err := c.flush(conn, ctx); err != nil {
+	if err := c.flush(ctx, conn); err != nil {
 		_ = sub.Unsubscribe()
 		return nil, fmt.Errorf("nats: subscribe %q: %w", subject, err)
 	}
@@ -280,7 +280,7 @@ func (c *Client) connection() (*natsgo.Conn, error) {
 	return c.conn, nil
 }
 
-func (c *Client) flush(conn *natsgo.Conn, ctx context.Context) error {
+func (c *Client) flush(ctx context.Context, conn *natsgo.Conn) error {
 	flushCtx, cancel := c.flushContext(ctx)
 	defer cancel()
 	return conn.FlushWithContext(flushCtx)
