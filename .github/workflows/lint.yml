@@ -33,7 +33,10 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
+          # Not go-version-file: setup-go normalises the go directive's 1.27rc2
+          # to 1.27, which has no release. Spell the candidate as semver, the
+          # same way the Go workflow does.
+          go-version: 1.27.0-rc.2
       # The released golangci-lint binaries are built with Go 1.26 and refuse to
       # run against our 1.27 modules ("the Go language version used to build
       # golangci-lint is lower than the targeted Go version"). Build it from
