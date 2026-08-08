@@ -3,6 +3,8 @@ name: "CodeQL"
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   analyze:
@@ -19,6 +21,14 @@ jobs:
     steps:
     - name: Checkout repo
       uses: actions/checkout@v6
+
+    # CodeQL builds the module to analyse it, so it needs the toolchain the
+    # modules require. setup-go spells release candidates as semver, unlike the
+    # go directive's 1.27rc2.
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: 1.27.0-rc.2
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
