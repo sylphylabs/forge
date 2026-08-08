@@ -15,7 +15,8 @@ jobs:
       matrix:
         # Every go.mod requires go 1.27rc2, so that is what the blocking job
         # must run. setup-go spells release candidates in semver form, unlike
-        # the go directive.
+        # the go directive. Once 1.27 ships, every workflow can read go.mod
+        # instead of repeating the version.
         go: [1.27.0-rc.2]
     name: build & test
     runs-on: ubuntu-latest

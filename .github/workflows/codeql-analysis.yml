@@ -28,6 +28,9 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
+        # Not go-version-file: setup-go normalises the go directive's 1.27rc2
+        # to 1.27, which has no release. Once 1.27 ships, every workflow can
+        # read go.mod instead of repeating the version.
         go-version: 1.27.0-rc.2
 
     - name: Initialize CodeQL
