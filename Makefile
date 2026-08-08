@@ -18,9 +18,6 @@ all:
 .PHONY: install
 install: all
 	@cd cmd && GOWORK=off GOBIN='$(BIN)' go install ./protoc-gen-go-errors ./protoc-gen-go-http ./protoc-gen-go-middleware ./protoc-gen-openapi
-	@which protoc-gen-go &> /dev/null || go get google.golang.org/protobuf/cmd/protoc-gen-go
-	@which protoc-gen-go-grpc &> /dev/null || go get google.golang.org/grpc/cmd/protoc-gen-go-grpc
-	@which protoc-gen-validate  &> /dev/null || go get github.com/envoyproxy/protoc-gen-validate
 	@echo "install finished"
 
 .PHONY: uninstall
@@ -52,6 +49,11 @@ test-coverage:
 lint: $(LINTER)
 	@${TOOLS_SHELL} lint
 	@echo "lint check finished"
+
+.PHONY: generate
+generate:
+	@$(BUF) generate
+	@echo "buf generate finished"
 
 .PHONY: proto-check
 proto-check:
