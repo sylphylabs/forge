@@ -24,6 +24,40 @@ type Endpointer interface {
 	Endpoint() (*url.URL, error)
 }
 
+// Healthzer is implemented by servers that can report whether they are ready
+// to accept new work. Like [Endpointer] and [ReplyHeaderer] it is an optional
+// capability: consumers type-assert for it, and a [Server] that does not
+// implement it makes no readiness claim.
+type Healthzer interface {
+	// Healthz reports readiness, not liveness: whether the server can accept
+	// new work right now. It is false before the server starts accepting
+	// traffic, true while it accepts, and false again as soon as shutdown or
+	// draining begins — before the listener actually closes. Liveness — is
+	// the process running at all — is expressed by the process itself and
+	// needs no method.
+	//
+	// Healthz must be safe to call concurrently with the server lifecycle
+	// and must not block.
+	Healthz() bool
+}
+
+// GracefulStopper is implemented by servers that can drain in-flight work
+// before stopping. It is an optional capability alongside [Server]: consumers
+// type-assert for it.
+type GracefulStopper interface {
+	// GracefulStop stops accepting new work, waits for in-flight work to
+	// finish, and returns nil once the server has stopped. When ctx ends
+	// first, it abandons the wait and returns the context's error; the drain
+	// keeps running in the background, and the caller decides whether to
+	// force termination with Stop.
+	//
+	// Stop keeps its own contract — terminate within the bounds the context
+	// allows, by force if necessary. A lifecycle manager shutting down a
+	// server that implements GracefulStopper prefers it and falls back to
+	// Stop when the drain is abandoned or fails.
+	GracefulStop(context.Context) error
+}
+
 // Header is the storage medium used by a Header.
 type Header interface {
 	Get(key string) string
