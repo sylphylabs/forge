@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sync/atomic"
 	"time"
 
 	"github.com/sylphylabs/forge/internal/endpoint"
@@ -16,9 +17,11 @@ import (
 )
 
 var (
-	_ transport.Server     = (*Server)(nil)
-	_ transport.Endpointer = (*Server)(nil)
-	_ http.Handler         = (*Server)(nil)
+	_ transport.Server          = (*Server)(nil)
+	_ transport.Endpointer      = (*Server)(nil)
+	_ transport.Healthzer       = (*Server)(nil)
+	_ transport.GracefulStopper = (*Server)(nil)
+	_ http.Handler              = (*Server)(nil)
 )
 
 // ServerOption is an HTTP server option.
@@ -145,6 +148,7 @@ type Server struct {
 	ene        EncodeErrorFunc
 	pathPrefix string
 	router     *routeMux
+	serving    atomic.Bool
 }
 
 // NewServer creates an HTTP server by options.
@@ -285,6 +289,8 @@ func (s *Server) Start(ctx context.Context) error {
 		return ctx
 	}
 	log.Info("[HTTP] server listening", "addr", s.lis.Addr().String())
+	s.serving.Store(true)
+	defer s.serving.Store(false)
 	var err error
 	if s.tlsConf != nil {
 		err = s.ServeTLS(s.lis, "", "")
@@ -297,8 +303,25 @@ func (s *Server) Start(ctx context.Context) error {
 	return nil
 }
 
+// Healthz reports whether the server accepts new requests: true while the
+// listener serves, false before Start and as soon as a stop begins.
+func (s *Server) Healthz() bool {
+	return s.serving.Load()
+}
+
+// GracefulStop stops accepting new connections and waits for in-flight
+// requests to finish. When ctx ends first it returns the context's error and
+// leaves open connections alone; the caller decides whether to force
+// termination with Stop.
+func (s *Server) GracefulStop(ctx context.Context) error {
+	s.serving.Store(false)
+	log.Info("[HTTP] server stopping")
+	return s.Shutdown(ctx)
+}
+
 // Stop stop the HTTP server.
 func (s *Server) Stop(ctx context.Context) error {
+	s.serving.Store(false)
 	log.Info("[HTTP] server stopping")
 	err := s.Shutdown(ctx)
 	if err != nil {

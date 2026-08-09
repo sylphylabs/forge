@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"net"
 	"net/url"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -21,8 +22,10 @@ import (
 )
 
 var (
-	_ transport.Server     = (*Server)(nil)
-	_ transport.Endpointer = (*Server)(nil)
+	_ transport.Server          = (*Server)(nil)
+	_ transport.Endpointer      = (*Server)(nil)
+	_ transport.Healthzer       = (*Server)(nil)
+	_ transport.GracefulStopper = (*Server)(nil)
 )
 
 // ServerOption is gRPC server option.
@@ -122,6 +125,8 @@ type Server struct {
 	health            *health.Server
 	customHealth      bool
 	adminClean        func()
+	shutdownOnce      sync.Once
+	drained           chan struct{}
 	disableReflection bool
 }
 
@@ -133,7 +138,9 @@ func NewServer(opts ...ServerOption) *Server {
 		address: ":0",
 		timeout: 1 * time.Second,
 		health:  health.NewServer(),
+		drained: make(chan struct{}),
 	}
+	srv.health.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
 	for _, o := range opts {
 		o(srv)
 	}
@@ -195,22 +202,49 @@ func (s *Server) Start(ctx context.Context) error {
 	return s.Serve(s.lis)
 }
 
+// Healthz reports whether the server accepts new RPCs: true after Start
+// resumes serving, false before Start and as soon as a stop begins. It reads
+// the lifecycle-driven internal health state; with [CustomHealth] the
+// registered health service is user-owned and may report differently.
+func (s *Server) Healthz() bool {
+	resp, err := s.health.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
+	return err == nil && resp.GetStatus() == grpc_health_v1.HealthCheckResponse_SERVING
+}
+
+// drain marks the server as not serving and begins the graceful drain of
+// in-flight RPCs exactly once. The returned channel closes when the drain
+// completes.
+func (s *Server) drain() <-chan struct{} {
+	s.shutdownOnce.Do(func() {
+		if s.adminClean != nil {
+			s.adminClean()
+		}
+		s.health.Shutdown()
+		go func() {
+			defer close(s.drained)
+			log.Info("[gRPC] server stopping")
+			s.Server.GracefulStop()
+		}()
+	})
+	return s.drained
+}
+
+// GracefulStop stops accepting new RPCs and waits for in-flight RPCs to
+// finish. When ctx ends first it returns the context's error and leaves the
+// drain running; the caller decides whether to force termination with Stop.
+func (s *Server) GracefulStop(ctx context.Context) error {
+	select {
+	case <-s.drain():
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // Stop stop the gRPC server.
 func (s *Server) Stop(ctx context.Context) error {
-	if s.adminClean != nil {
-		s.adminClean()
-	}
-	s.health.Shutdown()
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		log.Info("[gRPC] server stopping")
-		s.GracefulStop()
-	}()
-
 	select {
-	case <-done:
+	case <-s.drain():
 	case <-ctx.Done():
 		log.Warn("[gRPC] server couldn't stop gracefully in time, doing force stop")
 		s.Server.Stop()
