@@ -28,6 +28,8 @@ type AppInfo interface {
 	Endpoint() []string
 }
 
+var _ transport.Healthzer = (*App)(nil)
+
 // App is an application components lifecycle manager.
 type App struct {
 	opts               options
@@ -120,7 +122,7 @@ func (a *App) Run() error {
 				stopCtx, cancel = context.WithTimeout(stopCtx, a.opts.stopTimeout)
 				defer cancel()
 			}
-			return recordLifecycleErr(server.Stop(stopCtx))
+			return recordLifecycleErr(stopServer(stopCtx, server))
 		})
 	}
 	finish := func(startupErr error) error {
@@ -215,6 +217,41 @@ func (a *App) Stop() error {
 		a.stopErr = a.stop()
 	})
 	return a.stopErr
+}
+
+// Healthz reports whether every server that exposes readiness through
+// [transport.Healthzer] can accept new work. Servers without the capability
+// make no claim and do not affect the result. App itself satisfies
+// transport.Healthzer, so it can feed a health endpoint directly.
+func (a *App) Healthz() bool {
+	for _, srv := range a.opts.servers {
+		if h, ok := srv.(transport.Healthzer); ok && !h.Healthz() {
+			return false
+		}
+	}
+	return true
+}
+
+// stopServer shuts one server down within ctx. A server that implements
+// [transport.GracefulStopper] drains first; when the drain is abandoned or
+// fails, Stop forces termination. Abandonment by ctx is the designed
+// fallback, so only the forced Stop's error is reported then; any other drain
+// error stays joined to Stop's result. Servers without the capability keep
+// the plain Stop path.
+func stopServer(ctx context.Context, srv transport.Server) error {
+	gs, ok := srv.(transport.GracefulStopper)
+	if !ok {
+		return srv.Stop(ctx)
+	}
+	err := gs.GracefulStop(ctx)
+	if err == nil {
+		return nil
+	}
+	stopErr := srv.Stop(ctx)
+	if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
+		return stopErr
+	}
+	return errors.Join(err, stopErr)
 }
 
 func (a *App) stop() error {
