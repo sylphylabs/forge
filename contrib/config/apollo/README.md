@@ -10,6 +10,7 @@ This module implements the `config.Source` interface in forge based apollo confi
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/sylphylabs/forge/contrib/config/apollo"
 	"github.com/sylphylabs/forge/config"
@@ -24,7 +25,7 @@ func main() {
 				apollo.WithEndpoint("http://localhost:8080"),
 				apollo.WithNamespace("application,event.yaml,demo.json"),
 				apollo.WithEnableBackup(),
-				apollo.WithSecret("ad75b33c77ae4b9c9626d969c44f41ee"),
+				apollo.WithSecret(os.Getenv("APOLLO_SECRET")),
 			),
 		),
 	)
