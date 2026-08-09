@@ -90,6 +90,10 @@ func SetOperation(ctx context.Context, op string) {
 // SetCookie adds a Set-Cookie header to the provided [ResponseWriter]'s headers.
 // The provided cookie must have a valid Name. Invalid cookies may be
 // silently dropped.
+//
+// The cookie is written exactly as given; no attributes are added. Callers are
+// responsible for its security attributes, and should set Secure and HttpOnly
+// (and an appropriate SameSite) on any cookie carrying session or auth data.
 func SetCookie(ctx context.Context, cookie *http.Cookie) {
 	if tr, ok := transport.FromServerContext(ctx); ok {
 		if tr, ok := tr.(*Transport); ok {
