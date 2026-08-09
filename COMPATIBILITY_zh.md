@@ -50,6 +50,7 @@ Forge 也不会仅为了兼容 Forge 而保留 API。如果已有更清晰或更
 | WRR selector | 稳态清理会扫描节点集合 | 先以 O(1) 判断是否存在过期项 | 仅性能变化 |
 | P2C selector | 每个 balancer 使用带锁随机源 | 使用并发安全的 `math/rand/v2` 顶层随机源 | 仅性能变化 |
 | App shutdown | 重复 stop 与阶段错误语义不完整 | 幂等 stop、合并错误、受限 after-stop | API 与行为变化 |
+| Transport 能力接口 | `transport.Server` 加 `Endpointer` | 可选的 `Healthzer` 与 `GracefulStopper` 接口；App 优先排空并聚合就绪状态 | 新 API |
 | Config watch | reload 期间可能观察到部分新旧值 | 原子发布完整、已解析的 snapshot | 行为变化 |
 | OTel 属性 | 旧 semconv，transport 属性混用 | semconv v1.41，按 transport 区分 | 遥测 schema 变化 |
 | OTel Metrics | 使用自定义名称、`code` 与 `reason` 的通用 unary middleware | HTTP semconv v1.41 duration histogram 与 grpc-go A66 duration metrics | 源码与遥测 schema 不兼容 |
@@ -263,6 +264,15 @@ Selector API 和选择结果保持不变，但稳态成本不同：
 范围内继续执行；多个失败通过 `errors.Join` 返回，不再由后发生的错误覆盖先前
 错误。`AfterStopTimeout` 配置受限的 after-stop 阶段，默认十秒。After-stop
 callback 保留 application context 的值，但不继承其取消状态。
+
+`transport.Healthzer` 与 `transport.GracefulStopper` 是 `transport.Server` 之外
+的可选能力接口。停机时 `App` 会在 `StopTimeout` 内优先排空实现了
+`GracefulStopper` 的 server，排空被放弃或失败时回退到 `Stop`；只实现
+`Start`/`Stop` 的 server 收到的仍是与之前相同的单次 `Stop` 调用。
+`App.Healthz` 报告所有实现 `Healthzer` 的 server 是否都能接收新请求，
+`transport/http/healthz.NewHandler` 将其作为 HTTP readiness 探针提供，不会自动
+注册任何路由。gRPC server 的内部 health service 在 `Start` 恢复之前报告
+`NOT_SERVING`。
 
 ## Config Reload
 

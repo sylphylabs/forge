@@ -52,6 +52,7 @@ upstream revision explicitly.
 | WRR selector | Scans a node set during steady-state cleanup | Detects stale entries in O(1) before cleanup | Performance only |
 | P2C selector | Per-balancer locked random source | Concurrent `math/rand/v2` top-level source | Performance only |
 | App shutdown | Repeated stop and stage errors were not fully defined | Idempotent stop, joined errors, bounded after-stop stage | API and behavior change |
+| Transport capabilities | `transport.Server` plus `Endpointer` | Optional `Healthzer` and `GracefulStopper` interfaces; App prefers draining and aggregates readiness | New API |
 | Config watch | Sources could be observed in a partially reloaded state | Complete resolved snapshots are published atomically | Behavior change |
 | OTel attributes | Legacy semconv and mixed transport attributes | semconv v1.41 transport-specific attributes | Telemetry schema change |
 | OTel metrics | Generic unary middleware with custom names, `code`, and `reason` | HTTP semconv v1.41 duration histograms and grpc-go A66 duration metrics | Source and telemetry schema breaking |
@@ -305,6 +306,17 @@ returned through `errors.Join` instead of later failures hiding earlier ones.
 `AfterStopTimeout` configures the bounded after-stop stage; its default is ten
 seconds. After-stop callbacks preserve application-context values without
 inheriting its cancellation.
+
+`transport.Healthzer` and `transport.GracefulStopper` are optional capability
+interfaces alongside `transport.Server`. During shutdown, `App` drains a
+server that implements `GracefulStopper` within `StopTimeout` and falls back
+to `Stop` when the drain is abandoned or fails; a server implementing only
+`Start` and `Stop` receives the same single `Stop` call as before.
+`App.Healthz` reports whether every server that implements `Healthzer` accepts
+new work, and `transport/http/healthz.NewHandler` serves that as an HTTP
+readiness probe without registering any route automatically. The gRPC
+server's internal health service reports `NOT_SERVING` until `Start` resumes
+it.
 
 ## Config Reload
 
