@@ -556,3 +556,117 @@ func (b *safeBytesBuffer) String() string {
 	defer b.mu.Unlock()
 	return b.buf.String()
 }
+
+func TestHealthzLifecycle(t *testing.T) {
+	srv := NewServer(Address("127.0.0.1:0"))
+	if srv.Healthz() {
+		t.Fatal("Healthz() before Start = true, want false")
+	}
+	go func() {
+		_ = srv.Start(context.Background())
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for !srv.Healthz() {
+		if time.Now().After(deadline) {
+			t.Fatal("Healthz() never became true after Start")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := srv.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if srv.Healthz() {
+		t.Fatal("Healthz() after Stop = true, want false")
+	}
+}
+
+func TestGracefulStopDrainsInFlightRequests(t *testing.T) {
+	inHandler := make(chan struct{})
+	release := make(chan struct{})
+	srv := NewServer(Address("127.0.0.1:0"), Timeout(0))
+	srv.HandleFunc("/slow", func(w http.ResponseWriter, _ *http.Request) {
+		close(inHandler)
+		<-release
+		w.WriteHeader(http.StatusOK)
+	})
+	endpoint, err := srv.Endpoint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _ = srv.Start(context.Background()) }()
+
+	got := make(chan int, 1)
+	go func() {
+		resp, err := http.Get(endpoint.String() + "/slow")
+		if err != nil {
+			got <- -1
+			return
+		}
+		defer resp.Body.Close()
+		got <- resp.StatusCode
+	}()
+	<-inHandler
+	if !srv.Healthz() {
+		t.Fatal("Healthz() while serving = false, want true")
+	}
+
+	stopped := make(chan error, 1)
+	go func() { stopped <- srv.GracefulStop(context.Background()) }()
+	// Draining begins: readiness must already be false while the in-flight
+	// request is still being served.
+	deadline := time.Now().Add(5 * time.Second)
+	for srv.Healthz() {
+		if time.Now().After(deadline) {
+			t.Fatal("Healthz() stayed true after GracefulStop began")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	close(release)
+	if err := <-stopped; err != nil {
+		t.Fatalf("GracefulStop() = %v, want nil", err)
+	}
+	if code := <-got; code != http.StatusOK {
+		t.Fatalf("in-flight request status = %d, want %d", code, http.StatusOK)
+	}
+}
+
+func TestGracefulStopAbandonsDrainOnContextEnd(t *testing.T) {
+	inHandler := make(chan struct{})
+	release := make(chan struct{})
+	srv := NewServer(Address("127.0.0.1:0"), Timeout(0))
+	srv.HandleFunc("/slow", func(w http.ResponseWriter, _ *http.Request) {
+		close(inHandler)
+		<-release
+		w.WriteHeader(http.StatusOK)
+	})
+	endpoint, err := srv.Endpoint()
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { _ = srv.Start(context.Background()) }()
+
+	got := make(chan int, 1)
+	go func() {
+		resp, err := http.Get(endpoint.String() + "/slow")
+		if err != nil {
+			got <- -1
+			return
+		}
+		defer resp.Body.Close()
+		got <- resp.StatusCode
+	}()
+	<-inHandler
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := srv.GracefulStop(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("GracefulStop() = %v, want %v", err, context.DeadlineExceeded)
+	}
+	// The drain keeps running in the background: releasing the handler lets
+	// the in-flight request complete instead of being force-closed.
+	close(release)
+	if code := <-got; code != http.StatusOK {
+		t.Fatalf("in-flight request status = %d, want %d", code, http.StatusOK)
+	}
+	_ = srv.Stop(context.Background())
+}

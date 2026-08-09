@@ -486,3 +486,121 @@ func (b *safeBytesBuffer) String() string {
 	defer b.mu.Unlock()
 	return b.buf.String()
 }
+
+func TestHealthzLifecycle(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	srv := NewServer(Listener(l))
+	if srv.Healthz() {
+		t.Fatal("Healthz() before Start = true, want false")
+	}
+	go func() { _ = srv.Start(context.Background()) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for !srv.Healthz() {
+		if time.Now().After(deadline) {
+			t.Fatal("Healthz() never became true after Start")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := srv.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if srv.Healthz() {
+		t.Fatal("Healthz() after Stop = true, want false")
+	}
+}
+
+func TestGracefulStopDrainsInFlightRPCs(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	srv := NewServer(Listener(l))
+	pb.RegisterGreeterServer(srv, &server{})
+	go func() { _ = srv.Start(context.Background()) }()
+
+	conn, err := NewClient(context.Background(), WithEndpoint(l.Addr().String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	client := pb.NewGreeterClient(conn)
+
+	stream, err := client.SayHelloStream(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := stream.Send(&pb.HelloRequest{Name: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatal(err)
+	}
+
+	stopped := make(chan error, 1)
+	go func() { stopped <- srv.GracefulStop(context.Background()) }()
+	// Draining begins: readiness must turn false while the stream is open.
+	deadline := time.Now().Add(5 * time.Second)
+	for srv.Healthz() {
+		if time.Now().After(deadline) {
+			t.Fatal("Healthz() stayed true after GracefulStop began")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	// Finish the in-flight stream so the drain can complete.
+	if err := stream.Send(&pb.HelloRequest{Name: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-stopped; err != nil {
+		t.Fatalf("GracefulStop() = %v, want nil", err)
+	}
+}
+
+func TestGracefulStopAbandonsDrainOnContextEnd(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	srv := NewServer(Listener(l))
+	pb.RegisterGreeterServer(srv, &server{})
+	go func() { _ = srv.Start(context.Background()) }()
+
+	conn, err := NewClient(context.Background(), WithEndpoint(l.Addr().String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	client := pb.NewGreeterClient(conn)
+
+	stream, err := client.SayHelloStream(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := stream.Send(&pb.HelloRequest{Name: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := srv.GracefulStop(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("GracefulStop() = %v, want %v", err, context.DeadlineExceeded)
+	}
+	// Stop shares the drain started by GracefulStop and forces termination.
+	if err := srv.Stop(ctx); err != nil {
+		t.Fatalf("Stop() = %v, want nil", err)
+	}
+	if srv.Healthz() {
+		t.Fatal("Healthz() after forced stop = true, want false")
+	}
+}
