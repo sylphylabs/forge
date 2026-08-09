@@ -772,3 +772,184 @@ func TestApp_ContextCanceled(t *testing.T) {
 	time.AfterFunc(time.Millisecond*10, stop)
 	_ = app.Run()
 }
+
+// gracefulServer records the shutdown call sequence App drives on a server
+// that implements transport.GracefulStopper.
+type gracefulServer struct {
+	*lifecycleServer
+	healthy      atomic.Bool
+	gracefulErr  error
+	gracefulHook func(context.Context)
+	calls        []string
+	callsMu      sync.Mutex
+}
+
+func newGracefulServer() *gracefulServer {
+	return &gracefulServer{lifecycleServer: newLifecycleServer()}
+}
+
+func (s *gracefulServer) Start(ctx context.Context) error {
+	s.healthy.Store(true)
+	return s.lifecycleServer.Start(ctx)
+}
+
+func (s *gracefulServer) Healthz() bool { return s.healthy.Load() }
+
+func (s *gracefulServer) record(call string) {
+	s.callsMu.Lock()
+	s.calls = append(s.calls, call)
+	s.callsMu.Unlock()
+}
+
+func (s *gracefulServer) callSequence() []string {
+	s.callsMu.Lock()
+	defer s.callsMu.Unlock()
+	return append([]string(nil), s.calls...)
+}
+
+func (s *gracefulServer) GracefulStop(ctx context.Context) error {
+	s.healthy.Store(false)
+	s.record("GracefulStop")
+	if s.gracefulHook != nil {
+		s.gracefulHook(ctx)
+	}
+	if s.gracefulErr != nil {
+		return s.gracefulErr
+	}
+	s.stopOnce.Do(func() { close(s.stopped) })
+	return nil
+}
+
+func (s *gracefulServer) Stop(ctx context.Context) error {
+	s.healthy.Store(false)
+	s.record("Stop")
+	return s.lifecycleServer.Stop(ctx)
+}
+
+func TestAppShutdownPrefersGracefulStop(t *testing.T) {
+	server := newGracefulServer()
+	app := New(Server(server), StopTimeout(time.Second))
+	errCh := make(chan error, 1)
+	go func() { errCh <- app.Run() }()
+	<-server.started
+	if err := app.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatal(err)
+	}
+	if got, want := server.callSequence(), []string{"GracefulStop"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("call sequence = %v, want %v", got, want)
+	}
+}
+
+func TestAppShutdownFallsBackToStopOnAbandonedDrain(t *testing.T) {
+	server := newGracefulServer()
+	server.gracefulErr = context.DeadlineExceeded
+	server.gracefulHook = func(ctx context.Context) { <-ctx.Done() }
+	app := New(Server(server), StopTimeout(50*time.Millisecond))
+	errCh := make(chan error, 1)
+	go func() { errCh <- app.Run() }()
+	<-server.started
+	if err := app.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatalf("abandoned drain is the designed fallback, want nil error, got %v", err)
+	}
+	if got, want := server.callSequence(), []string{"GracefulStop", "Stop"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("call sequence = %v, want %v", got, want)
+	}
+	requireClosed(t, server.stopped, "server stop signal")
+}
+
+func TestAppShutdownJoinsIndependentDrainError(t *testing.T) {
+	drainErr := errors.New("drain failed")
+	server := newGracefulServer()
+	server.gracefulErr = drainErr
+	app := New(Server(server), StopTimeout(time.Second))
+	errCh := make(chan error, 1)
+	go func() { errCh <- app.Run() }()
+	<-server.started
+	_ = app.Stop()
+	err := <-errCh
+	if !errors.Is(err, drainErr) {
+		t.Fatalf("Run() error = %v, want %v joined", err, drainErr)
+	}
+	if got, want := server.callSequence(), []string{"GracefulStop", "Stop"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("call sequence = %v, want %v", got, want)
+	}
+}
+
+// TestAppShutdownWithoutGracefulStopperIsUnchanged proves zero breakage: a
+// third-party server implementing only Start and Stop sees exactly the calls
+// it saw before the capability interfaces existed.
+func TestAppShutdownWithoutGracefulStopperIsUnchanged(t *testing.T) {
+	var stopCalls atomic.Int32
+	server := newLifecycleServer()
+	wrapped := &countingServer{lifecycleServer: server, stopCalls: &stopCalls}
+	app := New(Server(wrapped), StopTimeout(time.Second))
+	errCh := make(chan error, 1)
+	go func() { errCh <- app.Run() }()
+	<-server.started
+	if err := app.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatal(err)
+	}
+	if got := stopCalls.Load(); got != 1 {
+		t.Fatalf("Stop calls = %d, want exactly 1", got)
+	}
+	requireClosed(t, server.stopped, "server stop signal")
+	requireClosed(t, server.exited, "server exit signal")
+}
+
+// countingServer implements only transport.Server, mimicking a third-party
+// transport that predates the capability interfaces.
+type countingServer struct {
+	*lifecycleServer
+	stopCalls *atomic.Int32
+}
+
+func (s *countingServer) Stop(ctx context.Context) error {
+	s.stopCalls.Add(1)
+	return s.lifecycleServer.Stop(ctx)
+}
+
+func TestAppHealthzAggregatesHealthzers(t *testing.T) {
+	healthy := newGracefulServer()
+	healthy.healthy.Store(true)
+	unhealthy := newGracefulServer()
+	opaque := &mockServer{} // no Healthz: makes no claim
+
+	if app := New(Server(healthy, opaque)); !app.Healthz() {
+		t.Fatal("all reporting servers healthy, want true")
+	}
+	if app := New(Server(healthy, unhealthy)); app.Healthz() {
+		t.Fatal("one reporting server unhealthy, want false")
+	}
+	if app := New(); !app.Healthz() {
+		t.Fatal("no servers, want vacuous true")
+	}
+}
+
+func TestAppHealthzTurnsFalseDuringShutdown(t *testing.T) {
+	server := newGracefulServer()
+	app := New(Server(server), StopTimeout(time.Second))
+	errCh := make(chan error, 1)
+	go func() { errCh <- app.Run() }()
+	<-server.started
+	if !app.Healthz() {
+		t.Fatal("running server, want healthy")
+	}
+	if err := app.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatal(err)
+	}
+	if app.Healthz() {
+		t.Fatal("stopped server, want unhealthy")
+	}
+}
