@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -129,6 +130,7 @@ func TestRulesOperationIsOpaque(t *testing.T) {
 func TestRulesConcurrency(t *testing.T) {
 	r := NewRules[int64](1)
 	done := make(chan struct{})
+	var torn atomic.Int64
 	var wg sync.WaitGroup
 	for range 4 {
 		wg.Add(1)
@@ -141,7 +143,8 @@ func TestRulesConcurrency(t *testing.T) {
 				default:
 				}
 				if v := r.For("/svc/Method"); v != 1 && v != 2 {
-					panic("observed a value outside any snapshot")
+					torn.Store(v)
+					return
 				}
 				_ = r.For("/svc/Other")
 			}
@@ -152,6 +155,9 @@ func TestRulesConcurrency(t *testing.T) {
 	}
 	close(done)
 	wg.Wait()
+	if v := torn.Load(); v != 0 {
+		t.Fatalf("observed %d, a value outside any snapshot", v)
+	}
 }
 
 func TestWatchHotUpdate(t *testing.T) {
