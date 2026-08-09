@@ -159,8 +159,8 @@ the regenerated diff. No forwarding `protoc-gen-go-forge` command or
 `--go-forge_out` flag is retained.
 
 Published projects will replace these local entries with pinned
-`buf.build/forge/go-errors`, `go-http`, and `go-middleware` revisions after
-those plugins are public. Do not use an unpinned development revision.
+`buf.build/forge/go-errors`, `go-http`, and `go-middleware` revisions once
+those plugins are published. Do not use an unpinned development revision.
 
 ```shell
 buf generate

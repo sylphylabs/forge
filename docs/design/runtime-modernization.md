@@ -136,11 +136,12 @@ avoidable repeated discovery, parsing, lookup, locking, and allocation.
 
 ## Workstream 0: Release Baseline
 
-The local atomic generator cutover may proceed before public release. Publishing
-the first supported root and API versions plus the atomic Buf plugins remains a
-prerequisite for claiming a releaseable external toolchain. Existing Google HTTP
-transcoding and error generation must be available through pinned published
-plugins without repository-relative replacements before public release.
+The local atomic generator cutover may proceed before the first release.
+Publishing the first supported root and API versions plus the atomic Buf plugins
+remains a prerequisite for claiming a releaseable external toolchain. Existing
+Google HTTP transcoding and error generation must be available through pinned
+published plugins without repository-relative replacements before the first
+release.
 
 Required outcomes:
 

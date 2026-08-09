@@ -153,7 +153,7 @@ HTTP plugin 保留原 option 名称。middleware 的 HTTP 方法集合必须与 
 `_forge.pb.go`。项目不保留 `protoc-gen-go-forge` 转发命令或
 `--go-forge_out` flag。
 
-三个 plugin 公开后，已发布项目应把本地 entry 替换为固定 revision 的
+三个 plugin 发布后，已发布项目应把本地 entry 替换为固定 revision 的
 `buf.build/forge/go-errors`、`go-http` 和 `go-middleware`，不得使用未固定的
 开发 revision。
 

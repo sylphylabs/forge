@@ -36,7 +36,7 @@ go get github.com/sylphylabs/forge@main
 Forge 有意不提供项目脚手架 CLI。项目创建、依赖升级和服务运行均使用
 标准 Go 工具链。
 
-公开 Buf plugin 发布前，可以从当前 checkout 构建三个原子化 Forge
+对应的 Buf plugin 发布前，可以从当前 checkout 构建三个原子化 Forge
 Protobuf generator：
 
 ```shell
