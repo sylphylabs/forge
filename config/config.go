@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -195,7 +196,13 @@ func Get[T any](c Config, key string) (T, error) {
 		return any(i).(T), err
 	case int:
 		i, err := v.Int()
-		return any(int(i)).(T), err
+		if err != nil {
+			return t, err
+		}
+		if i < math.MinInt || i > math.MaxInt {
+			return t, fmt.Errorf("config value %q (%d) overflows int", key, i)
+		}
+		return any(int(i)).(T), nil
 	case float64:
 		f, err := v.Float()
 		return any(f).(T), err
