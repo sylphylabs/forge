@@ -65,26 +65,20 @@ ID 从 UUIDv1 改为 UUIDv4；如果其值或 version 属于运维契约，应�
 ## 3. 更新代码生成器
 
 Forge 将公开错误 descriptor 统一放在独立的
-`github.com/sylphylabs/forge/api` module 中。runtime 对外发送和接收的仍然是
-`{code, reason, message, metadata}` 四字段错误体，不会用
-`google.rpc.Status` 替换它。
+`github.com/sylphylabs/forge/api` module 中。错误体不再是
+`{code, reason, message, metadata}` 四字段：它携带与传输无关的 `kind`、
+`domain`、`trace_id` 以及字段级 `violations`。
 
-大多数业务通过 `errors.New`、`errors.Newf` 或生成的错误辅助函数构造错误，不需要
-修改 runtime 调用。只有显式引用旧生成消息类型的代码需要更新 import 和类型：
+显式引用生成消息类型的代码需要更新 import：
 
 ```text
 github.com/go-kratos/kratos/v3/errors.Status
 github.com/sylphylabs/forge/api/errors/v1.Status
 ```
 
-API import path `github.com/sylphylabs/forge/api/errors/v1` 声明的 package 名是
-`errors`。runtime 内部将其 alias 为 `errorapi`，并在 `errors.Error` 中嵌入
-`errorapi.Status`，因此 `err.Code`、`err.Reason`、`err.Message` 与
-`err.Metadata` 等字段访问保持不变。待 Forge API module 发布后，还需更新
-`.proto` import 与 enum annotation；不应继续保留或 vendor 继承自 Forge 的任一份
-`errors/errors.proto`。
-
-schema 的具体改写如下：
+`errors.Error` 不再内嵌该消息，因此 `err.Code`、`err.Reason` 等字段访问改为
+`err.Kind()`、`err.Reason()`、`err.Domain()`、`err.Message()` 等访问器。调用点
+的改动见第 9 节；schema 改写如下：
 
 ```proto
 // 修改前
@@ -92,19 +86,20 @@ import "errors/errors.proto";
 enum ErrorReason {
   option (errors.default_code) = 500;
   ERROR_REASON_UNSPECIFIED = 0;
+  ERROR_REASON_NOT_FOUND = 1 [(errors.code) = 404];
 }
 
 // Forge
 import "sylphy/errors/v1/errors.proto";
 enum ErrorReason {
-  option (sylphy.errors.v1.default_code) = 500;
   ERROR_REASON_UNSPECIFIED = 0;
+  ERROR_REASON_NOT_FOUND = 1 [(sylphy.errors.v1.kind) = KIND_NOT_FOUND];
 }
 ```
 
-enum value override 同样需要从 `(errors.code)` 改为
-`(sylphy.errors.v1.code)`。修改源文件后应重新生成 helper；generator 不再携带
-旧 annotation 的私有 fallback descriptor。
+annotation 现在指定 `Kind` 而非 HTTP 状态码，`default_code` 变为可省的
+`default_kind`。修改源文件后应重新生成；generator 不再携带旧 annotation 的私有
+fallback descriptor。
 
 用三个原子化 Forge 命令替换继承来的 generator module。本地开发期间它们
 共享一个源码 module：
@@ -328,16 +323,111 @@ Go client 时，应使用具体 primary rule，并把含糊规则放到 addition
 HTTP SSE 与 WebSocket stream 不会再被 unary server timeout 终止。如果业务
 要求最大连接时长、读写超时或空闲超时，需要显式配置相应策略。
 
-## 9. 保留 Kratos v3 已完成的迁移
+## 9. 迁移错误
 
-Forge 继续使用 Kratos v3 的 `log/slog` 日志模型、兼容标准库的 errors，
-以及相互独立的 `json` 与 `protojson` codec。已经使用 Kratos v3 的服务不应
-撤销这些迁移。
+Forge 用与传输无关的 `Kind` 而非 HTTP 状态码给错误分类，并为每个 reason 生成
+sentinel 值而非构造函数与判定函数。契约见
+[`../design/errors.md`](../design/errors.md)，本节只讲机械改动。
+
+### 9.1 替换构造函数
+
+```go
+// 修改前
+return errors.BadRequest("VALIDATION", "email is malformed")
+return errors.InternalServer("DB", err.Error())
+
+// Forge
+return errors.New(errors.KindInvalidArgument).
+    WithReason("VALIDATION").Msg("email is malformed")
+return errors.New(errors.KindInternal).
+    WithReason("DB").Wrap(err)
+```
+
+对应关系：
+
+| Kratos v3 | Forge |
+| --- | --- |
+| `BadRequest` | `KindInvalidArgument` |
+| `Unauthorized` | `KindUnauthenticated` |
+| `Forbidden` | `KindPermissionDenied` |
+| `NotFound` | `KindNotFound` |
+| `Conflict` | `KindConflict` |
+| `TooManyRequests` | `KindResourceExhausted` |
+| `ClientClosed` | `KindCanceled` |
+| `InternalServer` | `KindInternal` |
+| `ServiceUnavailable` | `KindUnavailable` |
+| `GatewayTimeout` | `KindDeadlineExceeded` |
+
+`WithCause` 改名为 `Wrap`。应优先使用它，而不是把 `err.Error()` 折进 message：
+message 给人读，cause 给 `errors.Is` 与 `errors.As` 用。
+
+### 9.2 替换判定函数
+
+`IsXxx` 与 `Code` 已移除。判定具体错误用 `errors.Is`，判定错误类别用
+`errors.KindOf`：
+
+```go
+// 修改前
+if errors.IsNotFound(err) { ... }
+if errors.Code(err) == 503 { ... }
+
+// Forge
+if errors.Is(err, v1.ErrUserNotFound) { ... }
+if errors.KindOf(err) == errors.KindUnavailable { ... }
+```
+
+`errors.Reason` 改为 `errors.ReasonOf`。需要错误对应的 HTTP 状态码时，用
+`errors.KindOf(err).HTTPStatus()`。
+
+### 9.3 更新生成的调用点
+
+生成物由 `func ErrorXxx` / `func IsXxx` 变为 `var ErrXxx`：
+
+```go
+// 修改前
+return v1.ErrorUserNotFound("no user %s", id)
+if v1.IsUserNotFound(err) { ... }
+
+// Forge
+return v1.ErrUserNotFound.Msgf("no user %s", id).Wrap(cause)
+if errors.Is(err, v1.ErrUserNotFound) { ... }
+```
+
+生成的标识符会去掉 protobuf 作用域规则强制的 enum 名前缀，因此
+`FAILURE_REASON_NOT_FOUND` 生成 `ErrNotFound`。
+
+未标注 `kind` 的值默认为 `KIND_INTERNAL`，可用 enum 上的 `default_kind` 改变。
+重新生成时，reason 不是 `SCREAMING_SNAKE_CASE`、未以 enum 名为前缀、或零值上标
+了 kind，都会**编译期失败**。应修正声明而不是绕过 generator。
+
+### 9.4 检查跨进程行为变化
+
+有两项改动影响可观测行为，而不只是源码：
+
+**cause 链不再跨进程。** 收到的错误 `errors.Unwrap` 返回 nil，`errors.As` 也取
+不到远端类型。此前依赖 RPC 后检查 cause 的客户端，改用 trace ID 关联。
+
+**出网错误经过 `errors.Policy`**，默认会隐藏内部错误的 message。此前展示服务端
+500 message 的客户端，现在会看到通用文案；原文仍在服务端日志中，按 trace ID 可
+查。内网可信链路可以关闭：
+
+```go
+http.NewErrorEncoder(errors.PolicyVerbose)
+```
+
+最后，`errors.Join` 在本契约中**不是**聚合错误 —— 过线时只保留第一个。需要报告
+多个失败的校验逻辑改用 `errors.Violations`，它映射到 `errdetails.BadRequest`
+并保留全部条目。
+
+## 10. 保留 Kratos v3 已完成的迁移
+
+Forge 继续使用 Kratos v3 的 `log/slog` 日志模型，以及相互独立的 `json` 与
+`protojson` codec。已经使用 Kratos v3 的服务不应撤销这些迁移。
 
 HTTP generator 已支持 Edition 2023 Open/Opaque API。应从 schema 重新生成，
 不要继续保留上游 generator 产生的旧代码。
 
-## 10. 替换旧 Metrics Middleware
+## 11. 替换旧 Metrics Middleware
 
 Forge 直接移除继承的通用 metrics middleware，不提供兼容 shim，也不双发旧
 指标。HTTP 应在原生 filter 与 `RoundTripper` 边界安装：
@@ -447,7 +537,7 @@ duration 在收到 response header 或 transport 失败时结束，不再包含 
 完整的属性、状态、路由、基数与生命周期合同见
 [`docs/design/otel-metrics.md`](../design/otel-metrics.md)。
 
-## 11. 验证迁移
+## 12. 验证迁移
 
 先生成代码，再运行测试，避免生成文件中残留旧导入路径：
 
@@ -480,6 +570,13 @@ go vet ./...
 - [ ] 动态模板继续使用 `BuildPath`；重复使用的固定模板只编译一次。
 - [ ] 检查 body/query 分类、ProtoJSON wire value 和 `%2F` 路径。
 - [ ] 为 HTTP stream 定义显式生命周期策略。
+- [ ] 用 `errors.New(Kind)` 替换 HTTP 命名的错误构造函数，`WithCause` 改为 `Wrap`。
+- [ ] 用 `errors.Is`、`errors.KindOf` 替换 `IsXxx` 与 `errors.Code`。
+- [ ] 将 `default_code`/`code` annotation 改写为 `default_kind`/`kind` 并重新生成。
+- [ ] 将调用点更新为生成的 sentinel 值。
+- [ ] 为每个边界选择 `errors.Policy`；确认默认脱敏行为适用于公网调用方。
+- [ ] 校验路径中的 `errors.Join` 改用 `errors.Violations`。
+- [ ] 确认没有客户端依赖 RPC 后通过 `errors.As` 取到 cause。
 - [ ] 用 HTTP filter/wrapper 与显式 gRPC A66 metric set 替换通用 metrics middleware。
 - [ ] 将 counter 查询改为 histogram `_count`，并移除依赖 `reason` 的指标维度。
 - [ ] 根据实际 exporter 输出验证 Prometheus 名称、bucket、exemplar、dashboard 与 alert。

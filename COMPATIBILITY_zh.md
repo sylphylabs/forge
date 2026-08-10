@@ -2,7 +2,7 @@
 
 状态：预发布
 
-最后核对：2026 年 7 月 25 日
+最后核对：2026 年 8 月 9 日
 
 本文是 [`COMPATIBILITY.md`](COMPATIBILITY.md) 的中文翻译；如果两份文档存在
 歧义，以英文规范版本为准。
@@ -54,6 +54,21 @@ Forge 也不会仅为了兼容 Forge 而保留 API。如果已有更清晰或更
 | Config watch | reload 期间可能观察到部分新旧值 | 原子发布完整、已解析的 snapshot | 行为变化 |
 | OTel 属性 | 旧 semconv，transport 属性混用 | semconv v1.41，按 transport 区分 | 遥测 schema 变化 |
 | OTel Metrics | 使用自定义名称、`code` 与 `reason` 的通用 unary middleware | HTTP semconv v1.41 duration histogram 与 grpc-go A66 duration metrics | 源码与遥测 schema 不兼容 |
+| 错误分类 | 错误上存 HTTP 状态码，再映射到 gRPC | 与传输无关的 `Kind`，向每个 transport 单向投影 | 源码、线格式与行为不兼容 |
+| 错误构造 | `errors.BadRequest(reason, msg)` 与生成的 `ErrorXxx(format, args...)` | `errors.New(Kind)` 与生成的 sentinel 值 | 源码与生成代码不兼容 |
+| 错误判定 | 生成的 `IsXxx(err)`，比较结构体字段 | 对生成 sentinel 用 `errors.Is`，另有 `errors.KindOf` | 源码不兼容 |
+| 错误 annotation | `default_code` 与 `code`，携带 HTTP 状态码 | `default_kind` 与 `kind`，携带 `Kind` | Protobuf 契约不兼容 |
+| 重试判定 | `errors.IsRetryable` 与 `Kind.Retryable` 孤立地按 Kind 分类 | 已移除；判定需要投递证据或幂等声明 | 源码不兼容 |
+| 客户端重试默认行为 | `KindUnavailable` 被无条件重试 | 仅在有 `transport.WasNotSent` 证据或 `retry.Idempotent(ctx)` 时重试 | 行为不兼容 |
+| 聚合错误 | `errors.Join` 过线时静默丢弃除第一个外的全部错误 | 显式 `errors.Violations`，投影到 `errdetails.BadRequest` | 新增 API |
+| 错误响应格式 | 参与内容协商：JSON 写 `NOT_FOUND`，ProtoJSON 写 `KIND_NOT_FOUND` | 统一为 `application/problem+json`，不参与协商 | 线格式不兼容 |
+| 错误披露 | 所有 message 原样过线 | 只有 `errors.Public` 过线：调用方显式声明的内容，绝不含 cause | 源码与行为不兼容 |
+| 负载均衡策略 | 进程级全局 `selector.SetGlobalSelector`，默认值取决于哪个 transport 先被链接 | 每客户端 `WithSelector`，`wrr` 默认值由各 transport 自己拥有 | 源码不兼容 |
+| HTTP 客户端流 | 单一 `ClientStream` 接口；只收不发的流用运行时错误应付发送方法 | 核心 `ClientStream` + `SendingClientStream` 能力接口 | 源码不兼容 |
+| 错误响应读取 | 任何 body 都解析，无大小限制，不校验状态码 | 仅 Problem 媒体类型、64 KiB 上限、与状态码矛盾的 body 一律丢弃 | 行为变化 |
+| HTTP/gRPC 状态码转换 | `transport/http/status` 双向转换 | 已移除；各 transport 单向投影 `Kind` | 源码不兼容 |
+| HTTP transport 的 Protobuf 依赖 | `transport/http` 无条件链接 Protobuf runtime | 移入 `transport/http/transcoding`；纯 JSON 服务既不链接 Protobuf 也不链接 gRPC | 源码不兼容；生成代码 import 路径变化 |
+| Codec 注册 | `transport` blank-import 全部 codec | 只注册无需 schema 的 codec；Protobuf codec 由 `transcoding` 注册 | 未注册 content type 的行为变化 |
 
 ## 仓库身份与版本
 
@@ -284,8 +299,9 @@ File watcher 会直接跳过隐藏文件，不再把它们作为 reload error �
 
 OpenTelemetry tracing 使用 semantic conventions v1.41。HTTP 与 gRPC 属性分开
 发出，peer port 使用整数，gRPC method 会被严格校验，同时保留非法原始 method
-便于诊断。原自定义 `rpc.status_code` 字段改为 `forge.error.code`，避免与标准
-RPC semantic attribute 冲突。
+便于诊断。原自定义 `rpc.status_code` 字段改为 `forge.error.kind` 与
+`forge.error.reason`，避免与标准 RPC semantic attribute 冲突，且用名称而非编号
+表达失败类别。
 
 Metrics 改为按 transport 区分且首版只提供 duration histogram。HTTP 使用 v1.41
 Stable `http.server.request.duration` 与 `http.client.request.duration`；gRPC 直接
@@ -301,12 +317,171 @@ shim。HTTP instrumentation 覆盖原生 `ServeHTTP` 与 `RoundTrip` 生命周�
 grpc-go 官方实现负责。完整合同与基数策略见
 [`docs/design/otel-metrics.md`](docs/design/otel-metrics.md)。
 
+## Metadata 透传编码
+
+`middleware/metadata` 对无法直接作为 header 值传输的透传值做百分号转义，并在
+接收端还原。gRPC 的非二进制 header 只接受 0x20 至 0x7E 的可打印 ASCII，否则
+以 `Internal` 错误终止整个 RPC；因此在 Kratos v3 的行为下，只要 metadata 中带
+非 ASCII 的姓名、地址或控制字符，调用在到达服务端之前就已失败。
+
+只有当值落在该范围之外，或含有转义标记 `%` 本身时才会编码。不含 `%` 的可打印
+ASCII 值原样传输，因此该编码对常见情形不可见。
+
+这是线格式变更，其版本错配行为是刻意设计的：
+
+- Forge 发送方与不做解码的对端，在所有原本就能传输的值上一致，因为这些值不会
+  被改写。原本需要编码的值会以百分号转义的形式到达，而此前该调用直接失败。
+- Forge 接收方与不做编码的对端，在所有值上一致，包括含裸 `%` 的值：无法还原的
+  值原样透传，而不是被拒绝。
+
+因此两个方向都退化为此前的行为，而不会损坏值或使请求失败。`Server`、`Client`
+与 `ServerStream` 均参与其中；其中流式服务端路径为对应上游提案所未覆盖。
+
+## 错误
+
+错误携带与传输无关的 `Kind`，而不是 HTTP 状态码。每个 transport 把 `Kind`
+**单向**投影到自己的词汇表，因此不存在经由异构码空间的往返。旧设计中该往返是
+有损的：构造为 422 的错误经一跳 gRPC 后变成 500，因为 HTTP 有六十余个状态码而
+gRPC 只有十七个。
+
+作为服务契约的错误在 Protobuf 中用 `kind` 声明，`protoc-gen-go-errors` 为每个
+reason 生成一个不可变 sentinel 值，而非一个构造函数加一个判定函数。因此判定使用
+`errors.Is` 而非生成的 `IsXxx`，`errors.KindOf` 取代 `errors.Code`。generator 会在
+**编译期**拒绝那些会变成线格式不一致的声明：reason 不是 `SCREAMING_SNAKE_CASE`、
+未以 enum 名为前缀、或零值上标注了 kind。
+
+身份信息（含 domain）通过 `errdetails.ErrorInfo` 传递，因此调用方匹配远端错误与
+匹配本地错误使用同一个 sentinel。聚合失败通过 `errdetails.BadRequest` 传递；
+`errors.Join` 在本契约中不是聚合错误，过线时只保留第一个。
+
+cause 链不跨进程。收到的错误 `errors.Unwrap` 返回 nil，`errors.As` 也取不到远端
+类型。跨服务排查改用 trace ID：tracing middleware 会自动为出站错误打上当前
+trace，完整记录由 trace 后端保存。Forge 不会另外把 cause 摘要序列化上线。
+
+`transport/http/status` 包已移除。它的双向码转换正是 `Kind` 要取代的有损环节；
+各 transport 直接投影 `Kind` 后，已无任何引用。
+
+错误响应固定为 `application/problem+json`，**不参与内容协商**。此前参与协商时，同一个
+错误有两种写法 —— JSON 写 `NOT_FOUND`、ProtoJSON 写 `KIND_NOT_FOUND` —— 客户端读到
+非预期的那种会静默丢失 kind 或 reason。协商「结果」有意义，协商「失败」只会制造两端
+不一致。SSE 与 WebSocket 的错误帧使用同一份文档。
+
+接收方不认识的 kind 会保留其身份，仅分类回退到状态码，因此运行较新版本的对端仍可理解。
+
+过线的是 `errors.Public`：kind、身份，以及调用方**显式声明**的 message、metadata
+与 violations。cause 由**结构**排除而非由规则排除，因此没有任何配置能让它泄漏。
+
+这取代了 `errors.Policy` 及 `PolicySafe` / `PolicyStrict` / `PolicyVerbose`，三者
+均已删除。policy 读 Kind 去推断它无法观察的来源：它从不检查 metadata 或 violation
+文本，且那三个值是可重赋值的导出包变量，任何依赖库都能改掉。「什么是公开的」只有
+写下该字段的调用方能正确回答，`Msg` / `Meta` / `WithMetadata` / `Violations` 就是
+他们表态的方式。来自 Forge 之外的错误只披露 `KindUnknown` —— 它的文本是写给运维看
+的，不是写给调用方的。
+
+客户端只在 body 为 `application/problem+json`、不超过 `MaxProblemBytes`（64 KiB）、
+且其 kind 与响应状态码一致时才解析它。与状态码矛盾的 body 一律丢弃、改用状态行 ——
+因为陈旧中间层可能用新状态码回放旧 body，信它会让调用方把 503 匹配成 NotFound
+sentinel 而停止重试。未知 kind **不算**矛盾：保留其身份，仅分类回退到状态行。
+
+身份仅在 domain 与 reason 成对时保留；半个身份无法匹配 sentinel，按匿名处理。
+
+`errors.IsRetryable` 与 `errors.Kind.Retryable` 不存在。重试是否安全取决于错误
+类别、请求是否到达服务端、以及操作本身是否幂等，而 Kind 只回答第一项。
+`KindUnavailable` 尤其如此：它既可能产生于连接从未建立，也可能产生于服务端已执行
+完毕而响应在回传途中丢失，因此仅凭 Kind 得出的布尔值会授权重复已经发生的工作。调用方
+用 `errors.KindOf` 组合幂等声明与传输层的投递证据自行判定，或交给
+`middleware/retry`。
+
+参见 [`docs/design/errors.md`](docs/design/errors.md)。
+
+## 客户端重试需要证据或声明
+
+`middleware/retry` 只在两种情况下重试失败的调用：传输层证明请求从未到达服务端，
+或调用方用 `retry.Idempotent(ctx)` 声明该操作幂等。两者皆无的错误在一次尝试后
+直接返回。
+
+因此 `KindUnavailable` 本身不再触发重试。服务端可能在执行完请求之后、响应送达
+之前才报告自己不可用，此时对非幂等操作重试就是重复执行 —— 要避免的正是重复扣款
+或重复写入这类最难追查到根因的故障。在幂等声明下，`KindUnavailable` 与
+`KindDeadlineExceeded` 都会重试；`KindResourceExhausted` 与 `KindConflict` 不会，
+因为无服务端退避指引地重试限流调用会加剧过载，而冲突需要调用方先重新读取状态。
+
+投递证据来自传输层 —— 只有它知道字节是否离开了本进程。`transport.MarkNotSent`
+记录该证据，`transport.WasNotSent` 读取它。HTTP 客户端标记节点选择失败、dial
+失败与 WebSocket 握手失败。gRPC 客户端不做任何标记：grpc-go 把 dial 失败与调用
+途中断连报告为同一个没有类型化 cause 的 `codes.Unavailable` status，因此需要自动
+重试的 gRPC 调用应声明幂等。
+
+要为某个操作恢复自动重试，只需在明确知道该操作可安全重复的调用点加一次声明 ——
+通常是生成的调用包装或客户端 facade。
+
+参见 [`docs/design/retry.md`](docs/design/retry.md)。
+
+## 负载均衡是每客户端的
+
+`selector.GlobalSelector` 与 `selector.SetGlobalSelector` 已移除。客户端用
+`http.WithSelector` 或 `grpc.WithSelector` 选择策略，默认加权轮询。
+
+原全局变量可被任何依赖库重赋值、被并发读取且无同步，默认值还取决于哪个 transport
+先被链接。改为每客户端 option 后三者同时消失：一个依赖不再能改变另一个客户端的均衡
+行为，默认值也成为常量。
+
+gRPC 侧该 option 作用于经服务发现的端点；直连固定地址的客户端只有一个节点，不查询
+策略。
+
+## HTTP 客户端流显式声明自己能做什么
+
+`ClientStream` 只保留每种流都能兑现的方法 —— `Header`、`Trailer`、`CloseSend`、
+`Context`、`RecvMsg`。发送是独立能力：
+
+```go
+type SendingClientStream interface {
+	ClientStream
+	SendMsg(any) error
+	CloseAndRecv(any) error
+}
+```
+
+SSE 是单向的，而旧接口把这个**编译期事实**表达成三个方法的运行时错误字符串。现在
+调用方从类型就能知道：`Client.WebSocket` 返回 `SendingClientStream`，
+`Client.ServerSentEvent` 返回 `ClientStream`，持有窄接口而需要发送的代码做类型断言。
+
+`Send` 与 `Recv` 已移除 —— 它们是 `SendMsg` / `RecvMsg` 的别名。生成的客户端方法集
+不变，因此调用生成代码的业务代码无需修改，但**必须用配套的 `protoc-gen-go-http`
+重新生成**。
+
+## Protobuf 是可选的
+
+`transport/http` 只处理字节与 Go 值。所有需要 schema 的能力 —— HTTP transcoding、
+ProtoJSON 投影、path/query 绑定到声明字段、原始 `HttpBody`、stream body field ——
+都在 `transport/http/transcoding`，import 它即安装进 transport。
+
+生成的绑定代码会 import 它，因此从 `.proto` 构建的服务行为与开销均与从前一致。
+只提供纯 JSON 的服务两者都不 import：
+
+| 应用形态 | 二进制 | Protobuf 包 | gRPC 包 |
+| --- | --- | --- | --- |
+| 纯 JSON（`transport/http`） | 11 MB | 0 | 0 |
+| 只使用 `errors` 的库 | 2.6 MB | 0 | 0 |
+| 生成代码 + gRPC | 18 MB | 40 | 75 |
+
+手写服务若要绑定 Protobuf 消息而不经生成代码，MUST 自行 import：
+
+```go
+import _ "github.com/sylphylabs/forge/transport/http/transcoding"
+```
+
+未 import 时：原始 `HttpBody` 不被识别，path 变量不会绑定到消息字段，stream body
+field 会报告 schema runtime 缺失 —— transport 会明确报错，不静默失败。
+
+`transport` 不再 blank-import Protobuf codec，改由 `transcoding` 注册。服务若需要
+`proto` / `protojson` content type 而不使用生成代码，同样 import 该子包。
+
 ## 继承自 Kratos v3 的行为
 
 以下行为很重要，但不是 Forge 与 Kratos v3 的差异：
 
 - 日志使用 `log/slog`；
-- errors package 提供兼容标准库的包装；
 - `encoding/json` 与 `encoding/protojson` 是独立 codec；
 - 生成的 HTTP handler 会先 Bind 请求，再进入 service middleware。
 

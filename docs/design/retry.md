@@ -1,16 +1,16 @@
 # Client Retry
 
-Status: implemented
+Status: accepted
 
-Last reviewed: August 9, 2026
+Last reviewed: August 10, 2026
 
 ## Purpose
 
 This document defines the client retry middleware in `middleware/retry`: the
-retryable-error judgment and its default set, the backoff scheme, the
-per-call idempotency declaration, the per-operation policy table and its
-dynamic governance, and the deliberate exclusions — stream retries and
-node re-selection.
+retry decision and the delivery evidence it rests on, the injectable backoff
+curve, the per-call idempotency declaration, the per-operation policy table
+and its dynamic governance, and the deliberate exclusions — stream retries
+and node re-selection.
 
 The governance rule table this builds on is defined in
 [`dynamic-governance.md`](dynamic-governance.md). Diagnosis probes are
@@ -18,22 +18,29 @@ defined in [`diagnosis-probes.md`](diagnosis-probes.md).
 
 ## Decision
 
-Retry is one client unary middleware with three injectable judgments and no
-new mechanism:
+Retry is one client unary middleware with injectable judgments and no new
+mechanism:
 
 ```go
 // middleware/retry
 type Policy struct {
     Attempts    int           // max attempts including the first; 1 disables
-    BaseBackoff time.Duration // first wait bound, doubled per attempt
-    MaxBackoff  time.Duration // wait bound cap
+    BaseBackoff time.Duration // first wait bound of the default curve
+    MaxBackoff  time.Duration // wait bound cap of the default curve
 }
+
+type Backoff interface {
+    Next(attempt int) time.Duration
+}
+
+type ExponentialJitter struct{ Base, Max time.Duration }
 
 func Client(opts ...Option) (middleware.UnaryMiddleware, error)
 
 func WithPolicy(p Policy) Option
 func WithRules(rules *governance.Rules[Policy]) Option
 func WithRetryable(f func(ctx context.Context, err error) bool) Option
+func WithBackoff(b Backoff) Option
 
 func Idempotent(ctx context.Context) context.Context
 func IsIdempotent(ctx context.Context) bool
@@ -44,54 +51,127 @@ func ParseRule(v config.Value) (Policy, error)
 ```
 
 The middleware re-invokes the wrapped handler while three gates all hold:
-the policy in effect grants another attempt, the retryable predicate accepts
-the error, and the call context can accommodate the next backoff. On give-up
+the policy in effect grants another attempt, the retry decision accepts the
+error in the context of this operation, and the call context can accommodate
+the next backoff. On give-up
 the last attempt's error is returned unchanged — retry adds no error type of
 its own, so callers match on the underlying failure exactly as they would
 without the middleware.
 
 `Client` returns an error, not just a middleware: a nil option, an invalid
-static policy, an explicitly nil rule table or predicate are construction
-bugs and are reported at the offending call, never repaired into defaults.
+static policy, an explicitly nil rule table, predicate, or backoff are
+construction bugs and are reported at the offending call, never repaired
+into defaults.
 
-## The Default Retryable Set
+## The Retry Decision
 
-Retrying is only safe when the failed attempt provably never executed on a
-server. The default predicate admits exactly two error classes on that
-basis, plus one more under an explicit caller declaration:
+A retry re-executes work. Whether that is safe turns on three things: what
+class of failure occurred, whether the request ever reached a server, and
+whether the operation tolerates running twice. An `errors.Kind` answers only
+the first. The second is known solely to the transport, and the third solely
+to the call site, so the decision composes all three rather than deriving
+from any one.
 
-- **Connection establishment failures** — a `*net.OpError` with `Op ==
-  "dial"` anywhere in the error chain. The connection never opened, so no
-  request bytes left the client. This is the one class where non-execution
-  is a physical fact rather than a protocol promise.
-- **Service unavailable** — `errors.IsServiceUnavailable`, code 503, which
-  is also what gRPC `Unavailable` maps to through the transport error
-  conversion (`transport/http/status`). Both protocols document the
-  condition as "the service is temporarily unable to process the request";
-  Forge's own client emits it for node-selection failure
-  (`NODE_NOT_FOUND`), and gRPC emits `Unavailable` for connection loss.
-  The request was rejected, not run.
-- **Timeouts** — `errors.IsGatewayTimeout`, code 504, which gRPC
-  `DeadlineExceeded` maps to — **only when the call context carries the
-  [Idempotent] declaration**. A timed-out request is ambiguous: the server
-  may have executed it and the response was lost. Retrying it is duplicate
-  execution unless the operation tolerates that, and only the caller knows.
+`DefaultRetryable` retries a failure that carries **delivery evidence** or an
+**idempotence declaration**, and nothing else.
 
-Everything else is refused:
+### Evidence: the transport proved nothing was sent
 
-- 4xx client errors (400, 401, 403, 404, 409) are deterministic; the same
-  request yields the same answer.
-- 429 is the server shedding load; retrying amplifies the overload the
-  server is trying to survive.
-- 500 reports that the server ran the request and failed — execution
-  happened, so the duplicate-execution ambiguity is resolved against
-  retrying.
-- Local `context.Canceled` and `context.DeadlineExceeded` mean the caller
-  is gone or out of time; no declaration overrides them.
+A transport that can prove a request never left this process marks its error:
 
-The predicate is injectable via `WithRetryable` for callers whose transport
-or error taxonomy differs; `IsIdempotent` is exported so a custom predicate
-can honor the same declaration.
+```go
+// transport package
+func MarkNotSent(err error) error
+func WasNotSent(err error) bool
+```
+
+A marked error is retried whatever its Kind and whatever the caller declared:
+work that never started cannot be duplicated by starting it. This is the only
+route by which a non-idempotent call earns an automatic retry.
+
+Marking is an assertion of proof, so it is made conservatively. A transport
+marks only what it can demonstrate, and the absence of a mark reads as "the
+request may have executed" — the safe assumption. `WasNotSent` returning false
+therefore means no transport made the claim, not that delivery occurred.
+
+The HTTP client marks three failures. Node selection failing means no
+connection was attempted. A dial failure — a `*net.OpError` with `Op == "dial"`
+in the chain — means `net/http` had no connection to write to, since it writes
+a request only after establishing one; an empty connection pool funnels into
+the same dial. A failed WebSocket handshake means the stream never carried an
+application message.
+
+It deliberately leaves other failures unmarked. A request that was written and
+then lost its connection surfaces as a bare `io.EOF` under `*url.Error`, which
+at that layer is indistinguishable from a server that executed the request and
+failed to reply. A response-side read error arrives with `Op == "read"`, by
+which point delivery has certainly happened.
+
+The gRPC client marks nothing. grpc-go reports a call that never found a
+listener and a call whose connection died mid-flight as the same thing: a
+`codes.Unavailable` status error with no `Unwrap` method, no typed cause and no
+status detail, separated only by free text inside the message. That text is an
+unstable internal string, and even reading it could not rule out the case that
+matters — a request delivered and executed whose reply was lost. Marking on
+that basis would assert proof this transport does not have, so gRPC calls rely
+on the declaration instead.
+
+### Declaration: the caller says repetition is harmless
+
+When the context carries `Idempotent`, these Kinds are retried:
+
+- `KindUnavailable` — the transport or server reports itself unable to serve,
+  a condition both protocols document as transient.
+- `KindDeadlineExceeded` — the attempt ran out of time, which says nothing
+  about whether a server executed it.
+
+Both are ambiguous about delivery on their own. A service can go unavailable
+after executing a request and before its reply arrives, so neither is retried
+without the declaration.
+
+### Everything else
+
+`DefaultRetryable` evaluates in this order:
+
+1. A nil error is not retryable.
+2. Local context cancellation and deadline expiry (`context.Canceled`,
+   `context.DeadlineExceeded` anywhere in the chain) are refused
+   unconditionally, before any other test. The caller's own budget is spent;
+   another attempt cannot outrun it, and no declaration overrides this.
+3. An error carrying delivery evidence is accepted.
+4. Absent the `Idempotent` declaration, the error is refused.
+5. Under the declaration, `KindUnavailable` and `KindDeadlineExceeded` are
+   accepted.
+6. Every other Kind is refused.
+
+The refusals are refusals on the merits, not omissions:
+
+- `KindInvalidArgument`, `KindFailedPrecondition`, `KindOutOfRange`,
+  `KindUnauthenticated`, `KindPermissionDenied`, `KindNotFound`,
+  `KindAlreadyExists`, `KindUnimplemented` — caller-side or deterministic.
+  The same request produces the same failure; retrying only multiplies load.
+- `KindInternal`, `KindDataLoss` — the server ran the request and something
+  broke. Repetition re-runs a request that already had an effect, against a
+  server in a state it did not expect.
+- `KindCanceled` — the peer that wanted the answer is gone.
+- `KindUnknown` — unclassified. An unclassified failure has not proven it was
+  not executed, so the conservative default declines.
+- `KindResourceExhausted` — a rate limit or quota. Retrying without server
+  retry guidance makes overload worse, which is exactly the failure mode a
+  blanket default must not create.
+- `KindConflict` — optimistic concurrency lost. The caller has to re-read
+  state before a second attempt means anything; replaying the same request
+  will lose again.
+
+The last two stay refused even under the declaration: idempotence makes
+repetition safe for correctness, not free for the server.
+
+The cost of this posture is that a transport unable to prove delivery gives
+its non-idempotent calls no automatic retry at all. That is the intended
+trade: safety is the default, and convenience takes one explicit declaration.
+Callers whose protocol supplies proof the framework cannot see inject
+`WithRetryable`, and `IsIdempotent` lets that predicate honor the same
+declaration.
 
 ## The Idempotency Declaration
 
@@ -122,16 +202,75 @@ deliberate and is the shape a future idempotency middleware must build on:
 
 ## Backoff
 
-Waits follow exponential growth with full jitter: the wait after failed
-attempt *n* is drawn uniformly from `[0, min(BaseBackoff·2ⁿ⁻¹, MaxBackoff))`.
-Full jitter is the standard choice because it decorrelates the retry storms
-of many clients that failed at the same moment; a deterministic or
-half-jittered schedule re-synchronizes them at every step. The draw uses
-`math/rand/v2` — no seeding, no locking, no dependency.
+The curve is an interface, and the framework ships one implementation as the
+default rather than as the only option:
 
-Both axes are bounded by construction: `Attempts` caps the count and
-`MaxBackoff` caps each wait, and `Client`/`ParseRule` reject a policy with
-retries enabled but no positive base or a cap below the base.
+```go
+type Backoff interface {
+    Next(attempt int) time.Duration
+}
+```
+
+**Why injectable.** There is no single best retry curve. Exponential full
+jitter is right for a dependency failing under load-driven contention;
+decorrelated jitter converges faster on recovery; a constant interval is
+right for a dependency that recovers on a fixed cycle, where exponential
+growth just adds latency to a wait whose length was never the problem; linear
+growth suits a queue draining at a known rate. Picking one and hard-coding it
+would make the framework's guess unavoidable for every caller whose
+dependency does not match it, when the seam that removes the guess is one
+method wide.
+
+**Why this shape.** `Next` takes the 1-based number of the attempt that just
+failed and returns the wait, and takes nothing else:
+
+- *No `context.Context`.* A curve is a pure function of attempt number.
+  Passing the context would invite curves that read request state and make
+  the wait depend on the call, which is unreproducible in the one place — a
+  retry storm — where reasoning about waits matters. Context concerns are
+  already handled by the middleware around the curve, which refuses to sleep
+  past the deadline.
+- *No error.* Whether a failure deserves another attempt is `WithRetryable`'s
+  question, already answered before the curve is consulted. Letting `Next`
+  see the error would create a second place to express "do not retry this" —
+  by returning an absurd wait — with the two able to disagree.
+- *Returns the final wait, not a bound to be jittered.* Jitter is part of a
+  curve's identity, not a decoration applied to it. If the middleware drew a
+  random value inside a returned bound, a constant-interval implementation
+  could not express a constant interval. `ExponentialJitter` therefore owns
+  its own draw, from `math/rand/v2` — no seeding, no locking, no dependency.
+
+Implementations must be concurrency-safe: one middleware instance serves
+every call on a client. A non-positive result means no wait.
+
+**Interaction with `Policy` and governance.** `Policy.Attempts` always
+governs — it is the middleware's own budget, checked before the curve is
+consulted at all. `BaseBackoff` and `MaxBackoff` are parameters *of the
+default curve*: when no curve is injected, the middleware builds an
+`ExponentialJitter` from the policy resolved for that call, so a governed
+rule that widens `base_backoff` reaches the default curve without ceremony.
+
+Injecting a curve overrides those two fields, including the values a rule
+table serves; such a table then governs `Attempts` and nothing else. This is
+the intended and only sensible reading — an injected curve computes waits
+itself, so there is nothing for a base and a cap to parameterize. It is
+documented on `WithBackoff` because the silent alternative would be a
+governance knob that appears to work and does not.
+
+The rejected alternative was threading the resolved `Policy` into `Next` so a
+custom curve could follow governance. It makes every implementation accept
+parameters most of them ignore, and it creates two channels for one knob: an
+operator editing `base_backoff` would change waits or not depending on
+whether the injected curve chose to honor it. A curve that must be governed
+reads the governed values itself, through the same config the rule table
+uses, and owns that contract explicitly.
+
+Both axes stay bounded by construction: `Attempts` caps the count, the
+default curve's `Max` caps each wait, and `Client`/`ParseRule` reject a policy
+with retries enabled but no positive base or a cap below the base. `Client`
+rejects a nil `Backoff` at construction, so a misconfigured curve fails at the
+call that built the middleware rather than as a nil dereference on the first
+retry in production.
 
 The context is consulted twice per retry: a done context stops immediately,
 and a context whose remaining deadline cannot fit the drawn wait makes the
@@ -164,8 +303,9 @@ Composition order matters and is documented on `Client`: retry goes
 outermost among resilience middleware, so a circuit breaker composed inside
 it observes every attempt — which is the per-attempt accounting a breaker
 needs, and the pairing that gives retries a budget: once the breaker opens,
-its rejections are 503s of the breaker's own, and the loop stops consuming
-attempts against a dead endpoint.
+its rejections are `KindUnavailable` errors of the breaker's own, returned
+without touching the endpoint, so the remaining attempts drain against a
+local check instead of a dead dependency.
 
 ## Governed Policies
 
@@ -189,7 +329,9 @@ governance:
 
 A config `Rule` names only what it tightens; unset fields keep the default
 policy's values (3 attempts, 100ms base, 1s cap). `attempts: 1` is the
-supported way to disable retries for an operation at runtime.
+supported way to disable retries for an operation at runtime. The two backoff
+fields reach the default curve only; see [Backoff](#backoff) for what a rule
+governs once a curve is injected.
 
 `Policy` is a plain comparable struct, so the snapshot reported by
 `governance.Probe(rules, nil)` serializes as-is; registering it under
@@ -269,14 +411,33 @@ privately.
 - **Per-attempt timeouts inside retry.** Duplicates the timeout middleware.
   Compose `timeout` inside `retry` instead; each attempt then gets its own
   deadline while the caller's context bounds the whole sequence.
-- **A `Retryable()` marker on `errors.Error`.** Would put transport policy
-  into the error model and let servers dictate client retry behavior
-  implicitly. The judgment stays client-side, injectable, and
-  context-aware.
+- **Deriving retryability from the error Kind alone.** A Kind classifies a
+  failure in isolation: it sees neither the idempotence declaration nor the
+  transport's delivery evidence. `KindUnavailable` in particular covers two
+  opposite situations — a connection that never opened, and a server that
+  executed the request before its reply was lost — so a predicate reading only
+  the Kind would authorize the framework to repeat a non-idempotent call on
+  the strength of a failure that proves nothing. The judgment stays
+  client-side, injectable, and context-aware.
+- **A per-error retry hint on the wire.** A server-set "retryable" flag on
+  the error message would let servers dictate client retry behavior
+  implicitly and harden into protocol. The client owns its retry policy.
 - **Idempotency as a call option or client option.** A gRPC `CallOption` or
   HTTP `CallOption` reaches only one transport's call surface and cannot be
   read by middleware; a client-wide option declares too much. The context
   marker is transport-neutral, per-call, and readable by any middleware.
+- **A closed set of named backoff curves** (an enum such as
+  `BackoffExponential | BackoffLinear | BackoffConstant`, selectable from
+  config). Configurable from YAML, but every curve not in the set is
+  unreachable, and each addition is a framework change plus a config schema
+  change. The interface costs one method and admits curves the framework
+  never has to enumerate. An enum can still be layered on later as a config
+  convenience that constructs a `Backoff`, without changing the seam.
+- **`Backoff` as a plain `func(attempt int) time.Duration`.** Equivalent for
+  stateless curves and lighter to write, but a curve with state — a
+  decorrelated jitter carrying its previous wait — becomes a closure over
+  mutable variables with no place to document its concurrency contract. The
+  named interface gives implementations a receiver and a doc comment.
 - **Hedged requests.** Sending a second attempt before the first fails
   trades load for latency and requires idempotency unconditionally plus
   cancellation plumbing. Out of scope for a conservative default; nothing

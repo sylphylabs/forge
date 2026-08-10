@@ -66,28 +66,21 @@ explicit ID if its value or version is part of an operational contract.
 ## 3. Update Code Generators
 
 Forge owns its public error descriptor in the separate
-`github.com/sylphylabs/forge/api` module. The runtime still emits and accepts the
-four-field `{code, reason, message, metadata}` error envelope; it does not use
-`google.rpc.Status` as a replacement.
+`github.com/sylphylabs/forge/api` module. The envelope is no longer the
+four-field `{code, reason, message, metadata}` message: it carries a
+transport-neutral `kind`, a `domain`, a `trace_id`, and per-field `violations`.
 
-Most applications construct errors through `errors.New`, `errors.Newf`, or the
-generated error helpers and need no runtime code change. Code that explicitly
-names the old generated message must update its import and type:
+Code that names the generated message must update its import:
 
 ```text
 github.com/go-kratos/kratos/v3/errors.Status
 github.com/sylphylabs/forge/api/errors/v1.Status
 ```
 
-The API import path `github.com/sylphylabs/forge/api/errors/v1` declares package
-`errors`. The runtime aliases that package as `errorapi` and embeds
-`errorapi.Status` in `errors.Error`, so field selectors such as `err.Code`,
-`err.Reason`, `err.Message`, and `err.Metadata` remain unchanged. Update
-`.proto` imports and enum annotations when the Forge API module is
-published; do not retain or vendor one of the inherited `errors/errors.proto`
-copies.
-
-The schema rewrite is:
+`errors.Error` no longer embeds that message, so field selectors such as
+`err.Code` and `err.Reason` become the accessors `err.Kind()`, `err.Reason()`,
+`err.Domain()`, and `err.Message()`. Section 9 covers the call-site changes; the
+schema rewrite is:
 
 ```proto
 // Before
@@ -95,20 +88,21 @@ import "errors/errors.proto";
 enum ErrorReason {
   option (errors.default_code) = 500;
   ERROR_REASON_UNSPECIFIED = 0;
+  ERROR_REASON_NOT_FOUND = 1 [(errors.code) = 404];
 }
 
 // Forge
 import "sylphy/errors/v1/errors.proto";
 enum ErrorReason {
-  option (sylphy.errors.v1.default_code) = 500;
   ERROR_REASON_UNSPECIFIED = 0;
+  ERROR_REASON_NOT_FOUND = 1 [(sylphy.errors.v1.kind) = KIND_NOT_FOUND];
 }
 ```
 
-Enum-value overrides similarly change from `(errors.code)` to
-`(sylphy.errors.v1.code)`. Regenerate helpers after changing the source;
-the generator no longer carries a private fallback descriptor for the old
-annotations.
+An annotation now names a `Kind` rather than an HTTP status, and
+`default_code` becomes the optional `default_kind`. Regenerate after changing
+the source; the generator no longer carries a private fallback descriptor for
+the old annotations.
 
 Replace the inherited generator modules with the three atomic Forge
 commands. During local development they share one source module:
@@ -347,16 +341,145 @@ HTTP SSE and WebSocket streams are not terminated by the unary server timeout.
 Add explicit read, write, idle, or application lifetime policies where the
 service requires them.
 
-## 9. Keep Inherited v3 Migrations
+## 9. Migrate Errors
 
-Forge retains the Kratos v3 `log/slog` logging model, standard-compatible
-errors, and the separate `json` and `protojson` codecs. A service already on
-Kratos v3 should not undo those migrations.
+Forge classifies an error by a transport-neutral `Kind` instead of an HTTP
+status code, and generates a sentinel value per reason instead of a constructor
+and a predicate. See [`../design/errors.md`](../design/errors.md) for the
+contract; this section covers the mechanical changes.
+
+### 9.1 Replace constructors
+
+Each HTTP-named constructor becomes `New` with a kind. The reason is no longer
+a positional argument, because a contract error should carry one from its
+Protobuf declaration:
+
+```go
+// Before
+return errors.BadRequest("VALIDATION", "email is malformed")
+return errors.NotFound("USER", "no such user")
+return errors.InternalServer("DB", err.Error())
+
+// Forge
+return errors.New(errors.KindInvalidArgument).
+    WithReason("VALIDATION").Msg("email is malformed")
+return errors.New(errors.KindNotFound).
+    WithReason("USER").Msg("no such user")
+return errors.New(errors.KindInternal).
+    WithReason("DB").Wrap(err)
+```
+
+The mapping is:
+
+| Kratos v3 | Forge |
+| --- | --- |
+| `BadRequest` | `KindInvalidArgument` |
+| `Unauthorized` | `KindUnauthenticated` |
+| `Forbidden` | `KindPermissionDenied` |
+| `NotFound` | `KindNotFound` |
+| `Conflict` | `KindConflict` |
+| `TooManyRequests` | `KindResourceExhausted` |
+| `ClientClosed` | `KindCanceled` |
+| `InternalServer` | `KindInternal` |
+| `ServiceUnavailable` | `KindUnavailable` |
+| `GatewayTimeout` | `KindDeadlineExceeded` |
+
+`WithCause` is now `Wrap`. Prefer it over folding `err.Error()` into the
+message: the message is for humans, the cause is for `errors.Is` and
+`errors.As`.
+
+### 9.2 Replace predicates
+
+`IsXxx` and `Code` are removed. Match a specific failure with `errors.Is`, and a
+class of failure with `errors.KindOf`:
+
+```go
+// Before
+if errors.IsNotFound(err) { ... }
+if errors.Code(err) == 503 { ... }
+
+// Forge
+if errors.Is(err, v1.ErrUserNotFound) { ... }
+if errors.KindOf(err) == errors.KindUnavailable { ... }
+```
+
+`errors.Reason` becomes `errors.ReasonOf`. Where a handler needs the HTTP
+status a failure projects onto, use `errors.KindOf(err).HTTPStatus()`.
+
+### 9.3 Update Protobuf declarations
+
+`default_code` and `code` are replaced by `default_kind` and `kind`, which take
+a `Kind` rather than an HTTP status:
+
+```proto
+// Before
+enum FailureReason {
+  option (kratos.api.default_code) = 500;
+  FAILURE_REASON_UNSPECIFIED = 0;
+  FAILURE_REASON_NOT_FOUND = 1 [(kratos.api.code) = 404];
+}
+
+// Forge
+enum FailureReason {
+  FAILURE_REASON_UNSPECIFIED = 0;
+  FAILURE_REASON_NOT_FOUND = 1 [(sylphy.errors.v1.kind) = KIND_NOT_FOUND];
+}
+```
+
+A value without its own `kind` is `KIND_INTERNAL`; set `default_kind` on the
+enum to change that. Regeneration now fails the build on a reason that is not
+`SCREAMING_SNAKE_CASE`, one not prefixed by its enum name, or a kind declared on
+the zero value. Fix the declaration rather than working around the generator.
+
+### 9.4 Update generated call sites
+
+The generator emits `var ErrXxx` instead of `func ErrorXxx` and `func IsXxx`:
+
+```go
+// Before
+return v1.ErrorUserNotFound("no user %s", id)
+if v1.IsUserNotFound(err) { ... }
+
+// Forge
+return v1.ErrUserNotFound.Msgf("no user %s", id).Wrap(cause)
+if errors.Is(err, v1.ErrUserNotFound) { ... }
+```
+
+The generated identifier drops the enum-name prefix that Protobuf scoping
+requires on the value, so `FAILURE_REASON_NOT_FOUND` yields `ErrNotFound`.
+
+### 9.5 Review what crosses the boundary
+
+Two changes affect observable behavior, not just source:
+
+The cause chain no longer crosses a process boundary. `errors.Unwrap` returns
+nil on a received error and `errors.As` will not reach a remote type. A client
+that inspected a wrapped cause after an RPC must correlate by trace ID instead.
+
+Outgoing errors pass through an `errors.Policy`, defaulting to withholding the
+message of an internal failure. A client that displayed the server's message for
+a 500 now sees a generic one; the original remains in the service's logs, keyed
+by trace ID. Services on a trusted internal network can opt out:
+
+```go
+http.NewErrorEncoder(errors.PolicyVerbose)
+```
+
+Finally, `errors.Join` is not an aggregate error in this contract — it drops all
+but the first error at the boundary. Validation that reported multiple failures
+should use `errors.Violations`, which projects onto `errdetails.BadRequest` and
+preserves every entry.
+
+## 10. Keep Inherited v3 Migrations
+
+Forge retains the Kratos v3 `log/slog` logging model and the separate `json` and
+`protojson` codecs. A service already on Kratos v3 should not undo those
+migrations.
 
 The HTTP generator supports Edition 2023 Open and Opaque APIs. Regenerate from
 the schema rather than retaining code produced by the upstream generator.
 
-## 10. Replace Legacy Metrics Middleware
+## 11. Replace Legacy Metrics Middleware
 
 Forge removes the inherited generic metrics middleware without a
 compatibility shim or a second metric stream. Instrument HTTP at its native
@@ -474,7 +597,7 @@ latency SLOs rather than comparing the new and old client series as equivalent.
 The complete attribute, status, route, cardinality, and lifecycle contract is
 in [`docs/design/otel-metrics.md`](../design/otel-metrics.md).
 
-## 11. Validate the Migration
+## 12. Validate the Migration
 
 Run generation before tests so stale imports cannot hide in generated files:
 
@@ -508,6 +631,13 @@ graceful shutdown in integration tests used by the service.
 - [ ] Keep `BuildPath` for dynamic templates; compile repeated fixed templates once.
 - [ ] Review body/query classification, ProtoJSON wire values, and `%2F` paths.
 - [ ] Define explicit HTTP stream lifetime policies.
+- [ ] Replace HTTP-named error constructors with `errors.New(Kind)`, and `WithCause` with `Wrap`.
+- [ ] Replace `IsXxx` and `errors.Code` with `errors.Is` and `errors.KindOf`.
+- [ ] Rewrite `default_code`/`code` annotations as `default_kind`/`kind` and regenerate.
+- [ ] Update call sites to the generated sentinel values.
+- [ ] Choose an `errors.Policy` per boundary; confirm the default redaction suits public callers.
+- [ ] Replace `errors.Join` in validation paths with `errors.Violations`.
+- [ ] Confirm no client depends on reaching a cause through `errors.As` after an RPC.
 - [ ] Replace generic metrics middleware with the HTTP filter/wrapper and explicit gRPC A66 metric set.
 - [ ] Rewrite counter queries to histogram `_count` and remove `reason`-based metric dimensions.
 - [ ] Verify Prometheus names, buckets, exemplars, dashboards, and alerts against deployed exporter output.

@@ -1,8 +1,8 @@
 # Google HTTP Transcoding Conformance
 
-Status: Phase 1 implemented and validated; release packaging pending; Phase 2 scope only
+Status: Phase 1 semantics validated; optional package boundary alignment in progress; Phase 2 scope only
 
-Last reviewed: July 22, 2026
+Last reviewed: August 9, 2026
 
 ## Purpose
 
@@ -105,6 +105,92 @@ External service config and `fully_decode_reserved_expansion` remain unsupported
 and belong exclusively to Phase 2.
 
 ## Design
+
+### Package and binding ownership
+
+Google HTTP transcoding is an optional Protobuf integration, not a property of
+generic `net/http`. Every runtime reference to `proto.Message`,
+`protoreflect`, ProtoJSON, `google.api.HttpBody`, descriptor-aware query/path
+binding, response-body projection, or stream-field projection belongs to:
+
+```text
+github.com/sylphylabs/forge/transport/http/transcoding
+```
+
+The package name is behavioral rather than technological: it owns one Google
+HTTP rule's complete mapping between an RPC message and HTTP. Generic
+`transport/http` owns routing, client/server lifecycle, JSON, SSE/WebSocket, and
+Problem Details, and its dependency closure contains no Protobuf or gRPC
+package.
+
+Each normalized rule compiles once into one immutable deep object:
+
+```go
+type Rule struct {
+    Path         string
+    Body         string
+    ResponseBody string
+}
+
+func Compile(Rule, proto.Message, proto.Message) (*Binding, error)
+func MustCompile(Rule, proto.Message, proto.Message) *Binding
+
+func (*Binding) BuildPath(proto.Message) (string, error)
+func (*Binding) BindRequest(http.Context, proto.Message) error
+func (*Binding) RequestBody(proto.Message) (body any, contentType string, err error)
+func (*Binding) ResponseBody(proto.Message) (any, error)
+func (*Binding) Receive(http.Context, http.ServerStream, proto.Message) error
+```
+
+The exact method set may be reduced during implementation, but ownership may
+not be split back into generated combinations of `MustCompilePath`, omit-field
+options, ProtoJSON field wrappers, and stream body-field strings. `Binding`
+owns field classification, validation, and body/query/path precedence once.
+
+Generated `_http.pb.go` imports both `transport/http` and
+`transport/http/transcoding`, emits one Binding per HTTP rule, and asserts a
+support version from each package. A generated server/client cannot obtain
+transcoding behavior from a blank import or process-global codec registration.
+
+`google.api.HttpBody` crosses the generic boundary through HTTP-owned
+capabilities rather than a type assertion in core:
+
+```go
+type BodyMarshaler interface {
+    MarshalHTTPBody() (contentType string, data []byte, err error)
+}
+
+type BodyUnmarshaler interface {
+    UnmarshalHTTPBody(contentType string, data []byte) error
+}
+```
+
+The transcoding adapter implements these capabilities around `HttpBody`.
+Likewise, ProtoJSON and binary Protobuf codecs are explicitly constructed and
+installed in an immutable codec set owned by one HTTP client or server.
+`encoding/form` supports ordinary Go values only; descriptor-aware query
+binding lives here.
+
+The shared codec container has no package-global fallback:
+
+```go
+// package encoding
+type Codecs struct { /* immutable after construction */ }
+
+func NewCodecs(defaultName string, codecs ...Codec) (*Codecs, error)
+func (c *Codecs) Lookup(name string) (Codec, bool)
+func (c *Codecs) Default() Codec
+
+// package transport/http
+func CodecSet(*encoding.Codecs) ServerOption
+func WithCodecSet(*encoding.Codecs) ClientOption
+```
+
+Codec implementations expose explicit constructors and have no registering
+`init`. Generic HTTP constructs a JSON-only default. XML, YAML, form bodies,
+ProtoJSON, binary Protobuf, and custom codecs are explicit instance choices.
+Duplicate or empty names and a missing default are construction errors; they
+are never repaired by whichever package happened to initialize last.
 
 ### One Template Parser
 
@@ -416,6 +502,13 @@ Phase 1 is complete only when all of the following hold:
 - Root HTTP tests and generator tests pass with race detection where shared
   runtime state is involved.
 - Real `protoc` generation compiles and runs for Open and Opaque APIs.
+- Generated code imports `transport/http/transcoding` explicitly and uses one
+  immutable Binding per rule.
+- `go list -deps ./transport ./encoding/form ./transport/http` reports zero
+  Protobuf and zero gRPC packages; this package is expected to report
+  Protobuf dependencies.
+- Two HTTP instances can concurrently install different codecs for the same
+  media type without shared state or a race.
 - All repository Go modules compile after the `BuildPath` API change.
 - The released generator module has no repository-relative `replace` directive,
   requires the matching root release, and passes a versioned `go install` smoke

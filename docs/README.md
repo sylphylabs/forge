@@ -1,5 +1,16 @@
 # Forge Documentation
 
+## Usage Guides
+
+Task-oriented, example-first guides. Written for coding agents, and equally
+usable by people who want the rules without the rationale. [AGENTS.md](../AGENTS.md)
+is the entry point.
+
+- [Errors](agent/errors.md)
+- [Observability](agent/observability.md)
+- [Middleware](agent/middleware.md)
+- [Application, transports, and config](agent/application.md)
+
 ## Current Behavior
 
 - [Compatibility contract](../COMPATIBILITY.md)
@@ -9,6 +20,7 @@
 
 ## Design and Evidence
 
+- [Errors](design/errors.md)
 - [Runtime modernization](design/runtime-modernization.md)
 - [Application lifecycle](design/application-lifecycle.md)
 - [Config lifecycle](design/config-lifecycle.md)

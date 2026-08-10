@@ -2,7 +2,7 @@
 
 Status: pre-release
 
-Last verified: July 25, 2026
+Last verified: August 9, 2026
 
 Forge is an independent fork of `go-kratos/kratos`. It is not a drop-in
 replacement for Kratos v3 and does not promise source, behavior, or release
@@ -56,6 +56,21 @@ upstream revision explicitly.
 | Config watch | Sources could be observed in a partially reloaded state | Complete resolved snapshots are published atomically | Behavior change |
 | OTel attributes | Legacy semconv and mixed transport attributes | semconv v1.41 transport-specific attributes | Telemetry schema change |
 | OTel metrics | Generic unary middleware with custom names, `code`, and `reason` | HTTP semconv v1.41 duration histograms and grpc-go A66 duration metrics | Source and telemetry schema breaking |
+| Error classification | HTTP status code stored on the error and mapped to gRPC | Transport-neutral `Kind` projected one way onto each transport | Source, wire, and behavior breaking |
+| Error construction | `errors.BadRequest(reason, msg)` and generated `ErrorXxx(format, args...)` | `errors.New(Kind)` and generated sentinel values | Source and generated-code breaking |
+| Error matching | Generated `IsXxx(err)` comparing struct fields | `errors.Is` against a generated sentinel, plus `errors.KindOf` | Source breaking |
+| Error annotations | `default_code` and `code` carrying HTTP status | `default_kind` and `kind` carrying a `Kind` | Protobuf contract breaking |
+| Retry judgment | `errors.IsRetryable` and `Kind.Retryable` classified a Kind in isolation | Removed; the decision needs delivery evidence or an idempotence declaration | Source breaking |
+| Client retry default | `KindUnavailable` was retried unconditionally | Retried only with `transport.WasNotSent` evidence or `retry.Idempotent(ctx)` | Behavior breaking |
+| Aggregate errors | `errors.Join` silently dropped all but the first on the wire | Explicit `errors.Violations` projected onto `errdetails.BadRequest` | New API |
+| Error response format | Negotiated: JSON spelled `NOT_FOUND`, ProtoJSON spelled `KIND_NOT_FOUND` | One `application/problem+json` shape, not negotiated | Wire breaking |
+| Error disclosure | Every message crossed the boundary verbatim | Only `errors.Public` crosses: what the caller declared, never a cause | Source and behavior breaking |
+| Load-balancing policy | Process-global `selector.SetGlobalSelector`, default set by whichever transport linked first | Per-client `WithSelector`, `wrr` default owned by each transport | Source breaking |
+| HTTP client streams | One `ClientStream` interface; a receive-only stream answered its send methods with a runtime error | Core `ClientStream` plus a `SendingClientStream` capability | Source breaking |
+| Error response reader | Any body was parsed, unbounded, whatever the status said | Problem media type only, 64 KiB cap, a body contradicting the status is discarded | Behavior change |
+| HTTP/gRPC status conversion | `transport/http/status` converted codes in both directions | Removed; each transport projects a `Kind` one way | Source breaking |
+| Protobuf in the HTTP transport | `transport/http` always linked the Protobuf runtime | Moved to `transport/http/transcoding`; a plain-JSON service links neither Protobuf nor gRPC | Source breaking; import change for generated code |
+| Codec registration | `transport` blank-imported every codec | Registers only the schema-free codecs; `transcoding` registers the Protobuf ones | Behavior change for unregistered content types |
 
 ## Repository Identity and Versions
 
@@ -330,8 +345,9 @@ watchers silently skip hidden files rather than surfacing them as reload errors.
 OpenTelemetry tracing uses semantic conventions v1.41. HTTP and gRPC attributes
 are emitted separately, peer ports are integers, gRPC methods are validated,
 and invalid original method strings remain available for diagnosis. The former
-custom `rpc.status_code` field is now `forge.error.code`, avoiding collision
-with standard RPC semantic attributes.
+custom `rpc.status_code` field is now `forge.error.kind` and
+`forge.error.reason`, avoiding collision with standard RPC semantic attributes
+and naming the failure rather than numbering it.
 
 Metrics are transport-native and duration-only. HTTP uses the stable v1.41
 `http.server.request.duration` and `http.client.request.duration` histograms.
@@ -349,13 +365,218 @@ grpc-go owns unary, streaming, retry, and hedging lifecycles. The complete
 contract and cardinality policy are defined in
 [`docs/design/otel-metrics.md`](docs/design/otel-metrics.md).
 
+## Metadata Propagation Encoding
+
+`middleware/metadata` percent-escapes a propagated value that cannot travel as
+a header value, and unescapes it on the receiving side. gRPC admits only
+printable ASCII, 0x20 through 0x7E, in a non-binary header and fails the whole
+RPC with an `Internal` error otherwise, so under the Kratos v3 behavior any
+metadata carrying a non-ASCII name, address, or control byte terminated the
+call before it reached the server.
+
+Escaping engages only when a value falls outside that range or contains `%`,
+the escape marker itself. A value of printable ASCII without `%` is transmitted
+unchanged, so the encoding is invisible to the common case.
+
+This is a wire-format change, and the resulting skew behavior is deliberate:
+
+- A Forge sender and a peer that does not unescape agree on every value that
+  was already transmissible, because those values are not rewritten. A value
+  that needed escaping arrives percent-escaped, where previously the call
+  failed outright.
+- A Forge receiver and a peer that does not escape agree on every value,
+  including one containing a bare `%`: a value that fails to unescape is
+  passed through unchanged rather than rejected.
+
+Both directions therefore degrade to the previous behavior instead of
+corrupting a value or failing a request. `Server`, `Client`, and `ServerStream`
+all participate; the streaming server path is included, which the corresponding
+upstream proposal does not cover.
+
+## Errors
+
+An error carries a transport-neutral `Kind` rather than an HTTP status code.
+Each transport projects a `Kind` one way onto its own vocabulary, so no error
+round-trips through a foreign code space. Under the previous design that round
+trip was lossy: an error constructed as 422 arrived as 500 after a single gRPC
+hop, because HTTP has more than sixty status codes and gRPC has seventeen.
+
+Errors that form a service contract are declared in Protobuf with `kind`, and
+`protoc-gen-go-errors` emits one immutable sentinel value per reason instead of
+a constructor and a predicate. Matching therefore uses `errors.Is` rather than a
+generated `IsXxx`, and `errors.KindOf` replaces `errors.Code`. The generator
+rejects at build time what would otherwise become a wire-format inconsistency: a
+reason that is not `SCREAMING_SNAKE_CASE`, one not prefixed by its enum name, or
+a kind declared on the zero value.
+
+Identity travels as `errdetails.ErrorInfo`, including the domain, so a caller
+may match a remote error against the same sentinel it would use locally.
+Aggregate failures travel as `errdetails.BadRequest`; `errors.Join` is not an
+aggregate in this contract and drops all but the first error at the boundary.
+
+The cause chain does not cross a process boundary. `errors.Unwrap` returns nil
+on a received error and `errors.As` will not reach a remote type. Correlate
+across services by trace ID instead: the tracing middleware stamps the ambient
+trace onto every outgoing error, and a trace backend holds the fuller record.
+Forge does not also serialize a cause summary onto the wire.
+
+The `transport/http/status` package is removed. Its bidirectional code
+conversion was the lossy step `Kind` exists to replace, and nothing referenced
+it once each transport projected a `Kind` directly.
+
+An error response is always `application/problem+json` and does not take part
+in content negotiation. While it did, the same value was spelled two ways —
+`NOT_FOUND` as JSON and `KIND_NOT_FOUND` as ProtoJSON — and a client reading the
+shape it did not expect silently lost the kind or the reason. Negotiating a
+result is useful; negotiating a failure only creates ways for two peers to
+disagree. SSE and WebSocket error frames use the same document.
+
+A kind the receiver does not recognize keeps its identity, and only its
+classification falls back to the status line, so a peer running a newer version
+stays understandable.
+
+What crosses a boundary is `errors.Public`: the kind, the identity, and the
+message, metadata, and violations the caller explicitly declared. A cause is
+excluded structurally rather than by rule, so no configuration can leak one.
+
+This replaces `errors.Policy` and its `PolicySafe`, `PolicyStrict`, and
+`PolicyVerbose` values, all removed. A policy read the Kind and inferred
+provenance it could not observe: it never inspected metadata or violation text,
+and the three values were writable package variables any dependency could
+reassign. Declaring what is public is something only the caller who wrote the
+field can do, and `Msg`, `Meta`, `WithMetadata`, and `Violations` are how they
+say so. An error from outside Forge discloses only `KindUnknown`; its text was
+written for an operator.
+
+A client reads an error body only when it is `application/problem+json`, is at
+most `MaxProblemBytes` (64 KiB), and names a kind consistent with the response
+status. A body contradicting the status is discarded in favour of the status
+line, because a stale intermediary can serve an old body under a new status —
+believing it let a caller match a 503 against a NotFound sentinel and stop
+retrying. An unrecognized kind is not a contradiction: its identity is kept and
+only the classification falls back to the status.
+
+An identity is retained only as a complete domain and reason pair; half of one
+cannot match a sentinel and is treated as anonymous.
+
+`errors.IsRetryable` and `errors.Kind.Retryable` do not exist. Whether a retry
+is safe depends on the class of failure, on whether the request reached a
+server, and on whether the operation is idempotent; a Kind answers only the
+first. `KindUnavailable` in particular covers both a connection that never
+opened and a server that executed a request before its reply was lost, so a
+boolean derived from the Kind alone would authorize repeating work that already
+happened. Callers combine `errors.KindOf` with the idempotence declaration and
+the transport's delivery evidence, or delegate to `middleware/retry`.
+
+See [`docs/design/errors.md`](docs/design/errors.md).
+
+## Client Retry Requires Evidence or a Declaration
+
+`middleware/retry` retries a failed call only when the transport proved the
+request never reached a server, or when the caller declared the operation
+idempotent with `retry.Idempotent(ctx)`. An error offering neither is returned
+after one attempt.
+
+`KindUnavailable` is therefore not retried on its own. A service can report
+itself unavailable after executing a request and before its reply arrives, so
+repeating that call on a non-idempotent operation duplicates work that already
+happened — the failure mode being avoided is a second charge or a second write,
+which is among the hardest to trace back to its cause. Under the declaration,
+`KindUnavailable` and `KindDeadlineExceeded` are both retried;
+`KindResourceExhausted` and `KindConflict` are not, since retrying a
+rate-limited call without server guidance worsens overload and a conflict needs
+the caller to re-read state first.
+
+Delivery evidence comes from the transport, which is the only layer that knows
+whether bytes left the process. `transport.MarkNotSent` records the proof and
+`transport.WasNotSent` reads it. The HTTP client marks node selection failures,
+dial failures, and failed WebSocket handshakes. The gRPC client marks nothing:
+grpc-go reports a failed dial and a connection lost mid-call as the same
+`codes.Unavailable` status with no typed cause, so gRPC calls that want
+automatic retries declare idempotence.
+
+Restoring automatic retries for an operation is one call at the site that knows
+the operation is safe to repeat, typically a generated wrapper or a thin client
+facade.
+
+See [`docs/design/retry.md`](docs/design/retry.md).
+
+## Load Balancing Is Per Client
+
+`selector.GlobalSelector` and `selector.SetGlobalSelector` are removed. A client
+selects its policy with `http.WithSelector` or `grpc.WithSelector`, defaulting to
+weighted round robin.
+
+The global was reassignable by any dependency, read concurrently without
+synchronization, and its default came from whichever transport happened to be
+linked first. A per-client option removes all three: one dependency can no
+longer change another client's balancing, and the default is a constant.
+
+On gRPC the option applies to endpoints reached through discovery. A client
+dialling a fixed address has a single node and consults no policy.
+
+## HTTP Client Streams Declare What They Can Do
+
+`ClientStream` carries what every stream can honour — `Header`, `Trailer`,
+`CloseSend`, `Context`, `RecvMsg`. Sending is a separate capability:
+
+```go
+type SendingClientStream interface {
+	ClientStream
+	SendMsg(any) error
+	CloseAndRecv(any) error
+}
+```
+
+Server-sent events are one-directional, and the previous interface made that a
+runtime error string on three methods it could not honour. A caller now learns
+the same fact from the type: `Client.WebSocket` returns `SendingClientStream`,
+`Client.ServerSentEvent` returns `ClientStream`, and code holding the narrower
+one type-asserts to send.
+
+`Send` and `Recv` are removed; they were aliases of `SendMsg` and `RecvMsg`.
+Generated clients keep their existing method set, so service code calling them
+needs no edit — but regeneration with the matching `protoc-gen-go-http` is
+required.
+
+## Protobuf Is Optional
+
+`transport/http` speaks bytes and Go values. Everything needing a schema — HTTP
+transcoding, ProtoJSON projection, path and query binding onto declared fields,
+raw `HttpBody`, stream body fields — lives in `transport/http/transcoding`,
+which installs itself into the transport when imported.
+
+Generated bindings import it, so a service built from `.proto` files behaves
+exactly as before and pays exactly as before. A service that serves plain JSON
+imports neither it nor the Protobuf runtime:
+
+| Application | Binary | Protobuf packages | gRPC packages |
+| --- | --- | --- | --- |
+| Plain JSON over `transport/http` | 11 MB | 0 | 0 |
+| A library using only `errors` | 2.6 MB | 0 | 0 |
+| Generated bindings and gRPC | 18 MB | 40 | 75 |
+
+A hand-written service that binds Protobuf messages without generated code must
+import the subpackage itself:
+
+```go
+import _ "github.com/sylphylabs/forge/transport/http/transcoding"
+```
+
+Without it, a raw `HttpBody` is not recognized, a path variable is not bound
+onto a message field, and a stream body field reports that the schema runtime is
+missing. The transport says so rather than failing silently.
+
+`transport` no longer blank-imports the Protobuf codecs; `transcoding`
+registers them. A service that needs `proto` or `protojson` content types
+without generated code imports the subpackage for the same reason.
+
 ## Inherited Kratos v3 Behavior
 
 The following are important Kratos v3 behaviors but are not Forge
 differences:
 
 - Logging uses `log/slog`.
-- The errors package exposes standard-library-compatible error wrappers.
 - `encoding/json` and `encoding/protojson` are separate codecs.
 - Generated HTTP handlers bind request data before service middleware runs.
 

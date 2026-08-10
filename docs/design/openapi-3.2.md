@@ -1,7 +1,7 @@
 # OpenAPI 3.2 Generation
 
-Status: Core generation and shared HTTP binding semantics implemented and
-schema-validated; advanced 3.2 features pending
+Status: Core generation and shared HTTP binding semantics implemented;
+Problem Details schema alignment and advanced 3.2 features pending
 
 ## Decision
 
@@ -27,32 +27,41 @@ needed by current Forge unary HTTP transcoding:
 - existing gnostic OpenAPI v3 annotations;
 - merged or source-relative YAML output;
 - deterministic component references;
-- the Forge HTTP JSON error envelope.
+- the Forge RFC 9457 Problem Details error representation.
 
-The canonical HTTP error schema is `sylphy.errors.v1.Status`:
+The canonical HTTP error component is a generator-owned `ForgeProblem`, not a
+Protobuf message:
 
 ```json
 {
-  "code": 404,
-  "reason": "USER_NOT_FOUND",
-  "message": "user not found",
-  "metadata": {"resource": "users/123"}
+  "type": "about:blank",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "user not found",
+  "kind": "NOT_FOUND",
+  "domain": "sylphy.user.v1",
+  "reason": "USER_FAILURE_REASON_NOT_FOUND",
+  "metadata": {"resource": "users/123"},
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "violations": []
 }
 ```
 
-`reason`, `message`, and `metadata` remain optional in the schema because
-the default JSON codec omits protobuf zero values. The generator does not claim
-that an absent optional field is present on the wire.
+`type`, `title`, `status`, and `kind` are required on Forge-produced errors.
+`detail`, complete domain/reason identity, metadata, trace ID, and violations
+are optional and omitted when empty. The component follows the wire contract in
+[`errors.md`](errors.md); it is synthesized from that stable framework
+contract, not discovered from a generated `Status` descriptor.
 
-This is not `google.rpc.Status`. The gRPC transport projects an Forge
-error into `google.rpc.Status` plus `google.rpc.ErrorInfo`; OpenAPI describes
-the HTTP/JSON surface and therefore references the four-field Forge
-schema.
+This is not `google.rpc.Status` and it is not
+`sylphy.errors.v1.Status`. The public Protobuf API intentionally defines no
+Status envelope. gRPC projects an error into `google.rpc.Status` plus native
+details; OpenAPI describes only the HTTP Problem Details surface.
 
 When `default_response=true`, every operation receives a `default` response
 referencing that schema. Independently of the default response option,
 explicitly annotated `4xx` and `5xx` responses with no content automatically
-receive `application/json` content referencing the same schema. Explicit
+receive `application/problem+json` content referencing the same schema. Explicit
 response content is never overwritten.
 
 ## Options
@@ -69,7 +78,7 @@ defaults:
 | `enum_type` | `integer` | Integer or string enum representation |
 | `depth` | `2` | Recursive query-message expansion depth |
 | `default_response` | `true` | Add the shared Forge default error response |
-| `error_schema_name` | `sylphy.errors.v1.Status` | Error component name |
+| `error_schema_name` | `ForgeProblem` | Error component name |
 | `output_mode` | `merged` | One merged document or source-relative documents |
 
 Example Buf configuration:

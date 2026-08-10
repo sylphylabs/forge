@@ -145,17 +145,17 @@ Names are opaque non-empty strings, unique per registry. Convention:
 component name, plus a slash-separated facet when one component exposes
 several probes (`app`, `governance/ratelimit`).
 
-Duplicate registration panics. Overwrite — what `encoding.RegisterCodec`
-does — is wrong here because codec names are a closed negotiation vocabulary
-where replacing "json" is a feature, while probe names are contributed by
-independently written components that must not silently shadow each other's
-state: a dump that quietly shows the wrong component's data is the worst
-failure mode a diagnostic tool can have. An error return was rejected for
+Duplicate registration panics. Probe names are contributed by independently
+written components and must not silently shadow each other's state: a dump that
+quietly shows the wrong component's data is the worst failure mode a diagnostic
+tool can have. Codec configuration is not a precedent for overwrite: immutable
+codec sets reject duplicate names when an HTTP client or server is constructed.
+An error return was rejected for probes
 the reason established by `WithSuite`: registration has no legitimate
 runtime failure, only wiring bugs, and an error return would poison every
 registration site with handling for a condition that is always a programming
 mistake. Panic at the offending line during construction is the established
-posture (`WithSuite`, `RegisterCodec`'s nil checks), and both probe
+posture for registration wiring (`WithSuite`), and both probe
 constructors (`AppProbe(nil)`, `governance.Probe(nil, ...)`) panic on the
 same grounds.
 

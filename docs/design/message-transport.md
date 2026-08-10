@@ -24,8 +24,16 @@ Kafka, NATS, RabbitMQ, MQTT, task queues, and their client options remain
 optional nested modules. They must not enlarge applications that only use HTTP
 and gRPC.
 
+Adapters live under `contrib/message/<broker>`, following the convention the
+rest of `contrib` uses: the first path element names the core contract being
+implemented, the second names who implements it — as in `contrib/config/etcd`
+and `contrib/registry/consul`. A broker adapter implements `message.Publisher`
+and `message.Subscriber`, so it belongs under `message` rather than under
+`transport`, where `contrib/transport/mcp` implements `transport.Server`
+instead.
+
 The first official adapter is
-[`contrib/transport/nats`](../../contrib/transport/nats). It validates the core
+[`contrib/message/nats`](../../contrib/message/nats). It validates the core
 contract against a real NATS server without adding the NATS SDK to the root
 module.
 
@@ -147,7 +155,7 @@ An official adapter belongs in a nested module such as the current NATS
 adapter:
 
 ```text
-contrib/transport/nats/
+contrib/message/nats/
   go.mod
   nats.go
   README.md
@@ -162,7 +170,7 @@ behavior without a repository `go.work`.
 
 ### JetStream Adapter
 
-`contrib/transport/nats/jetstream` reuses the portable `message.Message` and
+`contrib/message/nats/jetstream` reuses the portable `message.Message` and
 lifecycle interfaces, but keeps durable delivery policy at the NATS boundary.
 It does not create or update Streams or Consumers during application startup.
 Deployment automation owns retention, storage, replicas, duplicate windows,

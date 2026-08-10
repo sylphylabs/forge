@@ -2,7 +2,7 @@
 
 Status: active
 
-Last reviewed: July 22, 2026
+Last reviewed: August 9, 2026
 
 ## Purpose
 
@@ -27,7 +27,8 @@ the implementation and validation are complete.
 
 ## Current Ledger
 
-All upstream states in this table were verified on July 22, 2026.
+Upstream states in this table were verified on July 22, 2026, except for the
+final row, which was verified on August 9, 2026.
 
 | Upstream revision | Area | Decision | Forge record | Rationale |
 | --- | --- | --- | --- | --- |
@@ -58,6 +59,27 @@ All upstream states in this table were verified on July 22, 2026.
 | [PR #3199](https://github.com/go-kratos/kratos/pull/3199) @ `4bba0c6a` / [PR #3478](https://github.com/go-kratos/kratos/pull/3478) @ `bd65ae3d` | etcd recovery and cancellation | Adopted | `fd27bead` | Registration recovery is bounded and context-aware; watcher close/cancel races no longer leak or spin. |
 | [PR #3216](https://github.com/go-kratos/kratos/pull/3216) @ `e9564e1b` | HTTP endpoint path prefix | Adopted | `ec58dbf5` | Direct endpoints retain their base path while discovery service names remain separate. |
 | [PR #3303](https://github.com/go-kratos/kratos/pull/3303) @ `74549b16` | Protobuf path parameter binding | Adopted | `ec58dbf5` | Field descriptors map proto text names to JSON query names, including nested fields and custom JSON names. |
+| [Issue #3867](https://github.com/go-kratos/kratos/issues/3867) / [PR #3869](https://github.com/go-kratos/kratos/pull/3869) | Non-ASCII metadata breaks gRPC calls | Adopted | pending | Reimplemented against gRPC's actual rule. The upstream predicate escapes only non-ASCII and `%`, leaving control characters such as `\n` and `\x00` bare; gRPC rejects the whole 0x00 to 0x1F and 0x7F range, so those values still failed. Forge keys on printable ASCII and also covers `ServerStream`, which the upstream patch omits. |
+
+## Reviewed and Not Applicable
+
+Upstream revisions examined against the current tree that need no Forge work.
+They are recorded so a later review does not re-examine them.
+
+| Upstream revision | Area | Reason |
+| --- | --- | --- |
+| [PR #3865](https://github.com/go-kratos/kratos/pull/3865) | gRPC array header forwarding | Already fixed in `transport/grpc/client.go`, which appends every value returned by `Values`. |
+| [PR #3866](https://github.com/go-kratos/kratos/pull/3866) | Nacos SDK v1 to v2 | `contrib/config/nacos` and `contrib/registry/nacos` are both on `nacos-sdk-go/v2`. |
+| [PR #3870](https://github.com/go-kratos/kratos/pull/3870) | Layout template tag matching | Project-scaffolding CLI removed. |
+| [PR #3871](https://github.com/go-kratos/kratos/pull/3871) | `run` command directory scan | Project-scaffolding CLI removed. |
+
+An open upstream defect that Forge shares is recorded separately and is not
+resolved by this review: [PR #3864](https://github.com/go-kratos/kratos/pull/3864)
+reports that the `json` codec mishandles a `proto.Message`. In Forge the same
+gap drops fields silently in both directions, because `transport/http/transcoding`
+dispatches on the codec name rather than on the target type. The upstream patch
+special-cases the decode path only. This needs its own decision and is not
+covered here.
 
 ## Adoption Requirements
 

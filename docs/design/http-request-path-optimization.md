@@ -1,15 +1,20 @@
 # HTTP Request-Path Optimization Plan
 
-Status: proposed next-stage work plan
+Status: deferred until the accepted `transport/http/transcoding` boundary lands
 
-Last reviewed: July 23, 2026
+Last reviewed: August 9, 2026
 
 ## Purpose
 
-This document defines the next performance work that Forge can own on the
+This document defines later performance work that Forge can own on the
 HTTP request path. It separates framework cost from application work, records
 the behavior that optimizations must preserve, and identifies decisions that
 must be approved before implementation.
+
+Correct package ownership comes first. The accepted transcoding design compiles
+each Google HTTP rule into one immutable
+`transport/http/transcoding.Binding`; this plan measures and optimizes that
+target, not the current spread of path, ProtoJSON, query, and stream helpers.
 
 This plan complements the broader
 [runtime modernization contract](runtime-modernization.md), the existing
@@ -87,10 +92,11 @@ preserve all of the following:
 - Calling `Bind` leaves the request body readable with the same bytes as today.
 - Middleware selection, order, nesting, error propagation, and panic behavior
   remain unchanged.
-- Custom filters, middleware, codecs, request decoders, response encoders, and
-  error encoders continue to observe the documented request and response.
-- Status codes, content types, headers, JSON representation, and response-body
-  bytes remain unchanged.
+- Custom filters, middleware, instance-owned codecs, request decoders, response
+  encoders, and error encoders continue to observe their documented request and
+  response.
+- Success status codes, content types, headers, and response-body bytes remain
+  unchanged. Errors use the canonical `application/problem+json` contract.
 - SSE, WebSocket, `HttpBody`, redirects, and streaming behavior do not inherit
   unary-only optimizations accidentally.
 - Open and Opaque protobuf APIs follow the same wire contract.
@@ -132,14 +138,15 @@ race, and before-and-after performance evidence.
 
 ### 1. Precompute Immutable Route Facts
 
-Move descriptor interpretation, field classification, route metadata, and
-binding plans to generation or registration time. The request path should not
-rediscover information already known from the protobuf descriptor and
-`HttpRule`.
+The accepted transcoding boundary already requires descriptor interpretation,
+field classification, route metadata, and binding plans to be owned once by an
+immutable `Binding`. The request path should not rediscover information already
+known from the Protobuf descriptor and `HttpRule`.
 
 Candidate work:
 
-- store direct path, query, and body binding plans on the registered route;
+- store direct path, query, body, response, and stream-field plans on the
+  compiled Binding;
 - precompute operation identity and transport metadata shared by handlers;
 - avoid repeated field-path splitting and descriptor lookup;
 - keep complex AIP extraction on the shared parser without rebuilding

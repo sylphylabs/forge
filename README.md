@@ -87,6 +87,8 @@ Forge started from Kratos v3. Existing Kratos users should treat the module-path
 
 ## Further Reading
 
+- [Usage guides](docs/README.md#usage-guides) — errors, observability, middleware, application
+- [Guidance for coding agents](AGENTS.md)
 - [Compatibility contract](COMPATIBILITY.md)
 - [Migration from Kratos v3](docs/migration/kratos-to-forge.md)
 - [Documentation index](docs/README.md)
