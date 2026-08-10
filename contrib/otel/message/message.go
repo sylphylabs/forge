@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/sylphylabs/forge/metadata"
+	"github.com/sylphylabs/forge/middleware"
 	transportmessage "github.com/sylphylabs/forge/transport/message"
 )
 
@@ -125,14 +126,22 @@ func (p *Publisher) Publish(ctx context.Context, destination string, msg *transp
 
 // Consumer returns middleware that extracts a parent context from message
 // headers and creates a consumer span around message processing.
-func Consumer(opts ...Option) transportmessage.Middleware {
+//
+// It is a [middleware.UnaryMiddleware], so it composes with the same chain as
+// the HTTP and gRPC transports. The destination comes from the
+// [transport.Transporter] in context rather than a parameter, which is how a
+// message handler reads it; under a wildcard subscription that is the concrete
+// destination that delivered the message, not the pattern that matched it.
+func Consumer(opts ...Option) middleware.UnaryMiddleware {
 	configured := newOptions(opts)
 	tracer := configured.tracerProvider.Tracer(instrumentationName, trace.WithSchemaURL(semconv.SchemaURL))
-	return func(next transportmessage.Handler) transportmessage.Handler {
-		return func(ctx context.Context, destination string, msg *transportmessage.Message) (err error) {
+	return func(next middleware.UnaryHandler) middleware.UnaryHandler {
+		return func(ctx context.Context, req any) (reply any, err error) {
 			if ctx == nil {
-				return next(ctx, destination, msg)
+				return next(ctx, req)
 			}
+			msg, _ := req.(*transportmessage.Message)
+			destination, _ := transportmessage.DestinationFromServerContext(ctx)
 			if msg != nil {
 				ctx = configured.propagator.Extract(ctx, metadataCarrier(msg.Headers))
 			}
@@ -143,7 +152,7 @@ func Consumer(opts ...Option) transportmessage.Middleware {
 				trace.WithAttributes(spanAttributes(configured.system, destination, "process", msg)...),
 			)
 			defer func() { finishSpan(span, err) }()
-			return next(ctx, destination, msg)
+			return next(ctx, req)
 		}
 	}
 }

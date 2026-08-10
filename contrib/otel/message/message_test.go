@@ -13,6 +13,8 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 	oteltrace "go.opentelemetry.io/otel/trace"
 
+	"github.com/sylphylabs/forge/metadata"
+	"github.com/sylphylabs/forge/transport"
 	transportmessage "github.com/sylphylabs/forge/transport/message"
 )
 
@@ -32,6 +34,47 @@ func newTestProvider() (*trace.TracerProvider, *tracetest.SpanRecorder) {
 	recorder := tracetest.NewSpanRecorder()
 	provider := trace.NewTracerProvider(trace.WithSpanProcessor(recorder))
 	return provider, recorder
+}
+
+// deliveryTransport stands in for the Transport a message server puts in context
+// for each delivery, which is where Consumer reads the destination from.
+type deliveryTransport struct {
+	destination string
+	header      metadata.Metadata
+}
+
+func (tr deliveryTransport) Kind() transport.Kind { return "message" }
+func (tr deliveryTransport) Endpoint() string     { return "test://broker" }
+func (tr deliveryTransport) Operation() string    { return tr.destination }
+func (tr deliveryTransport) RequestHeader() transport.Header {
+	return deliveryHeader(tr.header)
+}
+
+// deliveryHeader adapts metadata to the transport.Header a Transporter reports.
+type deliveryHeader metadata.Metadata
+
+func (h deliveryHeader) Get(key string) string      { return metadata.Metadata(h).Get(key) }
+func (h deliveryHeader) Set(key, value string)      { metadata.Metadata(h).Set(key, value) }
+func (h deliveryHeader) Add(key, value string)      { metadata.Metadata(h).Add(key, value) }
+func (h deliveryHeader) Values(key string) []string { return metadata.Metadata(h).Values(key) }
+func (h deliveryHeader) Keys() []string {
+	keys := make([]string, 0, len(h))
+	for key := range h {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+// deliveryContext builds the context a subscription would hand to middleware.
+func deliveryContext(destination string, msg *transportmessage.Message) context.Context {
+	header := metadata.Metadata{}
+	if msg != nil && msg.Headers != nil {
+		header = msg.Headers
+	}
+	return transport.NewServerContext(context.Background(), deliveryTransport{
+		destination: destination,
+		header:      header,
+	})
 }
 
 func TestPublisherInjectsIntoClone(t *testing.T) {
@@ -93,11 +136,11 @@ func TestConsumerExtractsParentAndRecordsError(t *testing.T) {
 		WithTracerProvider(provider),
 		WithPropagator(propagator),
 		WithSystem("nats"),
-	)(func(ctx context.Context, _ string, _ *transportmessage.Message) error {
+	)(func(ctx context.Context, _ any) (any, error) {
 		observed = oteltrace.SpanContextFromContext(ctx)
-		return wantErr
+		return nil, wantErr
 	})
-	if err := handler(context.Background(), "orders.created", msg); !errors.Is(err, wantErr) {
+	if _, err := handler(deliveryContext("orders.created", msg), msg); !errors.Is(err, wantErr) {
 		t.Fatalf("handler() error = %v, want %v", err, wantErr)
 	}
 
@@ -140,11 +183,11 @@ func TestCustomProviderAndPropagator(t *testing.T) {
 	handler := Consumer(
 		WithTracerProvider(provider),
 		WithPropagator(propagator),
-	)(func(ctx context.Context, _ string, _ *transportmessage.Message) error {
+	)(func(ctx context.Context, _ any) (any, error) {
 		extracted = ctx.Value(key)
-		return nil
+		return nil, nil
 	})
-	if err := handler(context.Background(), "custom", wire); err != nil {
+	if _, err := handler(deliveryContext("custom", wire), wire); err != nil {
 		t.Fatalf("Consumer() error = %v", err)
 	}
 	if extracted != "received-value" {
@@ -163,14 +206,14 @@ func TestNilMessageIsTransparent(t *testing.T) {
 	}
 
 	called := false
-	handler := Consumer()(func(_ context.Context, _ string, msg *transportmessage.Message) error {
+	handler := Consumer()(func(_ context.Context, req any) (any, error) {
 		called = true
-		if msg != nil {
+		if msg, _ := req.(*transportmessage.Message); msg != nil {
 			t.Fatalf("handler message = %#v, want nil", msg)
 		}
-		return nil
+		return nil, nil
 	})
-	if err := handler(context.Background(), "empty", nil); err != nil {
+	if _, err := handler(deliveryContext("empty", nil), (*transportmessage.Message)(nil)); err != nil {
 		t.Fatalf("Consumer()(nil) error = %v", err)
 	}
 	if !called {
