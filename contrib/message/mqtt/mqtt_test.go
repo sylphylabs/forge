@@ -15,7 +15,7 @@ import (
 	"github.com/sylphylabs/forge/transport/message"
 )
 
-// fakeConn records outbound packets so publish and subscription behaviour can
+// fakeConn records outbound packets so publish and subscription behavior can
 // be asserted without a broker.
 type fakeConn struct {
 	mu           sync.Mutex
@@ -254,7 +254,9 @@ func TestSubscribeDeliversConcreteTopicForWildcardFilter(t *testing.T) {
 	}
 	defer sub.Close(t.Context())
 
-	client.router.route(paho.PublishReceived{Packet: &paho.Publish{
+	// route reports whether the topic matched; these assertions are on the
+	// handler side effects, and route never returns a non-nil error.
+	_, _ = client.router.route(paho.PublishReceived{Packet: &paho.Publish{
 		Topic:   "accounts/42/created",
 		Payload: []byte("created"),
 		Properties: &paho.PublishProperties{
@@ -361,7 +363,9 @@ func TestSubscriptionCancellationStopsDelivery(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	client.router.route(paho.PublishReceived{Packet: &paho.Publish{Topic: "topic"}})
+	// route reports whether the topic matched; these assertions are on the
+	// handler side effects, and route never returns a non-nil error.
+	_, _ = client.router.route(paho.PublishReceived{Packet: &paho.Publish{Topic: "topic"}})
 	select {
 	case <-delivered:
 		t.Fatal("handler ran after cancellation")
@@ -413,7 +417,9 @@ func TestMessageServerLifecycle(t *testing.T) {
 	go func() { startErr <- server.Start(t.Context()) }()
 	waitForRoutes(t, client, 1)
 
-	client.router.route(paho.PublishReceived{Packet: &paho.Publish{Topic: "orders/created", Payload: []byte("ok")}})
+	// route reports whether the topic matched; these assertions are on the
+	// handler side effects, and route never returns a non-nil error.
+	_, _ = client.router.route(paho.PublishReceived{Packet: &paho.Publish{Topic: "orders/created", Payload: []byte("ok")}})
 	select {
 	case got := <-delivered:
 		if got != "orders/created:ok" {

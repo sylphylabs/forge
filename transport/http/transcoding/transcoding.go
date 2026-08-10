@@ -4,7 +4,7 @@
 //
 // It is separate from transport/http so that a service serving plain JSON does
 // not link the Protobuf runtime it never calls. Importing this package installs
-// the behaviour into the transport; generated code does so on the application's
+// the behavior into the transport; generated code does so on the application's
 // behalf, and a hand-written service that binds Protobuf messages imports it
 // directly:
 //
@@ -22,6 +22,10 @@ import (
 
 	"github.com/sylphylabs/forge/encoding"
 	"github.com/sylphylabs/forge/encoding/form"
+
+	// The proto and protojson codecs must be registered for this runtime to
+	// resolve them by name; importing them here means an application gets them
+	// by importing this package alone.
 	_ "github.com/sylphylabs/forge/encoding/proto"
 	_ "github.com/sylphylabs/forge/encoding/protojson"
 	transporthttp "github.com/sylphylabs/forge/transport/http"
@@ -101,10 +105,10 @@ var protoMessageType = reflect.TypeOf((*proto.Message)(nil)).Elem()
 // type, and an int64 spelled as a string all differ between their Go and JSON
 // forms, and encoding/json drops them without reporting anything.
 //
-// Any other codec is honoured. Registering one is a deliberate act — a service
+// Any other codec is honored. Registering one is a deliberate act — a service
 // that installs its own "application/x-thrift" means it, and this runtime has
 // no standing to override that choice.
-func (runtime) Codec(negotiated encoding.Codec, v any) encoding.Codec {
+func (runtime) Codec(negotiated encoding.Codec, _ any) encoding.Codec {
 	if negotiated.Name() != "json" {
 		return negotiated
 	}

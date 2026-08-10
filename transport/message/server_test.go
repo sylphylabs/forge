@@ -6,10 +6,10 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/transport"
-	"time"
 )
 
 type fakeSubscriber struct {

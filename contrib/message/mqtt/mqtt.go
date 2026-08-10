@@ -30,6 +30,14 @@ const (
 	// configured with WithIDInUserProperty instead of the default Correlation
 	// Data mapping.
 	PropertyMessageID = "forge-message-id"
+
+	// maxQoS is the highest Quality of Service level MQTT defines: 0 at most
+	// once, 1 at least once, 2 exactly once.
+	maxQoS = 2
+	// minFailureReasonCode is the lowest MQTT 5 reason code that denotes a
+	// failure. Codes below it are success, and for a SUBACK they carry the
+	// granted QoS, which may be lower than the one requested.
+	minFailureReasonCode = 0x80
 )
 
 var (
@@ -69,7 +77,7 @@ var (
 )
 
 // connection is the subset of autopaho.ConnectionManager the adapter uses. It
-// exists so delivery, acknowledgement, and lifecycle behaviour can be tested
+// exists so delivery, acknowledgement, and lifecycle behavior can be tested
 // without a broker; production code always passes the real manager.
 type connection interface {
 	Publish(context.Context, *paho.Publish) (*paho.PublishResponse, error)
@@ -386,15 +394,15 @@ func (c *Client) Publish(ctx context.Context, topic string, msg *message.Message
 	}
 	ctx, cancel := c.waitContext(ctx)
 	defer cancel()
-	if err := conn.AwaitConnection(ctx); err != nil {
-		return fmt.Errorf("mqtt: publish %q: %w", topic, err)
+	if connErr := conn.AwaitConnection(ctx); connErr != nil {
+		return fmt.Errorf("mqtt: publish %q: %w", topic, connErr)
 	}
 	resp, err := conn.Publish(ctx, c.toPublish(topic, msg))
 	if err != nil {
 		return fmt.Errorf("mqtt: publish %q: %w", topic, err)
 	}
 	// A QoS 0 publish has no response packet, so there is nothing to inspect.
-	if resp != nil && resp.ReasonCode >= 0x80 {
+	if resp != nil && resp.ReasonCode >= minFailureReasonCode {
 		return fmt.Errorf("mqtt: publish %q: %w: reason 0x%02x", topic, ErrPublishRejected, resp.ReasonCode)
 	}
 	return nil
@@ -424,9 +432,9 @@ func (c *Client) Subscribe(ctx context.Context, topic string, handler message.Ha
 
 	waitCtx, cancel := c.waitContext(ctx)
 	defer cancel()
-	if err := conn.AwaitConnection(waitCtx); err != nil {
+	if connErr := conn.AwaitConnection(waitCtx); connErr != nil {
 		c.router.remove(entry)
-		return nil, fmt.Errorf("mqtt: subscribe %q: %w", topic, err)
+		return nil, fmt.Errorf("mqtt: subscribe %q: %w", topic, connErr)
 	}
 	suback, err := conn.Subscribe(waitCtx, &paho.Subscribe{
 		Subscriptions: []paho.SubscribeOptions{{Topic: topic, QoS: c.subscribeQoS}},
@@ -559,7 +567,7 @@ func fromPublish(pub *paho.Publish) *message.Message {
 }
 
 func validateQoS(qos byte) error {
-	if qos > 2 {
+	if qos > maxQoS {
 		return fmt.Errorf("%w: %d", ErrInvalidQoS, qos)
 	}
 	return nil
@@ -587,7 +595,7 @@ func subackError(topic string, suback *paho.Suback) error {
 		return nil
 	}
 	for _, reason := range suback.Reasons {
-		if reason >= 0x80 {
+		if reason >= minFailureReasonCode {
 			return fmt.Errorf("mqtt: subscribe %q: %w: reason 0x%02x", topic, ErrSubscribeRejected, reason)
 		}
 	}

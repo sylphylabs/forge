@@ -94,7 +94,7 @@ func TestClientEncodesServerDecodes(t *testing.T) {
 	clientMD.Set(key, value)
 	clientCtx = metadata.NewClientContext(clientCtx, clientMD)
 
-	if _, err := Client()(func(ctx context.Context, req any) (any, error) {
+	if _, err := Client()(func(_ context.Context, req any) (any, error) {
 		return req, nil
 	})(clientCtx, "req"); err != nil {
 		t.Fatal(err)
@@ -159,7 +159,7 @@ func TestClientKeepsPrintableASCIIVerbatim(t *testing.T) {
 	md.Set(key, value)
 	ctx = metadata.NewClientContext(ctx, md)
 
-	if _, err := Client()(func(ctx context.Context, req any) (any, error) {
+	if _, err := Client()(func(_ context.Context, req any) (any, error) {
 		return req, nil
 	})(ctx, "req"); err != nil {
 		t.Fatal(err)

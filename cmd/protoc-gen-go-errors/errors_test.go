@@ -139,10 +139,10 @@ func TestGenerateWithoutDefaultKind(t *testing.T) {
 // An enum that declares nothing is an ordinary enum and must be left alone.
 func TestIgnoresPlainEnum(t *testing.T) {
 	plugin, file := newPlugin(t, enumSpec{
-		name: "Colour",
+		name: "Color",
 		values: []valueSpec{
-			{name: "COLOUR_UNSPECIFIED", number: 0},
-			{name: "COLOUR_RED", number: 1},
+			{name: "COLOR_UNSPECIFIED", number: 0},
+			{name: "COLOR_RED", number: 1},
 		},
 	})
 	generated, err := generateErrorFile(plugin, plugin.FilesByPath[file.GetName()])
@@ -239,7 +239,7 @@ func TestRejectsInvalidDeclarations(t *testing.T) {
 func TestScreamingSnake(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"FailureReason", "FAILURE_REASON"},
-		{"Colour", "COLOUR"},
+		{"Color", "COLOR"},
 		{"HTTPError", "H_T_T_P_ERROR"},
 	}
 	for _, tt := range tests {

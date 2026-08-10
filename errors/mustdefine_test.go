@@ -25,7 +25,9 @@ func TestMustDefineRejectsUnidentifiableSentinels(t *testing.T) {
 					t.Errorf("MustDefine(%q, %q) did not panic", tt.domain, tt.reason)
 				}
 			}()
-			MustDefine(KindNotFound, tt.domain, tt.reason)
+			// The return value is irrelevant: the assertion is the panic
+			// recovered above, which is all this call is made for.
+			_ = MustDefine(KindNotFound, tt.domain, tt.reason)
 		})
 	}
 }

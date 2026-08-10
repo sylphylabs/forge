@@ -16,13 +16,13 @@ const Name = "json"
 var (
 	// marshalOptions pins the wire-format settings for all protojson responses produced by
 	// this codec. Keeping this unexported prevents any imported package from silently
-	// changing the serialisation behaviour of unrelated code running in the same process.
+	// changing the serialization behavior of unrelated code running in the same process.
 	marshalOptions = protojson.MarshalOptions{
 		EmitUnpopulated: true,
 	}
 	// unmarshalOptions pins the wire-format settings for all protojson parsing done by
 	// this codec. Keeping this unexported prevents any imported package from silently
-	// changing the deserialisation behaviour of unrelated code running in the same process.
+	// changing the deserialization behavior of unrelated code running in the same process.
 	unmarshalOptions = protojson.UnmarshalOptions{
 		DiscardUnknown: true,
 	}

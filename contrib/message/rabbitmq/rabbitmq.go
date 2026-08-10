@@ -409,7 +409,7 @@ func New(opts ...Option) (*Client, error) {
 // A successful return means the broker took responsibility for the message: it
 // was routed to at least one queue and, for a durable queue with persistent
 // delivery, persisted. It does not mean a consumer has processed it. A
-// cancelled context after the frame is written leaves an ambiguous outcome, so
+// canceled context after the frame is written leaves an ambiguous outcome, so
 // callers still need idempotency keyed on Message.ID.
 func (c *Client) Publish(ctx context.Context, destination string, msg *message.Message) error {
 	if ctx == nil {
@@ -525,9 +525,17 @@ func ignoreClosed(err error) error {
 }
 
 // run owns one subscription's delivery loop and its recovery across broker
-// restarts. It exits only when the subscription context is cancelled, the
+// restarts. It exits only when the subscription context is canceled, the
 // subscription is closed, or the client is closed.
-func (c *Client) run(ctx context.Context, sub *subscription, destination string, binding Binding, handler message.Handler, channel Channel, deliveries <-chan amqp.Delivery) {
+func (c *Client) run(
+	ctx context.Context,
+	sub *subscription,
+	destination string,
+	binding Binding,
+	handler message.Handler,
+	channel Channel,
+	deliveries <-chan amqp.Delivery,
+) {
 	defer close(sub.stopped)
 	for {
 		closed := channel.NotifyClose(make(chan *amqp.Error, 1))
@@ -548,7 +556,14 @@ func (c *Client) run(ctx context.Context, sub *subscription, destination string,
 }
 
 // drain reports whether the loop should re-establish the consumer.
-func (c *Client) drain(ctx context.Context, sub *subscription, destination string, handler message.Handler, deliveries <-chan amqp.Delivery, closed <-chan *amqp.Error) bool {
+func (c *Client) drain(
+	ctx context.Context,
+	sub *subscription,
+	destination string,
+	handler message.Handler,
+	deliveries <-chan amqp.Delivery,
+	closed <-chan *amqp.Error,
+) bool {
 	for {
 		select {
 		case <-ctx.Done():
@@ -639,13 +654,13 @@ func (c *Client) consume(ctx context.Context, binding Binding) (Channel, <-chan 
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := c.declareTopology(channel, binding); err != nil {
-		return nil, nil, errors.Join(err, channel.Close())
+	if declareErr := c.declareTopology(channel, binding); declareErr != nil {
+		return nil, nil, errors.Join(declareErr, channel.Close())
 	}
 	// Prefetch is per consumer, so it is applied to the subscription's own
 	// channel rather than globally across the connection.
-	if err := channel.Qos(c.prefetch, 0, false); err != nil {
-		return nil, nil, errors.Join(fmt.Errorf("qos: %w", err), channel.Close())
+	if qosErr := channel.Qos(c.prefetch, 0, false); qosErr != nil {
+		return nil, nil, errors.Join(fmt.Errorf("qos: %w", qosErr), channel.Close())
 	}
 	deliveries, err := channel.Consume(binding.Queue.Name, c.consumerTag(), false, binding.Queue.Exclusive, false, false, nil)
 	if err != nil {
@@ -666,14 +681,18 @@ func (c *Client) declareTopology(channel Channel, binding Binding) error {
 		if kind == "" {
 			kind = amqp.ExchangeTopic
 		}
-		if err := channel.ExchangeDeclare(binding.Exchange.Name, kind, binding.Exchange.Durable, binding.Exchange.AutoDelete, false, false, binding.Exchange.Args); err != nil {
+		if err := channel.ExchangeDeclare(
+			binding.Exchange.Name, kind, binding.Exchange.Durable, binding.Exchange.AutoDelete, false, false, binding.Exchange.Args,
+		); err != nil {
 			return fmt.Errorf("declare exchange %q: %w", binding.Exchange.Name, err)
 		}
 	}
 	if binding.Queue.Name == "" {
 		return nil
 	}
-	if _, err := channel.QueueDeclare(binding.Queue.Name, binding.Queue.Durable, binding.Queue.AutoDelete, binding.Queue.Exclusive, false, binding.Queue.Args); err != nil {
+	if _, err := channel.QueueDeclare(
+		binding.Queue.Name, binding.Queue.Durable, binding.Queue.AutoDelete, binding.Queue.Exclusive, false, binding.Queue.Args,
+	); err != nil {
 		return fmt.Errorf("declare queue %q: %w", binding.Queue.Name, err)
 	}
 	if binding.Exchange.Name == "" {

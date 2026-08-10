@@ -107,7 +107,7 @@ func subscriptionOf(method *protogen.Method) (*messageapi.Subscription, bool) {
 	return subscription, true
 }
 
-func buildServiceDesc(g *protogen.GeneratedFile, file *protogen.File, facts *serviceFacts) *serviceDesc {
+func buildServiceDesc(g *protogen.GeneratedFile, _ *protogen.File, facts *serviceFacts) *serviceDesc {
 	sd := &serviceDesc{
 		ServiceType: facts.service.GoName,
 		ServiceName: string(facts.service.Desc.FullName()),

@@ -74,7 +74,9 @@ func TestRouteGivesEachHandlerAnIndependentCopy(t *testing.T) {
 		return nil
 	})
 
-	r.route(paho.PublishReceived{Packet: &paho.Publish{Topic: "topic", Payload: []byte("ab")}})
+	// route reports whether the topic matched; these assertions are on the
+	// handler side effects, and route never returns a non-nil error.
+	_, _ = r.route(paho.PublishReceived{Packet: &paho.Publish{Topic: "topic", Payload: []byte("ab")}})
 	if string(second) != "ab" {
 		t.Errorf("second handler saw %q, want an unmutated copy", second)
 	}
@@ -107,7 +109,9 @@ func TestRemoveStopsDelivery(t *testing.T) {
 		return nil
 	})
 	r.remove(entry)
-	r.route(paho.PublishReceived{Packet: &paho.Publish{Topic: "topic"}})
+	// route reports whether the topic matched; these assertions are on the
+	// handler side effects, and route never returns a non-nil error.
+	_, _ = r.route(paho.PublishReceived{Packet: &paho.Publish{Topic: "topic"}})
 	if called {
 		t.Error("handler ran after remove")
 	}
@@ -124,7 +128,9 @@ func TestRemoveKeepsSiblingSubscriptionToSameFilter(t *testing.T) {
 	r.add("topic", 1, count)
 	r.remove(first)
 
-	r.route(paho.PublishReceived{Packet: &paho.Publish{Topic: "topic"}})
+	// route reports whether the topic matched; these assertions are on the
+	// handler side effects, and route never returns a non-nil error.
+	_, _ = r.route(paho.PublishReceived{Packet: &paho.Publish{Topic: "topic"}})
 	if calls != 1 {
 		t.Errorf("calls = %d, want 1 surviving subscription", calls)
 	}

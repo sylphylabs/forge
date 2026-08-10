@@ -11,6 +11,15 @@ import (
 	"github.com/sylphylabs/forge/transport"
 )
 
+const (
+	// fixedAttrs is the number of attributes every request record carries:
+	// kind, component, operation, args, and latency.
+	fixedAttrs = 5
+	// maxErrorAttrs is the most attributes errorAttrs can return: error_kind,
+	// reason, domain, trace_id, error, and stack.
+	maxErrorAttrs = 6
+)
+
 // errorAttrs describes err for a log record.
 //
 // A failure is logged by kind and reason rather than by a transport status
@@ -65,13 +74,14 @@ func Server(logger *slog.Logger) middleware.UnaryMiddleware {
 				return
 			}
 
-			attrs := []slog.Attr{
+			attrs := make([]slog.Attr, 0, fixedAttrs+maxErrorAttrs)
+			attrs = append(attrs,
 				slog.String("kind", "server"),
 				slog.String("component", kind),
 				slog.String("operation", operation),
 				slog.String("args", extractArgs(req)),
 				slog.Float64("latency", time.Since(startTime).Seconds()),
-			}
+			)
 			attrs = append(attrs, errorAttrs(err)...)
 			logger.LogAttrs(ctx, level, "server request", attrs...)
 			return
@@ -98,13 +108,14 @@ func Client(logger *slog.Logger) middleware.UnaryMiddleware {
 				return
 			}
 
-			attrs := []slog.Attr{
+			attrs := make([]slog.Attr, 0, fixedAttrs+maxErrorAttrs)
+			attrs = append(attrs,
 				slog.String("kind", "client"),
 				slog.String("component", kind),
 				slog.String("operation", operation),
 				slog.String("args", extractArgs(req)),
 				slog.Float64("latency", time.Since(startTime).Seconds()),
-			}
+			)
 			attrs = append(attrs, errorAttrs(err)...)
 			logger.LogAttrs(ctx, level, "client request", attrs...)
 			return

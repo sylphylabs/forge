@@ -17,8 +17,8 @@ func TestParseRule(t *testing.T) {
 	}
 
 	// An empty rule keeps every default and still yields a policy.
-	if p, err := ParseRule(newTestValue(map[string]any{})); err != nil || p != defaultPolicy {
-		t.Fatalf("empty rule must yield the default policy, got %+v, %v", p, err)
+	if empty, err := ParseRule(newTestValue(map[string]any{})); err != nil || empty != defaultPolicy {
+		t.Fatalf("empty rule must yield the default policy, got %+v, %v", empty, err)
 	}
 
 	// A partial rule keeps the defaults of the fields it does not name.

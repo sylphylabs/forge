@@ -309,7 +309,7 @@ func NewSubscriber(group string, opts ...SubscriberOption) (*Subscriber, error) 
 	return s, nil
 }
 
-func (s *Subscriber) defaultClient(topic string, opts []kgo.Opt) (*kgo.Client, error) {
+func (s *Subscriber) defaultClient(_ string, opts []kgo.Opt) (*kgo.Client, error) {
 	return kgo.NewClient(append([]kgo.Opt{kgo.SeedBrokers(s.seeds...)}, opts...)...)
 }
 
@@ -379,7 +379,7 @@ func (s *Subscriber) Subscribe(ctx context.Context, topic string, handler messag
 func (s *Subscriber) consume(ctx context.Context, client *kgo.Client, topic string, handler message.Handler) {
 	// A poll that returned records leaves rebalances blocked until they are
 	// allowed again, and Client.Close waits for that. Releasing on the way out
-	// keeps a cancelled loop from deadlocking the subsequent close.
+	// keeps a canceled loop from deadlocking the subsequent close.
 	defer client.AllowRebalance()
 	for {
 		fetches := s.poll(ctx, client)

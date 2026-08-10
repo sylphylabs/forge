@@ -81,10 +81,10 @@ func KindOf(status int) errors.Kind {
 	case http.StatusGatewayTimeout:
 		return errors.KindDeadlineExceeded
 	}
-	if status >= 500 {
+	if status >= http.StatusInternalServerError {
 		return errors.KindInternal
 	}
-	if status >= 400 {
+	if status >= http.StatusBadRequest {
 		return errors.KindInvalidArgument
 	}
 	return errors.KindUnknown

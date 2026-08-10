@@ -249,7 +249,7 @@ func TestDeclaredDestinationConstants(t *testing.T) {
 	}
 }
 
-// A registration that cannot be honoured must bind nothing, rather than return
+// A registration that cannot be honored must bind nothing, rather than return
 // an error and leave a server that starts and consumes part of its contract.
 func TestRegisterBindsNothingWhenADestinationCollides(t *testing.T) {
 	subscriber := newRecordingSubscriber()

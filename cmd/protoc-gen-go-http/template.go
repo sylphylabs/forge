@@ -10,6 +10,15 @@ import (
 //go:embed http.tpl
 var httpTemplate string
 
+// The default aliases protogen picks for the support packages when nothing
+// competes for the names. They are the fallbacks used when a service is
+// rendered without a generated file to resolve imports against.
+const (
+	defaultHTTPIdent        = "http"
+	defaultContextIdent     = "context"
+	defaultTranscodingIdent = "transcoding"
+)
+
 type serviceDesc struct {
 	ServiceType   string // Greeter
 	ServiceName   string // helloworld.Greeter
@@ -78,13 +87,13 @@ func (s *serviceDesc) execute() string {
 	// caller that does not resolve imports) get the aliases protogen picks when
 	// nothing competes for them, which keeps the rendered output readable.
 	if s.HTTPIdent == "" {
-		s.HTTPIdent = "http"
+		s.HTTPIdent = defaultHTTPIdent
 	}
 	if s.ContextIdent == "" {
-		s.ContextIdent = "context"
+		s.ContextIdent = defaultContextIdent
 	}
 	if s.TranscodingIdent == "" {
-		s.TranscodingIdent = "transcoding"
+		s.TranscodingIdent = defaultTranscodingIdent
 	}
 	if len(s.ClientMethods) == 0 {
 		seen := make(map[string]struct{})

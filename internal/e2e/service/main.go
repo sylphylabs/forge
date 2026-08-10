@@ -34,6 +34,10 @@ var ErrNotFound = forgeerrors.MustDefine(
 var ErrBackendFailed = forgeerrors.MustDefine(
 	forgeerrors.KindUnavailable, "e2e.v1", "BACKEND_FAILED")
 
+// nameError is the request name that asks the service to fail, so the test can
+// check that a contract error keeps its identity across the wire.
+const nameError = "error"
+
 type server struct {
 	pb.UnimplementedGreeterServer
 
@@ -44,7 +48,7 @@ type server struct {
 // SayHello answers directly, or forwards to the backend when this instance is
 // the edge.
 //
-// The name selects the behaviour under test:
+// The name selects the behavior under test:
 //
 //	"error"       return a contract error with a full identity
 //	"aggregate"   return an aggregate error carrying violations
@@ -61,7 +65,7 @@ func (s *server) SayHello(ctx context.Context, req *pb.HelloRequest) (*pb.HelloR
 	}
 
 	switch name {
-	case "error":
+	case nameError:
 		return nil, ErrNotFound.
 			Msgf("no greeting for %q", name).
 			Meta("tenant", "acme").
@@ -87,7 +91,7 @@ func (s *server) SayHelloStream(stream pb.Greeter_SayHelloStreamServer) error {
 		if err != nil {
 			return nil
 		}
-		if req.GetName() == "error" {
+		if req.GetName() == nameError {
 			return ErrNotFound.Msg("stream ended with an error")
 		}
 		if err := stream.Send(&pb.HelloReply{Message: "Hello " + req.GetName()}); err != nil {
@@ -112,7 +116,7 @@ func registerStreamRoutes(srv *http.Server) {
 		if err := stream.SendMsg(&pb.HelloReply{Message: "Hello " + name}); err != nil {
 			return err
 		}
-		if name == "error" {
+		if name == nameError {
 			return stream.Close(ErrNotFound.Msg("sse ended with an error").WithTraceID("trace-e2e"))
 		}
 		return stream.Close(nil)
@@ -130,7 +134,7 @@ func registerStreamRoutes(srv *http.Server) {
 			if err := stream.RecvMsg(&req); err != nil {
 				return stream.Close(nil)
 			}
-			if req.GetName() == "error" {
+			if req.GetName() == nameError {
 				return stream.Close(ErrNotFound.Msg("websocket ended with an error").WithTraceID("trace-e2e"))
 			}
 			if err := stream.SendMsg(&pb.HelloReply{Message: "Hello " + req.GetName()}); err != nil {

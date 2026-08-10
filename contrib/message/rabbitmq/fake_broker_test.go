@@ -35,17 +35,17 @@ type fakeAcknowledger struct {
 	settled chan settlement
 }
 
-func (a *fakeAcknowledger) Ack(tag uint64, multiple bool) error {
+func (a *fakeAcknowledger) Ack(_ uint64, multiple bool) error {
 	a.settle(settlement{acked: true, multiple: multiple})
 	return nil
 }
 
-func (a *fakeAcknowledger) Nack(tag uint64, multiple, requeue bool) error {
+func (a *fakeAcknowledger) Nack(_ uint64, multiple, requeue bool) error {
 	a.settle(settlement{nacked: true, multiple: multiple, requeue: requeue})
 	return nil
 }
 
-func (a *fakeAcknowledger) Reject(tag uint64, requeue bool) error {
+func (a *fakeAcknowledger) Reject(_ uint64, requeue bool) error {
 	a.settle(settlement{nacked: true, requeue: requeue})
 	return nil
 }
@@ -111,7 +111,7 @@ func (c *fakeChannel) Publish(_ context.Context, exchange, key string, mandatory
 	return settledConfirmation(c.conn.confirmAcked), nil
 }
 
-func (c *fakeChannel) Consume(queue, consumer string, autoAck, _, _, _ bool, _ amqp.Table) (<-chan amqp.Delivery, error) {
+func (c *fakeChannel) Consume(_, consumer string, autoAck, _, _, _ bool, _ amqp.Table) (<-chan amqp.Delivery, error) {
 	if err := c.conn.consumeError(); err != nil {
 		return nil, err
 	}

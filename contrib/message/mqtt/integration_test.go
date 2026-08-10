@@ -140,7 +140,7 @@ func TestIntegrationHandlerErrorWithholdsAck(t *testing.T) {
 		wantRedeliver bool
 	}{
 		{name: "withheld ack redelivers", wantRedeliver: true},
-		// The inverse pins the behaviour down: acknowledging a failed handler
+		// The inverse pins the behavior down: acknowledging a failed handler
 		// discards the message, so nothing is left to redeliver.
 		{name: "acknowledged error discards", ackOnError: true},
 	} {

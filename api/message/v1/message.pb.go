@@ -42,7 +42,7 @@ type Subscription struct {
 	//
 	// So this field is deliberately not a portable topic pattern. Wildcards work
 	// where the adapter's broker defines them, and are declared in the adapter's
-	// bindings where it does not. An adapter that cannot honour a destination
+	// bindings where it does not. An adapter that cannot honor a destination
 	// rejects it when the subscription is registered, rather than silently
 	// receiving no messages.
 	Destination   string `protobuf:"bytes,1,opt,name=destination,proto3" json:"destination,omitempty"`

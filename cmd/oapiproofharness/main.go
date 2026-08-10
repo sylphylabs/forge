@@ -23,8 +23,8 @@ func main() {
 		panic(err)
 	}
 	fds := &descriptorpb.FileDescriptorSet{}
-	if err := proto.Unmarshal(raw, fds); err != nil {
-		panic(err)
+	if unmarshalErr := proto.Unmarshal(raw, fds); unmarshalErr != nil {
+		panic(unmarshalErr)
 	}
 	req := &pluginpb.CodeGeneratorRequest{
 		FileToGenerate: []string{"qp.proto"},

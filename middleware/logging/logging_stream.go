@@ -43,13 +43,14 @@ func ServerStream(logger *slog.Logger) middleware.StreamMiddleware {
 			if request != nil {
 				args = extractArgs(request)
 			}
-			attrs := []slog.Attr{
+			attrs := make([]slog.Attr, 0, fixedAttrs+maxErrorAttrs)
+			attrs = append(attrs,
 				slog.String("kind", "server"),
 				slog.String("component", kind),
 				slog.String("operation", operation),
 				slog.String("args", args),
 				slog.Float64("latency", time.Since(startTime).Seconds()),
-			}
+			)
 			attrs = append(attrs, errorAttrs(err)...)
 			logger.LogAttrs(ctx, level, "server stream", attrs...)
 			return err

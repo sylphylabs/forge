@@ -51,11 +51,6 @@ func maxRand() Option {
 	}
 }
 
-func mustClient(t *testing.T, opts ...Option) func(context.Context, any) (any, error) {
-	t.Helper()
-	return mustClientNext(t, nil, opts...)
-}
-
 func mustClientNext(t *testing.T, next func(context.Context, any) (any, error), opts ...Option) func(context.Context, any) (any, error) {
 	t.Helper()
 	m, err := Client(opts...)

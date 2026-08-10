@@ -15,11 +15,11 @@ func TestErrorAnnotations(t *testing.T) {
 	if value == nil {
 		t.Fatal("FAILURE_REASON_NOT_FOUND descriptor is missing")
 	}
-	if got := proto.GetExtension(value.Options(), errors.E_Code); got != int32(404) {
-		t.Fatalf("error code = %v, want 404", got)
+	if got := proto.GetExtension(value.Options(), errors.E_Kind); got != errors.Kind_KIND_NOT_FOUND {
+		t.Fatalf("error kind = %v, want %v", got, errors.Kind_KIND_NOT_FOUND)
 	}
-	if got := proto.GetExtension(descriptor.Options(), errors.E_DefaultCode); got != int32(500) {
-		t.Fatalf("default error code = %v, want 500", got)
+	if got := proto.GetExtension(descriptor.Options(), errors.E_DefaultKind); got != errors.Kind_KIND_INTERNAL {
+		t.Fatalf("default error kind = %v, want %v", got, errors.Kind_KIND_INTERNAL)
 	}
 }
 

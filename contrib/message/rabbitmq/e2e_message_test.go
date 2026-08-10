@@ -98,7 +98,7 @@ func TestMain(m *testing.M) {
 }
 
 // startBroker runs a RabbitMQ container and waits until it accepts AMQP
-// connections. Readiness is probed by dialling rather than by sleeping: the
+// connections. Readiness is probed by dialing rather than by sleeping: the
 // container reports "running" long before the broker listens.
 func startBroker() (url string, stop func(), err error) {
 	// A container left by a crashed run would make `docker run` fail on the
@@ -331,7 +331,7 @@ func TestWildcardBindingReportsTheConcreteDestination(t *testing.T) {
 // unmodified.
 //
 // timeout is chosen because its effect is observable from the handler alone —
-// the handler's own context is cancelled — so the assertion does not depend on
+// the handler's own context is canceled — so the assertion does not depend on
 // inspecting a log or a metric.
 func TestTimeoutMiddlewareAppliesOnTheMessagePath(t *testing.T) {
 	requireBroker(t)
@@ -433,7 +433,7 @@ func TestErrorClassifierRequeuesAFailedDelivery(t *testing.T) {
 }
 
 // recordingOrderEvents implements the generated server interface with
-// per-test behaviour. Using the generated interface rather than a hand-written
+// per-test behavior. Using the generated interface rather than a hand-written
 // handler is the point: it is the type the generator asks an application to
 // satisfy.
 type recordingOrderEvents struct {

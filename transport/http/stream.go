@@ -66,7 +66,7 @@ type ServerStream interface {
 
 // ClientStream is one client-side HTTP stream.
 //
-// It declares only what every client stream can honour, whichever wire
+// It declares only what every client stream can honor, whichever wire
 // carries it. Sending is not part of that set: SSE is one-directional by
 // definition, so an SSE stream can no more send a message than a listener can
 // dial. Streams that do have a sending half implement [SendingClientStream]

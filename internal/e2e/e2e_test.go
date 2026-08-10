@@ -2,7 +2,7 @@
 //
 // Every other test in this repository runs in one process, which means a
 // mistake in how a test reaches the code under test can look like a passing
-// contract. That happened during development: a probe dialled a raw gRPC
+// contract. That happened during development: a probe dialed a raw gRPC
 // client instead of Forge's, saw an error arrive without its identity, and was
 // reported as a transport defect. It was not — the probe had bypassed the
 // interceptor that restores identity.

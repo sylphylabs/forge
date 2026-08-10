@@ -235,7 +235,7 @@ func TestHTTPTemplateStreamsAndHTTPBody(t *testing.T) {
 		t.Fatalf("generated template should send whole message for non-streamable body:\n%s", got)
 	}
 	// A server-streaming-only client must never reach for the sending capability;
-	// embedding it would reintroduce a send method the SSE wire cannot honour.
+	// embedding it would reintroduce a send method the SSE wire cannot honor.
 	if strings.Contains(got, "type Greeter_ListHelloHTTPClient struct {\n\thttp.SendingClientStream") {
 		t.Fatalf("server-streaming client must not embed the sending capability:\n%s", got)
 	}
