@@ -15,7 +15,6 @@ var messageTemplate string
 type serviceDesc struct {
 	ServiceType string // OrderEvents
 	ServiceName string // order.v1.OrderEvents
-	Metadata    string // order/v1/order.proto
 	Deprecated  bool
 	Methods     []*methodDesc
 }

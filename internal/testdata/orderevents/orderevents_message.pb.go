@@ -8,9 +8,11 @@ package orderevents
 
 import (
 	context "context"
+	fmt "fmt"
 	middleware "github.com/sylphylabs/forge/middleware"
 	message "github.com/sylphylabs/forge/transport/message"
 	proto "google.golang.org/protobuf/proto"
+	strings "strings"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -19,18 +21,27 @@ var _ = new(context.Context)
 var _ = new(message.Message)
 var _ middleware.UnaryHandler
 var _ = proto.Unmarshal
-
-const OperationMessageOrderEventsOnOrderCreated = "/orderevents.OrderEvents/OnOrderCreated"
-const OperationMessageOrderEventsOnOrderShipped = "/orderevents.OrderEvents/OnOrderShipped"
+var _ = fmt.Errorf
+var _ = strings.TrimSpace
 
 // DestinationOrderEventsOnOrderCreated is the destination declared by the
 // contract. It is the default for RegisterOrderEventsMessageServer, not a
 // fixed value: see OrderEventsMessageRegisterOption.
+//
+// It is also the key middleware matches on, because a delivered message reports
+// its destination as the operation in flight. There is deliberately no
+// "/orderevents.OrderEvents/OnOrderCreated" constant: that shape is what HTTP and gRPC
+// report, and a matcher built from it would never fire here.
 const DestinationOrderEventsOnOrderCreated = "order.created"
 
 // DestinationOrderEventsOnOrderShipped is the destination declared by the
 // contract. It is the default for RegisterOrderEventsMessageServer, not a
 // fixed value: see OrderEventsMessageRegisterOption.
+//
+// It is also the key middleware matches on, because a delivered message reports
+// its destination as the operation in flight. There is deliberately no
+// "/orderevents.OrderEvents/OnOrderShipped" constant: that shape is what HTTP and gRPC
+// report, and a matcher built from it would never fire here.
 const DestinationOrderEventsOnOrderShipped = "order.shipped"
 
 type OrderEventsMessageServer interface {
@@ -80,9 +91,21 @@ func (o *orderEventsMessageRegisterOptions) resolve(operation, declared string) 
 	return o.prefix + declared
 }
 
+// orderEventsMessageOperations lists the operations this
+// contract declares, so that an override naming something else is reported
+// rather than silently ignored.
+var orderEventsMessageOperations = map[string]struct{}{
+	"OnOrderCreated": {},
+	"OnOrderShipped": {},
+}
+
 // RegisterOrderEventsMessageServer binds every subscribe-annotated method
-// of the service to s. Registration must happen before the server starts; the
-// first binding error is returned and no further method is bound.
+// of the service to s. Registration must happen before the server starts.
+//
+// Every destination is resolved and checked before the first binding, so a
+// rejected registration binds nothing at all. Binding as it went would leave a
+// server that returns an error and still starts, consuming part of its contract
+// while the rest is silently absent.
 func RegisterOrderEventsMessageServer(s *message.Server, srv OrderEventsMessageServer, opts ...OrderEventsMessageRegisterOption) error {
 	o := new(orderEventsMessageRegisterOptions)
 	for _, opt := range opts {
@@ -90,28 +113,61 @@ func RegisterOrderEventsMessageServer(s *message.Server, srv OrderEventsMessageS
 			opt(o)
 		}
 	}
-	if err := s.Handle(
-		o.resolve("OnOrderCreated", DestinationOrderEventsOnOrderCreated),
-		_OrderEvents_OnOrderCreated_Message_Handler(srv),
-	); err != nil {
-		return err
+	for operation := range o.destinations {
+		if _, ok := orderEventsMessageOperations[operation]; !ok {
+			return fmt.Errorf("orderevents.OrderEvents: override names unknown operation %q", operation)
+		}
 	}
-	if err := s.Handle(
-		o.resolve("OnOrderShipped", DestinationOrderEventsOnOrderShipped),
-		_OrderEvents_OnOrderShipped_Message_Handler(srv),
-	); err != nil {
-		return err
+
+	type binding struct {
+		destination string
+		handler     middleware.UnaryHandler
+	}
+	bindings := []binding{
+		{
+			destination: o.resolve("OnOrderCreated", DestinationOrderEventsOnOrderCreated),
+			handler:     _OrderEvents_OnOrderCreated_Message_Handler(srv),
+		},
+		{
+			destination: o.resolve("OnOrderShipped", DestinationOrderEventsOnOrderShipped),
+			handler:     _OrderEvents_OnOrderShipped_Message_Handler(srv),
+		},
+	}
+
+	claimed := make(map[string]struct{}, len(bindings))
+	for _, b := range bindings {
+		if strings.TrimSpace(b.destination) == "" {
+			return fmt.Errorf("orderevents.OrderEvents: empty destination after resolution")
+		}
+		if _, dup := claimed[b.destination]; dup {
+			// The second Handle would shadow the first, so the contract would
+			// be half-consumed with no error at delivery time.
+			return fmt.Errorf("orderevents.OrderEvents: two operations resolve to destination %q", b.destination)
+		}
+		claimed[b.destination] = struct{}{}
+	}
+
+	for _, b := range bindings {
+		if err := s.Handle(b.destination, b.handler); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func _OrderEvents_OnOrderCreated_Message_Handler(srv OrderEventsMessageServer) middleware.UnaryHandler {
 	return func(ctx context.Context, req any) (any, error) {
+		msg, ok := req.(*message.Message)
+		if !ok || msg == nil {
+			// The request is always the delivered envelope. Anything else means
+			// this handler was mounted somewhere other than a message server,
+			// and decoding an empty request would hand business code a
+			// plausible-looking event that never arrived.
+			return nil, fmt.Errorf("orderevents.OrderEvents: handler wants a *message.Message, got %T", req)
+		}
 		var in OrderCreated
-		if msg, ok := req.(*message.Message); ok && msg != nil {
-			if err := proto.Unmarshal(msg.Body, &in); err != nil {
-				return nil, err
-			}
+		if err := proto.Unmarshal(msg.Body, &in); err != nil {
+			return nil, err
 		}
 		return nil, srv.OnOrderCreated(ctx, &in)
 	}
@@ -119,11 +175,17 @@ func _OrderEvents_OnOrderCreated_Message_Handler(srv OrderEventsMessageServer) m
 
 func _OrderEvents_OnOrderShipped_Message_Handler(srv OrderEventsMessageServer) middleware.UnaryHandler {
 	return func(ctx context.Context, req any) (any, error) {
+		msg, ok := req.(*message.Message)
+		if !ok || msg == nil {
+			// The request is always the delivered envelope. Anything else means
+			// this handler was mounted somewhere other than a message server,
+			// and decoding an empty request would hand business code a
+			// plausible-looking event that never arrived.
+			return nil, fmt.Errorf("orderevents.OrderEvents: handler wants a *message.Message, got %T", req)
+		}
 		var in OrderShipped
-		if msg, ok := req.(*message.Message); ok && msg != nil {
-			if err := proto.Unmarshal(msg.Body, &in); err != nil {
-				return nil, err
-			}
+		if err := proto.Unmarshal(msg.Body, &in); err != nil {
+			return nil, err
 		}
 		return nil, srv.OnOrderShipped(ctx, &in)
 	}

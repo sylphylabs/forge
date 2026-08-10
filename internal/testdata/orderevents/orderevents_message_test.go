@@ -247,8 +247,57 @@ func TestDeclaredDestinationConstants(t *testing.T) {
 	if DestinationOrderEventsOnOrderShipped != "order.shipped" {
 		t.Errorf("DestinationOrderEventsOnOrderShipped = %q", DestinationOrderEventsOnOrderShipped)
 	}
-	if OperationMessageOrderEventsOnOrderCreated != "/orderevents.OrderEvents/OnOrderCreated" {
-		t.Errorf("OperationMessageOrderEventsOnOrderCreated = %q", OperationMessageOrderEventsOnOrderCreated)
+}
+
+// A registration that cannot be honoured must bind nothing, rather than return
+// an error and leave a server that starts and consumes part of its contract.
+func TestRegisterBindsNothingWhenADestinationCollides(t *testing.T) {
+	subscriber := newRecordingSubscriber()
+	server := message.NewServer(subscriber)
+
+	err := RegisterOrderEventsMessageServer(server, new(recordingServer),
+		WithOrderEventsMessageDestination("OnOrderShipped", DestinationOrderEventsOnOrderCreated),
+	)
+	if err == nil {
+		t.Fatal("two operations resolving to one destination must be rejected")
+	}
+	if got := subscriber.boundTopics(); len(got) != 0 {
+		t.Errorf("bound topics = %v, want none: a rejected registration must not bind", got)
+	}
+}
+
+// An override naming an operation the contract does not declare is a typo, and
+// silently ignoring it leaves the declared destination in place.
+func TestRegisterRejectsUnknownOperationOverride(t *testing.T) {
+	subscriber := newRecordingSubscriber()
+	server := message.NewServer(subscriber)
+
+	err := RegisterOrderEventsMessageServer(server, new(recordingServer),
+		WithOrderEventsMessageDestination("OnOrderCreatd", "typo.created"),
+	)
+	if err == nil {
+		t.Fatal("an override naming an unknown operation must be rejected")
+	}
+	if got := subscriber.boundTopics(); len(got) != 0 {
+		t.Errorf("bound topics = %v, want none", got)
+	}
+}
+
+// The request is always the delivered envelope. Anything else means the handler
+// was mounted outside a message server, which must not look like an empty event.
+func TestHandlerRejectsANonMessageRequest(t *testing.T) {
+	server := new(recordingServer)
+
+	// Reach the unary handler directly: the adapter-facing Handler always passes
+	// a *Message, so only a mismounted chain can produce another type.
+	handler := _OrderEvents_OnOrderCreated_Message_Handler(server)
+	for _, req := range []any{"not a message", nil, (*message.Message)(nil)} {
+		if _, err := handler(t.Context(), req); err == nil {
+			t.Errorf("req %#v: want an error, not an empty event", req)
+		}
+	}
+	if len(server.created) != 0 {
+		t.Errorf("business handler ran %d times, want 0", len(server.created))
 	}
 }
 

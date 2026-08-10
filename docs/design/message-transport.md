@@ -193,18 +193,25 @@ err := RegisterOrderEventsMessageServer(server, srv,
 which stays stable when the Go method name is remapped, and it replaces the
 destination outright rather than being prefixed again.
 
-The generated handler decodes the message body with `proto.Unmarshal` and puts
-the delivery in the handler context.
-`XxxDestinationFromServerContext(ctx) (string, bool)` returns the concrete
-delivery destination, which can differ from the registered one under a wildcard
-subscription, and `XxxMessageFromServerContext(ctx) (*message.Message, bool)`
-returns the envelope for handlers that need its ID, key, or headers. Both
-report absence rather than a zero value, matching the transport accessors.
+The generated handler decodes the message body with `proto.Unmarshal` and calls
+the service method. A handler that needs the destination reads it from the
+transport in context with `message.DestinationFromServerContext(ctx) (string,
+bool)`, the same accessor a hand-written handler uses; there is no per-service
+generated accessor, because the destination is a property of the delivery rather
+than of the contract. Under a wildcard subscription it is the concrete
+destination that delivered the message, not the pattern that matched it.
+
+A request that is not a `*message.Message` is an error rather than an empty
+decode: the only way to produce one is to mount the handler outside a message
+server, and a zero-value request would reach business code as an event that
+never arrived.
 
 Streaming RPCs are rejected: the portable contract delivers one encoded message
-per callback and has no stream semantics to generate against. Two methods in
-one service may not declare the same destination, because the second
-`Handle` would silently shadow the first.
+per callback and has no stream semantics to generate against. No two methods in
+a file may declare the same destination, across services as well as within one,
+because the second `Handle` would silently shadow the first. Registration
+re-checks this after overrides are applied, since an override can collide two
+destinations that the schema kept apart.
 
 ## Adapter and Repository Layout
 
@@ -328,7 +335,12 @@ proves against a real `message.Server` that:
 - a prefix applies to every destination an override did not replace;
 - the handler decodes the body and propagates the server's error;
 - an undecodable body fails without reaching the server;
-- the delivery destination and envelope are readable from the handler context.
+- the delivery destination is readable from the handler context, and is the
+  concrete one when it differs from the destination that was bound;
+- a registration that cannot be honoured binds nothing at all, rather than
+  returning an error and leaving a server that starts on half its contract;
+- an override naming an operation the contract does not declare is rejected;
+- a request that is not the delivered envelope is an error, not an empty event.
 
 This proves the first wire adapter and the root/nested-module dependency
 boundary, including JetStream acknowledgement and redelivery behavior. It does

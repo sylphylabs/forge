@@ -14,6 +14,8 @@ import (
 
 const (
 	contextPackage          = protogen.GoImportPath("context")
+	fmtPackage              = protogen.GoImportPath("fmt")
+	stringsPackage          = protogen.GoImportPath("strings")
 	transportMessagePackage = protogen.GoImportPath("github.com/sylphylabs/forge/transport/message")
 	middlewarePackage       = protogen.GoImportPath("github.com/sylphylabs/forge/middleware")
 	protoPackage            = protogen.GoImportPath("google.golang.org/protobuf/proto")
@@ -39,8 +41,12 @@ type messageFile struct {
 // analyzeMessageFile collects every subscribe-annotated method in the file.
 func analyzeMessageFile(file *protogen.File) (*messageFile, error) {
 	facts := new(messageFile)
+	// Destinations are checked across the whole file, not per service. Two
+	// services registered on one server would otherwise both bind the same
+	// destination, and the second Handle shadows the first without an error.
+	declaredBy := make(map[string]string)
 	for _, service := range file.Services {
-		analyzed, err := analyzeService(file, service)
+		analyzed, err := analyzeService(file, service, declaredBy)
 		if err != nil {
 			return nil, err
 		}
@@ -51,9 +57,8 @@ func analyzeMessageFile(file *protogen.File) (*messageFile, error) {
 	return facts, nil
 }
 
-func analyzeService(file *protogen.File, service *protogen.Service) (*serviceFacts, error) {
+func analyzeService(file *protogen.File, service *protogen.Service, declaredBy map[string]string) (*serviceFacts, error) {
 	facts := &serviceFacts{service: service}
-	declaredBy := make(map[string]string, len(service.Methods))
 	for _, method := range service.Methods {
 		subscription, ok := subscriptionOf(method)
 		if !ok {
@@ -78,7 +83,7 @@ func analyzeService(file *protogen.File, service *protogen.Service) (*serviceFac
 				file.Desc.Path(), method.Desc.FullName(), destination, previous,
 			)
 		}
-		declaredBy[destination] = string(method.Desc.Name())
+		declaredBy[destination] = string(method.Desc.FullName())
 		facts.bindings = append(facts.bindings, &binding{method: method, destination: destination})
 	}
 	if len(facts.bindings) == 0 {
@@ -106,7 +111,6 @@ func buildServiceDesc(g *protogen.GeneratedFile, file *protogen.File, facts *ser
 	sd := &serviceDesc{
 		ServiceType: facts.service.GoName,
 		ServiceName: string(facts.service.Desc.FullName()),
-		Metadata:    file.Desc.Path(),
 		Deprecated:  facts.service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated(),
 	}
 	for _, b := range facts.bindings {
@@ -169,6 +173,8 @@ func emitMessageFile(gen *protogen.Plugin, file *protogen.File, facts *messageFi
 	g.P("var _ = new(", transportMessagePackage.Ident("Message"), ")")
 	g.P("var _ ", middlewarePackage.Ident("UnaryHandler"))
 	g.P("var _ = ", protoPackage.Ident("Unmarshal"))
+	g.P("var _ = ", fmtPackage.Ident("Errorf"))
+	g.P("var _ = ", stringsPackage.Ident("TrimSpace"))
 	g.P()
 	for _, service := range facts.services {
 		source, err := buildServiceDesc(g, file, service).execute()

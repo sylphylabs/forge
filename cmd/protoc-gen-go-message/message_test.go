@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -145,7 +146,6 @@ func TestGenerateForgeMessageAnnotations(t *testing.T) {
 		`func RegisterOrderEventsMessageServer(s *message.Server, srv OrderEventsMessageServer, opts ...OrderEventsMessageRegisterOption) error {`,
 		`const DestinationOrderEventsOnOrderCreated = "order.created"`,
 		`const DestinationOrderEventsOnOrderShipped = "order.shipped"`,
-		`const OperationMessageOrderEventsOnOrderCreated = "/test.v1.OrderEvents/OnOrderCreated"`,
 		`func WithOrderEventsMessageDestination(operation, destination string) OrderEventsMessageRegisterOption {`,
 		`func WithOrderEventsMessageDestinationPrefix(prefix string) OrderEventsMessageRegisterOption {`,
 		`o.resolve("OnOrderCreated", DestinationOrderEventsOnOrderCreated)`,
@@ -229,7 +229,7 @@ func TestAnalyzeMessageFileRejectsInvalidSubscriptions(t *testing.T) {
 			},
 			want: []string{
 				"RPC test.v1.OrderEvents.OnOrderShipped",
-				`destination "order.created" is already bound by OnOrderCreated`,
+				`destination "order.created" is already bound by test.v1.OrderEvents.OnOrderCreated`,
 			},
 		},
 	}
@@ -303,5 +303,50 @@ func Test_lowerFirst(t *testing.T) {
 		if got := lowerFirst(test.name); got != test.want {
 			t.Errorf("lowerFirst(%q) = %q, want %q", test.name, got, test.want)
 		}
+	}
+}
+
+// A destination is an adapter-defined string, not a restricted charset, so it
+// reaches the generated constant through %q rather than raw interpolation.
+//
+// Interpolating it raw fails two ways: a quote or newline makes the file
+// unparsable, and a backslash silently changes the value — a service that
+// compiles and subscribes to a destination the contract never named.
+func TestDestinationSurvivesGoQuoting(t *testing.T) {
+	for _, destination := range []string{
+		`order.created`,
+		`a"b`,
+		"a\nb",
+		`a\b`,
+		`orders.\d+`,
+		"tab\there",
+	} {
+		t.Run(destination, func(t *testing.T) {
+			plugin, file := newMessagePlugin(t, []methodSpec{
+				{name: "OnOrderCreated", options: subscription(stringPointer(destination))},
+			})
+			if _, err := generateMessageFile(plugin, plugin.FilesByPath[file.GetName()]); err != nil {
+				t.Fatalf("generateMessageFile() error = %v", err)
+			}
+			response := plugin.Response()
+			if response.GetError() != "" {
+				t.Fatalf("generation error = %s", response.GetError())
+			}
+
+			content := response.File[0].GetContent()
+			_, literal, found := strings.Cut(content, "const DestinationOrderEventsOnOrderCreated = ")
+			if !found {
+				t.Fatalf("no destination constant in:\n%s", content)
+			}
+			literal, _, _ = strings.Cut(literal, "\n")
+
+			got, err := strconv.Unquote(strings.TrimSpace(literal))
+			if err != nil {
+				t.Fatalf("emitted literal %s is not a valid Go string: %v", literal, err)
+			}
+			if got != destination {
+				t.Errorf("destination round-tripped as %q, want %q", got, destination)
+			}
+		})
 	}
 }
