@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package orderevents;
+
+import "google/protobuf/empty.proto";
+import "sylphy/message/v1/message.proto";
+
+option go_package = "github.com/sylphylabs/forge/internal/testdata/orderevents";
+
+// The order event consumer definition.
+service OrderEvents {
+  // consumes a newly created order.
+  rpc OnOrderCreated(OrderCreated) returns (google.protobuf.Empty) {
+    option (sylphy.message.v1.subscribe) = {destination: "order.created"};
+  }
+  // consumes a shipped order.
+  rpc OnOrderShipped(OrderShipped) returns (google.protobuf.Empty) {
+    option (sylphy.message.v1.subscribe) = {destination: "order.shipped"};
+  }
+  // has no subscribe annotation and is therefore not bound to any destination.
+  rpc OnOrderAudited(OrderCreated) returns (google.protobuf.Empty);
+}
+
+// OrderCreated is published when an order is accepted.
+message OrderCreated {
+  string id = 1;
+  string customer = 2;
+}
+
+// OrderShipped is published when an order leaves the warehouse.
+message OrderShipped {
+  string id = 1;
+  string carrier = 2;
+}

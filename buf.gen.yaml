@@ -48,6 +48,15 @@ plugins:
       - run
       - -C
       - cmd
+      - ./protoc-gen-go-message
+    out: .
+    opt:
+      - paths=source_relative
+  - local:
+      - go
+      - run
+      - -C
+      - cmd
       - ./protoc-gen-go-middleware
     out: .
     opt:

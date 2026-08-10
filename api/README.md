@@ -17,6 +17,10 @@ need Protobuf tooling.
 
 - `sylphy/errors/v1/errors.proto` defines the portable error status and
   enum annotations.
+- `sylphy/message/v1/message.proto` defines the asynchronous subscription
+  annotation. `subscribe` binds one method to a `Subscription`, whose
+  `destination` is the contract default that a deployment overrides at
+  registration time.
 
 Middleware wiring belongs in generated Go service plans rather than Protobuf.
 The API module publishes no operation-policy or middleware-naming schema.

@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 
 	"github.com/sylphylabs/forge/api/errors/v1"
+	message "github.com/sylphylabs/forge/api/message/v1"
 )
 
 func TestErrorStatusRoundTrip(t *testing.T) {
@@ -65,6 +66,20 @@ func TestCustomOptions(t *testing.T) {
 	}
 }
 
+func TestMessageSubscriptionOption(t *testing.T) {
+	options := new(descriptorpb.MethodOptions)
+	proto.SetExtension(options, message.E_Subscribe, &message.Subscription{
+		Destination: "order.created",
+	})
+	got, ok := proto.GetExtension(options, message.E_Subscribe).(*message.Subscription)
+	if !ok {
+		t.Fatalf("subscribe extension type = %T, want *message.Subscription", proto.GetExtension(options, message.E_Subscribe))
+	}
+	if got.GetDestination() != "order.created" {
+		t.Fatalf("destination = %q, want %q", got.GetDestination(), "order.created")
+	}
+}
+
 func TestExtensionAllocations(t *testing.T) {
 	tests := []struct {
 		message protoreflect.FullName
@@ -73,6 +88,7 @@ func TestExtensionAllocations(t *testing.T) {
 	}{
 		{"google.protobuf.EnumOptions", 500101, "sylphy.errors.v1.default_kind"},
 		{"google.protobuf.EnumValueOptions", 500102, "sylphy.errors.v1.kind"},
+		{"google.protobuf.MethodOptions", 500201, "sylphy.message.v1.subscribe"},
 	}
 	for _, test := range tests {
 		extension, err := protoregistry.GlobalTypes.FindExtensionByNumber(test.message, test.number)

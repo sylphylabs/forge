@@ -21,6 +21,12 @@ middleware plans are defined by
 behavior is defined by
 [`google-http-transcoding.md`](google-http-transcoding.md).
 
+The three plugins below are the ones intended for Buf publication. They are not
+the whole of `cmd/`: `protoc-gen-openapi` and `protoc-gen-go-message` also live
+in that module. `protoc-gen-go-message` is specified by
+[`message-transport.md`](message-transport.md) and follows the same
+one-responsibility, one-artifact rules; its publication is out of scope here.
+
 ## Decision
 
 Forge publishes three independently selectable Buf plugins:

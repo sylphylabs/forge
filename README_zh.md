@@ -36,12 +36,13 @@ go get github.com/sylphylabs/forge@main
 Forge 有意不提供项目脚手架 CLI。项目创建、依赖升级和服务运行均使用
 标准 Go 工具链。
 
-对应的 Buf plugin 发布前，可以从当前 checkout 构建三个原子化 Forge
-Protobuf generator：
+对应的 Buf plugin 发布前，可以从当前 checkout 构建四个原子化 Forge
+Protobuf generator。只有消费异步消息的服务才需要安装
+`./protoc-gen-go-message`：
 
 ```shell
 cd cmd
-GOWORK=off go install ./protoc-gen-go-errors ./protoc-gen-go-http ./protoc-gen-go-middleware
+GOWORK=off go install ./protoc-gen-go-errors ./protoc-gen-go-http ./protoc-gen-go-message ./protoc-gen-go-middleware
 ```
 
 ## 生成并运行

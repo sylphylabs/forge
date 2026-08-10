@@ -149,6 +149,63 @@ Generated protobuf operation metadata may later add a typed codec/handler
 adapter. It must reuse this message lifecycle and operation identity instead
 of introducing a second broker selector or descriptor parser.
 
+## Generated Subscriptions
+
+`cmd/protoc-gen-go-message` turns a `(sylphy.message.v1.subscribe)` method
+option into a typed server interface and a registration function over this
+lifecycle. It emits `_message.pb.go` and calls `Server.Handle`; it does not
+introduce a second lifecycle, broker selector, or descriptor parser.
+
+```proto
+service OrderEvents {
+  rpc OnOrderCreated(OrderCreated) returns (google.protobuf.Empty) {
+    option (sylphy.message.v1.subscribe) = {destination: "order.created"};
+  }
+}
+```
+
+```go
+type OrderEventsMessageServer interface {
+	OnOrderCreated(context.Context, *OrderCreated) error
+}
+
+func RegisterOrderEventsMessageServer(
+	s *message.Server,
+	srv OrderEventsMessageServer,
+	opts ...OrderEventsMessageRegisterOption,
+) error
+```
+
+The proto `destination` is required: a method name is not a valid topic in
+every broker, so the generator rejects an annotation without one rather than
+inventing a default. That destination is the contract's default, not a fixed
+value. The same contract runs against different topic prefixes because
+registration can override it:
+
+```go
+err := RegisterOrderEventsMessageServer(server, srv,
+	WithOrderEventsMessageDestinationPrefix("staging."),
+	WithOrderEventsMessageDestination("OnOrderCreated", "legacy.orders.created"),
+)
+```
+
+`WithXxxMessageDestination` keys on the RPC name declared in the proto file,
+which stays stable when the Go method name is remapped, and it replaces the
+destination outright rather than being prefixed again.
+
+The generated handler decodes the message body with `proto.Unmarshal` and puts
+the delivery in the handler context.
+`XxxDestinationFromServerContext(ctx) (string, bool)` returns the concrete
+delivery destination, which can differ from the registered one under a wildcard
+subscription, and `XxxMessageFromServerContext(ctx) (*message.Message, bool)`
+returns the envelope for handlers that need its ID, key, or headers. Both
+report absence rather than a zero value, matching the transport accessors.
+
+Streaming RPCs are rejected: the portable contract delivers one encoded message
+per callback and has no stream semantics to generate against. Two methods in
+one service may not declare the same destination, because the second
+`Handle` would silently shadow the first.
+
 ## Adapter and Repository Layout
 
 An official adapter belongs in a nested module such as the current NATS
@@ -259,6 +316,19 @@ JetStream fixture covering:
 - termination of permanent handler failure;
 - refusal to provision a missing Stream or Consumer implicitly;
 - cancellation, draining, idempotent close, and `message.Server` integration.
+
+`cmd/protoc-gen-go-message` adds descriptor-level evidence for annotation
+discovery, rejection of a missing/blank destination, rejection of streaming and
+duplicate destinations, and omission of unannotated methods. A committed
+`internal/testdata/orderevents` fixture compiles the generated output and
+proves against a real `message.Server` that:
+
+- declared destinations are the ones bound;
+- a per-operation override replaces a destination outright;
+- a prefix applies to every destination an override did not replace;
+- the handler decodes the body and propagates the server's error;
+- an undecodable body fails without reaching the server;
+- the delivery destination and envelope are readable from the handler context.
 
 This proves the first wire adapter and the root/nested-module dependency
 boundary, including JetStream acknowledgement and redelivery behavior. It does

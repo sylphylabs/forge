@@ -37,11 +37,12 @@ Forge intentionally does not ship a project-scaffolding CLI. Project
 creation, dependency upgrades, and execution use the standard Go toolchain.
 
 Build the atomic Forge Protobuf generators from this checkout until the
-corresponding Buf plugins are published:
+corresponding Buf plugins are published. Install
+`./protoc-gen-go-message` only when a service consumes asynchronous messages:
 
 ```shell
 cd cmd
-GOWORK=off go install ./protoc-gen-go-errors ./protoc-gen-go-http ./protoc-gen-go-middleware
+GOWORK=off go install ./protoc-gen-go-errors ./protoc-gen-go-http ./protoc-gen-go-message ./protoc-gen-go-middleware
 ```
 
 ## Generate and Run

@@ -13,16 +13,16 @@ $(LINTER):
 	curl -SL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s latest
 
 all:
-	@cd cmd && GOWORK=off go build ./protoc-gen-go-errors ./protoc-gen-go-http ./protoc-gen-go-middleware ./protoc-gen-openapi
+	@cd cmd && GOWORK=off go build ./protoc-gen-go-errors ./protoc-gen-go-http ./protoc-gen-go-message ./protoc-gen-go-middleware ./protoc-gen-openapi
 
 .PHONY: install
 install: all
-	@cd cmd && GOWORK=off GOBIN='$(BIN)' go install ./protoc-gen-go-errors ./protoc-gen-go-http ./protoc-gen-go-middleware ./protoc-gen-openapi
+	@cd cmd && GOWORK=off GOBIN='$(BIN)' go install ./protoc-gen-go-errors ./protoc-gen-go-http ./protoc-gen-go-message ./protoc-gen-go-middleware ./protoc-gen-openapi
 	@echo "install finished"
 
 .PHONY: uninstall
 uninstall:
-	$(shell for tool in protoc-gen-go-errors protoc-gen-go-http protoc-gen-go-middleware protoc-gen-openapi; do for i in `which -a $${tool} 2>/dev/null | sort | uniq`; do read -p "Press to remove $${i} (y/n): " REPLY; if [ $${REPLY} = "y" ]; then rm -f $${i}; fi; done; done)
+	$(shell for tool in protoc-gen-go-errors protoc-gen-go-http protoc-gen-go-message protoc-gen-go-middleware protoc-gen-openapi; do for i in `which -a $${tool} 2>/dev/null | sort | uniq`; do read -p "Press to remove $${i} (y/n): " REPLY; if [ $${REPLY} = "y" ]; then rm -f $${i}; fi; done; done)
 	@echo "uninstall finished"
 
 .PHONY: clean
