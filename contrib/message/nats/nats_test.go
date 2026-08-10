@@ -70,9 +70,11 @@ func TestMessageServerLifecycleWithNATS(t *testing.T) {
 	ready := make(chan struct{})
 	server := message.NewServer(&readySubscriber{Client: client, ready: ready})
 	delivered := make(chan string, 1)
-	if err := server.Handle("orders.created", func(_ context.Context, subject string, msg *message.Message) error {
+	if err := server.Handle("orders.created", func(ctx context.Context, req any) (any, error) {
+		subject, _ := message.DestinationFromServerContext(ctx)
+		msg, _ := req.(*message.Message)
 		delivered <- subject + ":" + string(msg.Body)
-		return nil
+		return nil, nil
 	}); err != nil {
 		t.Fatal(err)
 	}

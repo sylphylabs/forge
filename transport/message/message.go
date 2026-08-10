@@ -89,28 +89,43 @@ type Subscriber interface {
 	Subscribe(context.Context, string, Handler) (Subscription, error)
 }
 
+// Nacker is the optional capability of a [Subscription] that can tell its
+// broker a message was not processed.
+//
+// It exists because brokers do not agree that such a thing is possible. Kafka
+// has no per-message negative acknowledgement — the only lever is to leave the
+// offset where it is — and MQTT 5 has none either, since a PUBACK reason code
+// does not ask for redelivery. RabbitMQ and NATS JetStream do have one.
+//
+// Expressing that as a capability rather than a method on [Subscription] keeps
+// the two honest: an adapter that cannot nack does not implement this, and a
+// caller that needs one finds out at the type assertion rather than by
+// discovering at runtime that its errors were silently dropped.
+//
+// A construction option cannot substitute for this. An option chooses among
+// behaviours a protocol has; it cannot supply one the protocol lacks.
+type Nacker interface {
+	// Nack reports that msg was not processed. Requeue asks the broker to
+	// redeliver it; the broker decides whether to honour that.
+	Nack(ctx context.Context, msg *Message, requeue bool) error
+}
+
 // Subscription is one active destination binding.
 type Subscription interface {
 	Close(context.Context) error
 }
 
-// Handler processes one message. Destination is the concrete destination that
-// delivered the message, which may differ from a wildcard subscription.
-// Returning an error leaves acknowledgement and retry policy to the broker
-// adapter; the core contract does not guess those semantics.
+// Handler delivers one message to an adapter's subscription.
+//
+// It is the shape a broker adapter implements, not the shape an application
+// writes: destination is a parameter here because an adapter has the value
+// before any context exists to carry it. Applications register a
+// [middleware.UnaryHandler] with [Server.Handle] and read the destination from
+// the [transport.Transporter] in context, as HTTP and gRPC handlers read their
+// operation.
+//
+// Returning an error leaves acknowledgement and retry policy to the adapter;
+// the core contract does not guess those semantics, because brokers do not
+// agree on them. Kafka and MQTT 5 have no negative acknowledgement at all,
+// while RabbitMQ and JetStream do — see [Nacker].
 type Handler func(context.Context, string, *Message) error
-
-// Middleware wraps a message handler.
-type Middleware func(Handler) Handler
-
-// Chain composes middleware in declaration order. Nil middleware is ignored.
-func Chain(m ...Middleware) Middleware {
-	return func(next Handler) Handler {
-		for i := len(m) - 1; i >= 0; i-- {
-			if m[i] != nil {
-				next = m[i](next)
-			}
-		}
-		return next
-	}
-}

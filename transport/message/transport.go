@@ -3,6 +3,8 @@ package message
 import (
 	"context"
 
+	"github.com/sylphylabs/forge/middleware"
+
 	"github.com/sylphylabs/forge/metadata"
 	"github.com/sylphylabs/forge/transport"
 )
@@ -72,10 +74,36 @@ func withTransport(ctx context.Context, endpoint, destination string, msg *Messa
 	})
 }
 
-// withTransportContext wraps next so every delivery carries a Transport. It
-// runs outside the message middleware chain, so that chain also sees it.
-func withTransportContext(endpoint string, next Handler) Handler {
+// DestinationFromServerContext returns the destination that delivered the
+// message being handled, and reports whether one was present.
+//
+// A handler reads its destination here rather than from a parameter, the way an
+// HTTP handler reads its request. Under a wildcard subscription this is the
+// concrete destination, not the pattern that matched it.
+func DestinationFromServerContext(ctx context.Context) (string, bool) {
+	tr, ok := transport.FromServerContext(ctx)
+	if !ok {
+		return "", false
+	}
+	return tr.Operation(), true
+}
+
+// deliver adapts an application handler to the shape an adapter subscribes
+// with.
+//
+// It is the one place the destination moves from a parameter into the context:
+// an adapter has the value before any context exists, while an application
+// reads it from the [transport.Transporter] the way an HTTP or gRPC handler
+// reads its operation. Running outside the middleware chain means that chain
+// sees the Transport too.
+//
+// A message has no reply, so the unary handler's first return value is
+// discarded. Middleware written for HTTP and gRPC passes that value through
+// without inspecting it, which is what lets the same middleware serve all three
+// transports.
+func deliver(endpoint string, next middleware.UnaryHandler) Handler {
 	return func(ctx context.Context, destination string, msg *Message) error {
-		return next(withTransport(ctx, endpoint, destination, msg), destination, msg)
+		_, err := next(withTransport(ctx, endpoint, destination, msg), msg)
+		return err
 	}
 }

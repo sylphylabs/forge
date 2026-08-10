@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/transport"
 )
 
@@ -33,8 +34,12 @@ var _ transport.Server = (*Server)(nil)
 // ServerOption configures a message Server before it starts.
 type ServerOption func(*Server)
 
-// WithMiddleware adds typed middleware to every binding.
-func WithMiddleware(m ...Middleware) ServerOption {
+// WithMiddleware adds middleware to every binding.
+//
+// The middleware is the same [middleware.UnaryMiddleware] HTTP and gRPC use, so
+// recovery, logging, rate limiting, and the rest apply to a message consumer
+// without a message-specific implementation of each.
+func WithMiddleware(m ...middleware.UnaryMiddleware) ServerOption {
 	return func(s *Server) {
 		for _, mw := range m {
 			if mw != nil {
@@ -63,7 +68,7 @@ func ShutdownTimeout(timeout time.Duration) ServerOption {
 
 type binding struct {
 	topic   string
-	handler Handler
+	handler middleware.UnaryHandler
 }
 
 type serverState uint8
@@ -87,7 +92,7 @@ type Server struct {
 	mu         sync.Mutex
 	state      serverState
 	bindings   []binding
-	middleware []Middleware
+	middleware []middleware.UnaryMiddleware
 	subs       []Subscription
 	cancel     context.CancelFunc
 	closeOnce  sync.Once
@@ -110,7 +115,7 @@ func NewServer(subscriber Subscriber, opts ...ServerOption) *Server {
 }
 
 // Handle registers one destination handler. It must be called before Start.
-func (s *Server) Handle(topic string, handler Handler) error {
+func (s *Server) Handle(topic string, handler middleware.UnaryHandler) error {
 	if strings.TrimSpace(topic) == "" {
 		return ErrEmptyTopic
 	}
@@ -130,7 +135,7 @@ func (s *Server) Handle(topic string, handler Handler) error {
 }
 
 // Use adds typed middleware before Start.
-func (s *Server) Use(m ...Middleware) error {
+func (s *Server) Use(m ...middleware.UnaryMiddleware) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.state != stateNew {
@@ -174,15 +179,15 @@ func (s *Server) Start(ctx context.Context) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
 	bindings := append([]binding(nil), s.bindings...)
-	middleware := append([]Middleware(nil), s.middleware...)
+	chain := append([]middleware.UnaryMiddleware(nil), s.middleware...)
 	s.mu.Unlock()
 
-	wrapped := Chain(middleware...)
+	wrapped := middleware.ChainUnary(chain...)
 	for _, b := range bindings {
 		if runCtx.Err() != nil {
 			return s.closeAfterCancellation(ctx)
 		}
-		handler := withTransportContext(s.endpoint, wrapped(b.handler))
+		handler := deliver(s.endpoint, wrapped(b.handler))
 		sub, err := s.subscriber.Subscribe(runCtx, b.topic, handler)
 		if err != nil {
 			cleanupErr := s.closeAfterCancellation(ctx)

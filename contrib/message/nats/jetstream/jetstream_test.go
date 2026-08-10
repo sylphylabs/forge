@@ -372,9 +372,11 @@ func TestMessageServerLifecycleWithJetStream(t *testing.T) {
 	ready := make(chan struct{})
 	server := message.NewServer(&readySubscriber{Subscriber: subscriber, ready: ready})
 	delivered := make(chan string, 1)
-	if err := server.Handle(testSubject, func(_ context.Context, subject string, msg *message.Message) error {
+	if err := server.Handle(testSubject, func(ctx context.Context, req any) (any, error) {
+		subject, _ := message.DestinationFromServerContext(ctx)
+		msg, _ := req.(*message.Message)
 		delivered <- subject + ":" + string(msg.Body)
-		return nil
+		return nil, nil
 	}); err != nil {
 		t.Fatal(err)
 	}

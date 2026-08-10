@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/transport"
 )
 
@@ -93,13 +94,13 @@ func TestServerDeliveryCarriesTransport(t *testing.T) {
 
 	sub := newRecordingSubscriber()
 	srv := NewServer(sub, Endpoint("nats://127.0.0.1:4222"))
-	if err := srv.Handle("orders.*", func(ctx context.Context, _ string, _ *Message) error {
+	if err := srv.Handle("orders.*", func(ctx context.Context, _ any) (any, error) {
 		if tr, ok := transport.FromServerContext(ctx); ok {
 			gotKind = tr.Kind()
 			gotOperation = tr.Operation()
 			gotEndpoint = tr.Endpoint()
 		}
-		return nil
+		return nil, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -130,13 +131,13 @@ func TestMessageMiddlewareSeesTransport(t *testing.T) {
 	var seen bool
 
 	sub := newRecordingSubscriber()
-	srv := NewServer(sub, WithMiddleware(func(next Handler) Handler {
-		return func(ctx context.Context, destination string, msg *Message) error {
+	srv := NewServer(sub, WithMiddleware(func(next middleware.UnaryHandler) middleware.UnaryHandler {
+		return func(ctx context.Context, req any) (any, error) {
 			_, seen = transport.FromServerContext(ctx)
-			return next(ctx, destination, msg)
+			return next(ctx, req)
 		}
 	}))
-	if err := srv.Handle("orders.created", func(context.Context, string, *Message) error { return nil }); err != nil {
+	if err := srv.Handle("orders.created", func(context.Context, any) (any, error) { return nil, nil }); err != nil {
 		t.Fatal(err)
 	}
 

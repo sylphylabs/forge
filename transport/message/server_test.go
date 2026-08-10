@@ -6,6 +6,9 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+
+	"github.com/sylphylabs/forge/middleware"
+	"github.com/sylphylabs/forge/transport"
 	"time"
 )
 
@@ -68,7 +71,7 @@ func TestServerLifecycle(t *testing.T) {
 	subscriber := newFakeSubscriber()
 	server := NewServer(subscriber)
 	for _, topic := range []string{"accounts.created", "accounts.deleted"} {
-		if err := server.Handle(topic, func(context.Context, string, *Message) error { return nil }); err != nil {
+		if err := server.Handle(topic, func(context.Context, any) (any, error) { return nil, nil }); err != nil {
 			t.Fatalf("Handle(%q): %v", topic, err)
 		}
 	}
@@ -98,7 +101,7 @@ func TestServerLifecycle(t *testing.T) {
 			t.Errorf("subscription context %d was not canceled", i)
 		}
 	}
-	if err := server.Handle("late", func(context.Context, string, *Message) error { return nil }); !errors.Is(err, ErrStopped) {
+	if err := server.Handle("late", func(context.Context, any) (any, error) { return nil, nil }); !errors.Is(err, ErrStopped) {
 		t.Errorf("late Handle error = %v, want ErrStopped", err)
 	}
 	if err := server.Start(context.Background()); !errors.Is(err, ErrStopped) {
@@ -110,18 +113,20 @@ func TestServerPassesConcreteDestinationThroughMiddleware(t *testing.T) {
 	subscriber := newFakeSubscriber()
 	var gotDestination string
 	var gotMessage *Message
-	server := NewServer(subscriber, WithMiddleware(func(next Handler) Handler {
-		return func(ctx context.Context, destination string, msg *Message) error {
+	server := NewServer(subscriber, WithMiddleware(func(next middleware.UnaryHandler) middleware.UnaryHandler {
+		return func(ctx context.Context, req any) (any, error) {
 			if ctx == nil {
 				t.Fatal("middleware received nil context")
 			}
-			return next(ctx, destination, msg)
+			return next(ctx, req)
 		}
 	}))
-	if err := server.Handle("accounts.*", func(_ context.Context, destination string, msg *Message) error {
-		gotDestination = destination
-		gotMessage = msg
-		return nil
+	if err := server.Handle("accounts.*", func(ctx context.Context, req any) (any, error) {
+		if tr, ok := transport.FromServerContext(ctx); ok {
+			gotDestination = tr.Operation()
+		}
+		gotMessage, _ = req.(*Message)
+		return nil, nil
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +164,7 @@ func TestServerSubscriptionFailureRollsBack(t *testing.T) {
 	subscriber.failErr = wantErr
 	server := NewServer(subscriber)
 	for _, topic := range []string{"first", "second"} {
-		if err := server.Handle(topic, func(context.Context, string, *Message) error { return nil }); err != nil {
+		if err := server.Handle(topic, func(context.Context, any) (any, error) { return nil, nil }); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -181,7 +186,7 @@ func TestServerJoinsCloseErrors(t *testing.T) {
 	subscriber.closeErrors = map[string]error{"first": firstErr, "second": secondErr}
 	server := NewServer(subscriber)
 	for _, topic := range []string{"first", "second"} {
-		if err := server.Handle(topic, func(context.Context, string, *Message) error { return nil }); err != nil {
+		if err := server.Handle(topic, func(context.Context, any) (any, error) { return nil, nil }); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -201,7 +206,7 @@ func TestServerJoinsCloseErrors(t *testing.T) {
 func TestServerParentCancellationClosesSubscriptions(t *testing.T) {
 	subscriber := newFakeSubscriber()
 	server := NewServer(subscriber, ShutdownTimeout(time.Second))
-	if err := server.Handle("events", func(context.Context, string, *Message) error { return nil }); err != nil {
+	if err := server.Handle("events", func(context.Context, any) (any, error) { return nil, nil }); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -233,19 +238,19 @@ func TestServerValidatesConfigurationAndFreezesMiddleware(t *testing.T) {
 
 	subscriber := newFakeSubscriber()
 	server := NewServer(subscriber)
-	if err := server.Handle("", func(context.Context, string, *Message) error { return nil }); !errors.Is(err, ErrEmptyTopic) {
+	if err := server.Handle("", func(context.Context, any) (any, error) { return nil, nil }); !errors.Is(err, ErrEmptyTopic) {
 		t.Errorf("empty topic error = %v", err)
 	}
 	if err := server.Handle("events", nil); !errors.Is(err, ErrNilHandler) {
 		t.Errorf("nil handler error = %v", err)
 	}
-	if err := server.Handle("events", func(context.Context, string, *Message) error { return nil }); err != nil {
+	if err := server.Handle("events", func(context.Context, any) (any, error) { return nil, nil }); err != nil {
 		t.Fatal(err)
 	}
 	startErr := make(chan error, 1)
 	go func() { startErr <- server.Start(context.Background()) }()
 	waitTopics(t, subscriber.subscribed, 1)
-	if err := server.Use(func(next Handler) Handler { return next }); !errors.Is(err, ErrAlreadyStarted) {
+	if err := server.Use(func(next middleware.UnaryHandler) middleware.UnaryHandler { return next }); !errors.Is(err, ErrAlreadyStarted) {
 		t.Errorf("Use after Start error = %v, want ErrAlreadyStarted", err)
 	}
 	if err := server.Stop(context.Background()); err != nil {

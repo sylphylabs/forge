@@ -5,6 +5,8 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/sylphylabs/forge/middleware"
 )
 
 func TestMessageOwnsPortableFields(t *testing.T) {
@@ -52,25 +54,29 @@ func TestNilMessageHelpers(t *testing.T) {
 	}
 }
 
-func TestChain(t *testing.T) {
+// Composition is the middleware package's, so a consumer gets the same ordering
+// guarantee an HTTP or gRPC handler gets — and the same treatment of a nil
+// entry, which that package rejects rather than skipping.
+func TestChainedMiddlewareRunsInDeclarationOrder(t *testing.T) {
 	var calls []string
-	middleware := func(name string) Middleware {
-		return func(next Handler) Handler {
-			return func(ctx context.Context, destination string, msg *Message) error {
+	record := func(name string) middleware.UnaryMiddleware {
+		return func(next middleware.UnaryHandler) middleware.UnaryHandler {
+			return func(ctx context.Context, req any) (any, error) {
 				calls = append(calls, name+":before")
-				err := next(ctx, destination, msg)
+				reply, err := next(ctx, req)
 				calls = append(calls, name+":after")
-				return err
+				return reply, err
 			}
 		}
 	}
 	wantErr := errors.New("handler failed")
-	handler := Chain(middleware("outer"), nil, middleware("inner"))(func(context.Context, string, *Message) error {
-		calls = append(calls, "handler")
-		return wantErr
-	})
+	handler := middleware.ChainUnary(record("outer"), record("inner"))(
+		func(context.Context, any) (any, error) {
+			calls = append(calls, "handler")
+			return nil, wantErr
+		})
 
-	if err := handler(context.Background(), "events.created", New(nil)); !errors.Is(err, wantErr) {
+	if _, err := handler(context.Background(), New(nil)); !errors.Is(err, wantErr) {
 		t.Fatalf("handler error = %v, want %v", err, wantErr)
 	}
 	want := []string{"outer:before", "inner:before", "handler", "inner:after", "outer:after"}

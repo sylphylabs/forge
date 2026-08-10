@@ -13,7 +13,7 @@ import (
 	natsgo "github.com/nats-io/nats.go"
 	natsjs "github.com/nats-io/nats.go/jetstream"
 
-	corenats "github.com/sylphylabs/forge/contrib/transport/nats"
+	corenats "github.com/sylphylabs/forge/contrib/message/nats"
 	"github.com/sylphylabs/forge/metadata"
 	"github.com/sylphylabs/forge/transport/message"
 )

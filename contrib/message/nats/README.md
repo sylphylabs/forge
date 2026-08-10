@@ -1,6 +1,6 @@
 # Forge NATS Transport
 
-`contrib/transport/nats` adapts core NATS pub/sub to
+`contrib/message/nats` adapts core NATS pub/sub to
 `github.com/sylphylabs/forge/transport/message`.
 
 Example:
