@@ -126,16 +126,18 @@ Use explicit tools instead:
 | `forge upgrade` | `go get`, `go install`, and `go mod tidy` |
 | `forge changelog` | Git history and GitHub release notes |
 
-Three atomic Forge Protobuf commands share one deterministic source module:
+Four atomic Forge Protobuf commands share one deterministic source module:
 
 ```text
 github.com/sylphylabs/forge/cmd/protoc-gen-go-errors
 github.com/sylphylabs/forge/cmd/protoc-gen-go-http
+github.com/sylphylabs/forge/cmd/protoc-gen-go-message
 github.com/sylphylabs/forge/cmd/protoc-gen-go-middleware
 ```
 
 Each command declares protobuf Editions support through Edition 2024 and emits
-only its owned `_errors.pb.go`, `_http.pb.go`, or `_middleware.pb.go` artifact.
+only its owned `_errors.pb.go`, `_http.pb.go`, `_message.pb.go`, or
+`_middleware.pb.go` artifact.
 There is no `protoc-gen-go-forge` forwarding command. Real `protoc`
 fixtures compile and execute Edition 2023 Open and Opaque APIs for message,
 scalar, repeated, map, explicit-presence, and oneof fields.
@@ -226,8 +228,9 @@ github.com/nacos-group/nacos-sdk-go/v2/clients/config_client
 
 Direct dependencies on archived `json-iterator/go`, `golang/mock`, and PGV were
 removed in favor of `encoding/json`, `go.uber.org/mock`, and Protovalidate test
-fixtures. Legacy requests implementing `Validate() error` remain supported and
-do not require the PGV runtime module.
+fixtures. Requests implementing `Validate() error` are validated through that
+method, whether it is hand-written or produced by an external generator, and
+doing so does not require the PGV runtime module.
 
 Some current provider SDKs still compile archived transitive packages. Their
 ownership and replacement conditions are documented in

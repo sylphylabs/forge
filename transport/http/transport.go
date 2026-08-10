@@ -143,9 +143,12 @@ func (hc headerCarrier) Values(key string) []string {
 	return http.Header(hc).Values(key)
 }
 
-// ResponseWriterFromServerContext returns the http.ResponseWriter from context if available.
-// This function provides backward compatibility and safe access to the ResponseWriter.
-// Returns nil if the transport doesn't implement ResponseTransporter.
+// ResponseWriterFromServerContext returns the http.ResponseWriter of the
+// request being served, and reports whether one was present.
+//
+// It reports false rather than a nil writer when the context carries no
+// transport, or one that serves responses without exposing a ResponseWriter,
+// so that a caller cannot mistake an absent writer for a usable one.
 func ResponseWriterFromServerContext(ctx context.Context) (http.ResponseWriter, bool) {
 	if tr, ok := transport.FromServerContext(ctx); ok {
 		if httpTr, ok := tr.(ResponseTransporter); ok {

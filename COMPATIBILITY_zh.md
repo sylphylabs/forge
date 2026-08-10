@@ -115,16 +115,17 @@ panic。Forge 不保留或修补这种隐式改写源码的工作流。
 | `forge upgrade` | `go get`、`go install` 与 `go mod tidy` |
 | `forge changelog` | Git 历史与 GitHub release notes |
 
-三个原子化 Forge Protobuf 命令共享一个确定性的源码 module：
+四个原子化 Forge Protobuf 命令共享一个确定性的源码 module：
 
 ```text
 github.com/sylphylabs/forge/cmd/protoc-gen-go-errors
 github.com/sylphylabs/forge/cmd/protoc-gen-go-http
+github.com/sylphylabs/forge/cmd/protoc-gen-go-message
 github.com/sylphylabs/forge/cmd/protoc-gen-go-middleware
 ```
 
 每条命令都声明支持到 protobuf Edition 2024，并且只生成自己拥有的
-`_errors.pb.go`、`_http.pb.go` 或 `_middleware.pb.go` 产物。项目不保留
+`_errors.pb.go`、`_http.pb.go`、`_message.pb.go` 或 `_middleware.pb.go` 产物。项目不保留
 `protoc-gen-go-forge` 转发命令。真实 `protoc` fixture 已经对 Edition 2023
 Open/Opaque API 的 message、scalar、repeated、map、显式 presence 与 oneof 字段
 完成编译和执行验证。
@@ -204,8 +205,9 @@ github.com/nacos-group/nacos-sdk-go/v2/clients/config_client
 ```
 
 直接依赖的已归档 `json-iterator/go`、`golang/mock` 与 PGV 已分别由
-`encoding/json`、`go.uber.org/mock` 和 Protovalidate 测试 fixture 替代。旧请求只要
-实现 `Validate() error` 仍然兼容，不需要 PGV runtime module。
+`encoding/json`、`go.uber.org/mock` 和 Protovalidate 测试 fixture 替代。实现
+`Validate() error` 的请求会经由该方法校验，无论它是手写的还是由外部生成器产出，
+且不需要 PGV runtime module。
 
 部分当前 provider SDK 仍会编译已归档的传递依赖。其归属和替换条件记录在
 [`docs/dependency-maintenance.md`](docs/dependency-maintenance.md)；Forge
