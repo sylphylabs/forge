@@ -133,18 +133,6 @@
       ]
     },
     {
-      "path": "contrib/errortracker/sentry",
-      "module": "github.com/sylphylabs/forge/contrib/errortracker/sentry",
-      "kind": "integration",
-      "support": "official",
-      "owner": "sylphylabs-maintainers",
-      "tagPrefix": "contrib/errortracker/sentry",
-      "dependsOn": [
-        "github.com/sylphylabs/forge",
-        "github.com/sylphylabs/forge/api"
-      ]
-    },
-    {
       "path": "contrib/middleware/jwt",
       "module": "github.com/sylphylabs/forge/contrib/middleware/jwt",
       "kind": "integration",
@@ -152,8 +140,7 @@
       "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/middleware/jwt",
       "dependsOn": [
-        "github.com/sylphylabs/forge",
-        "github.com/sylphylabs/forge/api"
+        "github.com/sylphylabs/forge"
       ]
     },
     {
@@ -164,8 +151,7 @@
       "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/middleware/session",
       "dependsOn": [
-        "github.com/sylphylabs/forge",
-        "github.com/sylphylabs/forge/api"
+        "github.com/sylphylabs/forge"
       ]
     },
     {
@@ -175,18 +161,6 @@
       "support": "official",
       "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/middleware/validate",
-      "dependsOn": [
-        "github.com/sylphylabs/forge",
-        "github.com/sylphylabs/forge/api"
-      ]
-    },
-    {
-      "path": "contrib/opensergo",
-      "module": "github.com/sylphylabs/forge/contrib/opensergo",
-      "kind": "integration",
-      "support": "official",
-      "owner": "sylphylabs-maintainers",
-      "tagPrefix": "contrib/opensergo",
       "dependsOn": [
         "github.com/sylphylabs/forge"
       ]
@@ -199,8 +173,7 @@
       "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/otel",
       "dependsOn": [
-        "github.com/sylphylabs/forge",
-        "github.com/sylphylabs/forge/api"
+        "github.com/sylphylabs/forge"
       ]
     },
     {
@@ -211,8 +184,7 @@
       "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/polaris",
       "dependsOn": [
-        "github.com/sylphylabs/forge",
-        "github.com/sylphylabs/forge/api"
+        "github.com/sylphylabs/forge"
       ]
     },
     {
@@ -326,12 +298,45 @@
       ]
     },
     {
-      "path": "contrib/transport/nats",
-      "module": "github.com/sylphylabs/forge/contrib/transport/nats",
+      "path": "contrib/message/kafka",
+      "module": "github.com/sylphylabs/forge/contrib/message/kafka",
       "kind": "integration",
       "support": "official",
       "owner": "sylphylabs-maintainers",
-      "tagPrefix": "contrib/transport/nats",
+      "tagPrefix": "contrib/message/kafka",
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
+    },
+    {
+      "path": "contrib/message/mqtt",
+      "module": "github.com/sylphylabs/forge/contrib/message/mqtt",
+      "kind": "integration",
+      "support": "official",
+      "owner": "sylphylabs-maintainers",
+      "tagPrefix": "contrib/message/mqtt",
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
+    },
+    {
+      "path": "contrib/message/nats",
+      "module": "github.com/sylphylabs/forge/contrib/message/nats",
+      "kind": "integration",
+      "support": "official",
+      "owner": "sylphylabs-maintainers",
+      "tagPrefix": "contrib/message/nats",
+      "dependsOn": [
+        "github.com/sylphylabs/forge"
+      ]
+    },
+    {
+      "path": "contrib/message/rabbitmq",
+      "module": "github.com/sylphylabs/forge/contrib/message/rabbitmq",
+      "kind": "integration",
+      "support": "official",
+      "owner": "sylphylabs-maintainers",
+      "tagPrefix": "contrib/message/rabbitmq",
       "dependsOn": [
         "github.com/sylphylabs/forge"
       ]

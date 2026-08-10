@@ -86,7 +86,9 @@ func TestLegacyErrorSchemasRemoved(t *testing.T) {
 		}
 		if entry.IsDir() && path != root {
 			switch entry.Name() {
-			case ".git", "output", "vendor":
+			// .claude holds agent worktrees: full copies of this repository
+			// that would otherwise be discovered as extra modules.
+			case ".git", ".claude", "output", "vendor":
 				return filepath.SkipDir
 			}
 		}
@@ -159,7 +161,9 @@ func discoverModules(t *testing.T, root string) []string {
 		}
 		if entry.IsDir() && path != root {
 			switch entry.Name() {
-			case ".git", "output", "vendor":
+			// .claude holds agent worktrees: full copies of this repository
+			// that would otherwise be discovered as extra modules.
+			case ".git", ".claude", "output", "vendor":
 				return filepath.SkipDir
 			}
 		}

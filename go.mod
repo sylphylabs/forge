@@ -11,7 +11,7 @@ require (
 	golang.org/x/sync v0.22.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20260720211330-0afa2a65878a
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260720211330-0afa2a65878a
-	google.golang.org/grpc v1.82.1
+	google.golang.org/grpc v1.83.0
 	google.golang.org/protobuf v1.36.11
 )
 
@@ -19,7 +19,6 @@ require (
 replace github.com/sylphylabs/forge/api => ./api
 
 require (
-	cel.dev/expr v0.25.2 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	golang.org/x/net v0.57.0 // indirect

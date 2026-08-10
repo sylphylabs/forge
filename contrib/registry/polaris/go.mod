@@ -3,8 +3,8 @@ module github.com/sylphylabs/forge/contrib/registry/polaris
 go 1.27rc2
 
 require (
-	github.com/sylphylabs/forge v0.0.0
 	github.com/polarismesh/polaris-go v1.7.1
+	github.com/sylphylabs/forge v0.0.0
 )
 
 require (
@@ -33,10 +33,9 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260720211330-0afa2a65878a // indirect
-	google.golang.org/grpc v1.82.1 // indirect
+	google.golang.org/grpc v1.83.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
 replace github.com/sylphylabs/forge => ../../../
-
