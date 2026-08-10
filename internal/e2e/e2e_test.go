@@ -10,11 +10,17 @@
 // These tests remove that class of mistake by using only the public entry
 // points against services running in containers.
 //
-// transport/message is deliberately not covered here. Message delivery is
+// transport/message is not covered here, for two reasons. Message delivery is
 // one-way: a handler error has no caller to return to, so it becomes an ack or
 // a nack to the broker rather than a value crossing a process boundary. There
 // is no error contract to verify, which is also why that package uses plain
-// stdlib errors rather than Forge ones.
+// stdlib errors rather than Forge ones. And a broker driver is a dependency of
+// its own contrib module, not of this one, so importing an adapter here would
+// put it in the root module's dependency graph.
+//
+// The equivalent tests for the message transport live with the adapter that
+// owns the broker dependency: see contrib/message/rabbitmq/e2e_message_test.go,
+// which runs a subscribe annotation through a real broker to a handler.
 package e2e
 
 import (

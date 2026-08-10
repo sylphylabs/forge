@@ -338,7 +338,8 @@
       "owner": "sylphylabs-maintainers",
       "tagPrefix": "contrib/message/rabbitmq",
       "dependsOn": [
-        "github.com/sylphylabs/forge"
+        "github.com/sylphylabs/forge",
+        "github.com/sylphylabs/forge/api"
       ]
     }
   ]

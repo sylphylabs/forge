@@ -174,3 +174,19 @@ The recovery test additionally needs a command that restarts that broker:
 
     FORGE_RABBITMQ_URL=amqp://guest:guest@127.0.0.1:5672/ \
       FORGE_RABBITMQ_RESTART="docker restart rabbit" go test ./...
+
+End-to-end tests in `e2e_message_test.go` run the whole chain a `subscribe`
+annotation produces — generated registration, a real broker, the middleware
+chain, and a handler reading its destination from context. They start and remove
+their own container, so they need Docker rather than a running broker:
+
+    FORGE_MESSAGE_E2E=1 go test ./...
+
+Point them at a broker you already have to skip the container cycle:
+
+    FORGE_MESSAGE_E2E=1 \
+      FORGE_MESSAGE_E2E_URL=amqp://guest:guest@127.0.0.1:5672/ go test ./...
+
+They live here rather than in `internal/e2e` because that package is in the root
+module, which has no AMQP dependency; testing this chain there would add a broker
+driver to every Forge consumer's dependency graph.
