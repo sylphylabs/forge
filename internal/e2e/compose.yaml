@@ -1,0 +1,26 @@
+# Two Forge services on a private network. The edge forwards to the backend,
+# so a request crosses two process boundaries and two serialization round
+# trips before the assertion sees it.
+services:
+  backend:
+    build:
+      context: ../..
+      dockerfile: internal/e2e/Dockerfile
+    networks: [e2e]
+
+  edge:
+    build:
+      context: ../..
+      dockerfile: internal/e2e/Dockerfile
+    environment:
+      # The edge reaches the backend over gRPC by service name, so the test
+      # exercises name resolution and a real connection, not a loopback dial.
+      BACKEND_ADDR: backend:9000
+    depends_on: [backend]
+    networks: [e2e]
+    ports:
+      - "18000:8000"
+      - "19000:9000"
+
+networks:
+  e2e:

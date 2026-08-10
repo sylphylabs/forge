@@ -145,3 +145,22 @@ jobs:
         run: |
           cd cmd
           GOWORK=off gotip test ./...
+
+  e2e:
+    name: cross-service e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.27.0-rc.2
+
+      # Two Forge services in containers, calling each other over a real
+      # network. Every other job runs in one process, where a mistake in how a
+      # test reaches the code can look like a passing contract; this job is what
+      # catches that.
+      - name: Cross-service tests
+        run: |
+          cd internal/e2e
+          FORGE_E2E=1 go test -count=1 -v ./...
