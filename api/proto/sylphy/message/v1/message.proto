@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package sylphy.message.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/sylphylabs/forge/api/message/v1;message";
+option java_multiple_files = true;
+option java_package = "com.github.sylphy.message.v1";
+
+// Subscription declares that an RPC is served by the asynchronous message
+// transport rather than by a request/response transport.
+//
+// The RPC's response type is ignored: proto requires every rpc to name one,
+// but a delivered message has no reply channel to carry it.
+message Subscription {
+  // destination names what the handler subscribes to. It is a default, not a
+  // constant: RegisterXMessageServer accepts overrides because the same
+  // contract is deployed against per-environment prefixes.
+  //
+  // What the string means is the adapter's to decide, and adapters do not
+  // agree. For Kafka, MQTT, and core NATS it is the wire address — a topic
+  // name, topic filter, or subject, each with its own separator and wildcard
+  // grammar. For RabbitMQ and NATS JetStream it is a logical name resolved
+  // through the adapter's own binding table to a pre-provisioned queue or
+  // consumer, and never reaches the broker at all.
+  //
+  // So this field is deliberately not a portable topic pattern. Wildcards work
+  // where the adapter's broker defines them, and are declared in the adapter's
+  // bindings where it does not. An adapter that cannot honour a destination
+  // rejects it when the subscription is registered, rather than silently
+  // receiving no messages. See docs/adr/0015.
+  string destination = 1;
+}
+
+// subscribe binds one RPC to a message destination.
+extend google.protobuf.MethodOptions {
+  Subscription subscribe = 500201;
+}
