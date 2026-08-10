@@ -293,6 +293,68 @@ func TestSubscriberValidation(t *testing.T) {
 	}
 }
 
+// Kafka topics have no hierarchy and ConsumeTopics matches literally, so a
+// destination carrying another broker's wildcard syntax would join the group
+// and never receive a record. Registration must fail instead.
+func TestSubscribeRejectsWildcardTopics(t *testing.T) {
+	subscriber, err := NewSubscriber("group", WithSubscriberSeedBrokers("127.0.0.1:9092"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := func(context.Context, string, *message.Message) error { return nil }
+
+	for _, topic := range []string{
+		"orders.*", // NATS and RabbitMQ single token
+		"orders/#", // MQTT multi-level
+		"orders.>", // NATS multi-level
+		"orders.#", // RabbitMQ multi-token
+	} {
+		t.Run(topic, func(t *testing.T) {
+			sub, err := subscriber.Subscribe(t.Context(), topic, handler)
+			if !errors.Is(err, ErrWildcardSubscribe) {
+				t.Fatalf("Subscribe(%q) error = %v, want ErrWildcardSubscribe", topic, err)
+			}
+			if sub != nil {
+				t.Errorf("Subscribe(%q) returned a subscription alongside its error", topic)
+			}
+		})
+	}
+}
+
+// A literal topic must not be caught by the wildcard guard. Dots and hyphens
+// are ordinary characters in a Kafka topic name.
+func TestSubscribeAcceptsLiteralTopics(t *testing.T) {
+	seeds := runCluster(t, "orders.created")
+	subscriber := newSubscriber(t, seeds, nil)
+	sub, err := subscriber.Subscribe(t.Context(), "orders.created", func(context.Context, string, *message.Message) error { return nil })
+	if err != nil {
+		t.Fatalf("Subscribe on a literal topic failed: %v", err)
+	}
+	if err := sub.Close(timeoutContext(t)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// WithTopicRegex is the escape hatch: it enables kgo.ConsumeRegex and lifts the
+// wildcard rejection, because `*` is meaningful in a regular expression.
+func TestTopicRegexLiftsTheWildcardRejection(t *testing.T) {
+	seeds := runCluster(t, "orders.created")
+	subscriber, err := NewSubscriber("forge-regex-group",
+		WithSubscriberSeedBrokers(seeds...),
+		WithTopicRegex(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sub, err := subscriber.Subscribe(t.Context(), `orders\..*`, func(context.Context, string, *message.Message) error { return nil })
+	if err != nil {
+		t.Fatalf("Subscribe with WithTopicRegex failed: %v", err)
+	}
+	if err := sub.Close(timeoutContext(t)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRecordConversionRoundTrip(t *testing.T) {
 	msg := message.New([]byte("payload"))
 	msg.ID = "evt-9"

@@ -72,6 +72,39 @@ add Kafka to the root Forge module.
   must still checkpoint work whose handlers already succeeded, otherwise every
   restart guarantees redelivery of the whole in-flight batch.
 
+## Topic Semantics
+
+A Kafka `destination` is a **wire address**: the literal topic name handed to
+`kgo.ConsumeTopics`. It has **no separator and no hierarchy** — a dot in
+`orders.created` is an ordinary character, not a level boundary — and therefore
+**no wildcards**.
+
+`Subscribe` rejects a topic containing `*`, `#`, or `>` with
+`ErrWildcardSubscribe`. Those are the wildcards of NATS, RabbitMQ, and MQTT, none
+of them is legal in a Kafka topic name, and a literal match against such a name
+would join the consumer group and never receive a record. Failing at
+registration is the point: a subscription that never delivers produces no later
+signal to fail on. MQTT's `+` is not screened, being legal in a topic name and a
+wildcard only within a filter.
+
+Consuming by pattern is available, but must be asked for:
+
+    subscriber, err := kafka.NewSubscriber("order-worker",
+        kafka.WithSubscriberSeedBrokers("127.0.0.1:9092"),
+        kafka.WithTopicRegex(),
+    )
+    // the destination is now a regular expression
+    server.Handle(`orders\..*`, handleOrder)
+
+`WithTopicRegex` enables `kgo.ConsumeRegex` and lifts the rejection in one
+option, because `kgo.Opt` is opaque and the adapter cannot otherwise tell that
+regex consumption was requested. This is not a hierarchical wildcard: the
+pattern is matched against topic *names*, so a newly created topic only joins the
+subscription after the client's next metadata refresh.
+
+`Publish` is not restricted. A literal topic name containing `*` is unusual but
+valid to produce to, and the publish side has no pattern to misread.
+
 Request/reply is deliberately absent. It is not part of the broker-neutral
 `transport/message` contract, and Kafka has no native request/reply primitive.
 

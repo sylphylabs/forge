@@ -86,19 +86,39 @@ before shutdown is an application decision.
 At QoS 0 there is no acknowledgement packet, so a handler error has no protocol
 effect and the message is simply gone.
 
-## Wildcards
+## Topic Semantics
 
-`Subscribe` accepts MQTT topic filters using `+` and `#`. One MQTT connection
-multiplexes every subscription, so the adapter matches each delivered topic
-against the registered filters itself. The `destination` argument the core
-`Handler` receives is always the **concrete** topic that produced the delivery,
-never the filter it was registered with:
+An MQTT `destination` is a **wire address**: the topic filter sent to the broker
+in SUBSCRIBE. Levels are separated by `/`.
+
+| | Syntax | Position |
+| --- | --- | --- |
+| Single level | `+` | any level, and must occupy the whole level |
+| Multi level | `#` | **last level only**, and must occupy it |
+
+`sport/+/player1` matches `sport/tennis/player1`. `sport/#` matches
+`sport/tennis/player1`, and also matches the bare parent topic `sport` — a
+multi-level wildcard covers the level it replaces (MQTT 5 §4.7.1.2). `sport/#/x`
+is not a valid filter, and a broker that accepts it still matches nothing.
+Neither character is a wildcard when it appears inside a level: `sport+` is
+literal.
+
+Wildcards are matched **by the adapter**, not only by the broker. One MQTT
+connection multiplexes every subscription, so the adapter keeps its own filter
+table and routes each delivered topic through it; acknowledgement depends on the
+aggregate outcome of every handler a topic matched, which the paho router cannot
+express. The `destination` the core `Handler` receives is always the **concrete**
+topic that produced the delivery, never the filter it was registered with:
 
     // handler receives "accounts/42/created"
     client.Subscribe(ctx, "accounts/+/created", handler)
 
-`Publish` rejects a topic containing `+` or `#`, because MQTT forbids wildcards
-in a PUBLISH topic name.
+Because `/` is the only separator, a filter written in another broker's syntax is
+one literal level: `orders.*` subscribes to a topic named `orders.*` and receives
+nothing. The adapter cannot reject it, since that is a legal MQTT topic name.
+
+`Publish` rejects a topic containing `+` or `#` with `ErrWildcardPublish`, because
+MQTT forbids wildcards in a PUBLISH topic name.
 
 ## Connection and Reconnect
 

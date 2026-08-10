@@ -33,6 +33,27 @@ Example:
     app := forge.New(forge.Server(server))
     return app.Run()
 
+## Destination Semantics
+
+A JetStream `destination` is a **logical name**, not a subject. It is a key into
+the `bindings` map above, resolving to the `{Stream, Consumer}` pair to attach
+to, and is never sent to the server as an address. That `"orders.created"` reads
+like a subject is a naming convention; the adapter treats it as an opaque key
+and does not split it on `.`.
+
+Wildcards are therefore **not declared here at all**. Which subjects reach a
+subscription is decided by the consumer's `FilterSubject` and the stream's
+`Subjects` — external deployment state. Since the adapter never creates or
+updates streams or consumers, it can neither read those filters nor validate a
+destination against them.
+
+Passing a subject pattern such as `orders.*` as a destination is simply a
+missing map key: `Subscribe` fails with `ErrBindingNotFound` rather than
+returning a subscription that never delivers.
+
+This differs from the core NATS adapter in the parent package, where the
+destination *is* the subject and `*` and `>` are evaluated by the server.
+
 ## Semantics
 
 - `Publisher.Publish` waits for a JetStream `PubAck`.

@@ -38,6 +38,18 @@ var (
 	ErrNilClient = errors.New("kafka: nil client")
 	// ErrClosed reports an adapter closed by its owner.
 	ErrClosed = errors.New("kafka: publisher closed")
+	// ErrWildcardSubscribe reports a subscription to a topic containing `*`,
+	// `#`, or `>`. Kafka topics have no hierarchy and ConsumeTopics matches
+	// literally, so such a subscription would join the group and never receive
+	// a record. Those three characters are the multi- and single-level wildcards
+	// of NATS, RabbitMQ, and MQTT, and none of them is legal in a Kafka topic
+	// name, so their presence is a syntax borrowed from another broker rather
+	// than an unusual topic. MQTT's `+` is deliberately not rejected: it is a
+	// wildcard only in a filter, and screening it buys nothing that the three
+	// illegal characters do not already cover.
+	//
+	// WithTopicRegex is the escape hatch, and lifts this check.
+	ErrWildcardSubscribe = errors.New("kafka: wildcard in subscribe topic")
 )
 
 var (
@@ -224,6 +236,26 @@ func WithSubscriberClientOptions(opts ...kgo.Opt) SubscriberOption {
 	}
 }
 
+// WithTopicRegex consumes topics by regular expression instead of by literal
+// name, enabling franz-go's kgo.ConsumeRegex. Each destination is then compiled
+// as a regular expression and matched against the topics the broker reports.
+//
+// This is the escape hatch from ErrWildcardSubscribe: it also suppresses the
+// wildcard rejection, because `*` is meaningful in a regular expression. Both
+// halves live in one option so the guard and the exemption cannot disagree —
+// kgo.Opt is opaque, so an adapter cannot tell whether kgo.ConsumeRegex was
+// passed through WithSubscriberClientOptions.
+//
+// Regex consumption is not a hierarchical wildcard. The pattern is evaluated
+// against topic *names*, not against a message's key or a subject hierarchy,
+// and a newly created topic only joins the subscription after the client's next
+// metadata refresh.
+func WithTopicRegex() SubscriberOption {
+	return func(s *Subscriber) {
+		s.topicRegex = true
+	}
+}
+
 // WithErrorHandler observes fetch, handler, and commit failures.
 func WithErrorHandler(handler ErrorHandler) SubscriberOption {
 	return func(s *Subscriber) {
@@ -251,6 +283,7 @@ type Subscriber struct {
 	clientOpt      []kgo.Opt
 	onError        ErrorHandler
 	maxPollRecords int
+	topicRegex     bool
 	newClient      clientFactory
 }
 
@@ -295,6 +328,14 @@ func (s *Subscriber) defaultClient(topic string, opts []kgo.Opt) (*kgo.Client, e
 // Records are processed one at a time in fetch order. Kafka only orders records
 // within a partition, so this preserves per-partition order without assuming
 // order across partitions.
+//
+// The topic is matched literally. A topic containing `*`, `#`, or `>` is
+// rejected with ErrWildcardSubscribe rather than accepted into a subscription
+// that can never deliver: those characters are the wildcard syntax of MQTT,
+// RabbitMQ, and NATS, and a Kafka topic named after one of their patterns
+// almost never exists. Consuming by pattern is still possible, but must be
+// asked for with WithTopicRegex, which matches the topic as a regular
+// expression against the broker's topic list and lifts this rejection.
 func (s *Subscriber) Subscribe(ctx context.Context, topic string, handler message.Handler) (message.Subscription, error) {
 	if ctx == nil {
 		return nil, ErrNilContext
@@ -308,6 +349,9 @@ func (s *Subscriber) Subscribe(ctx context.Context, topic string, handler messag
 	if s == nil || s.newClient == nil {
 		return nil, ErrNilClient
 	}
+	if !s.topicRegex && strings.ContainsAny(topic, "*#>") {
+		return nil, fmt.Errorf("%w: %q", ErrWildcardSubscribe, topic)
+	}
 	// BlockRebalanceOnPoll keeps ownership of the polled partitions until the
 	// batch is committed, so commits cannot land on partitions already
 	// reassigned to another member.
@@ -317,6 +361,9 @@ func (s *Subscriber) Subscribe(ctx context.Context, topic string, handler messag
 		kgo.DisableAutoCommit(),
 		kgo.BlockRebalanceOnPoll(),
 	})
+	if s.topicRegex {
+		opts = append(opts, kgo.ConsumeRegex())
+	}
 	client, err := s.newClient(topic, opts)
 	if err != nil {
 		return nil, fmt.Errorf("kafka: subscribe %q: %w", topic, err)

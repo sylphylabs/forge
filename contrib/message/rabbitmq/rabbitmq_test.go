@@ -342,6 +342,112 @@ func TestSubscribeDeclaresTopologyWhenEnabled(t *testing.T) {
 	}
 }
 
+// A RabbitMQ destination is a logical name, so wildcards are declared in the
+// binding's BindingKeys rather than in the destination. A topic exchange
+// evaluates them per message; the adapter passes them to QueueBind verbatim and
+// never parses them.
+func TestWildcardBindingKeysBindAgainstATopicExchange(t *testing.T) {
+	tests := []struct {
+		name string
+		key  string
+	}{
+		{name: "single token", key: "orders.*"},
+		{name: "multi token", key: "orders.#"},
+		{name: "multi token in the middle", key: "orders.#.paid"},
+		{name: "single token in the middle", key: "orders.*.eu"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := newFakeConn()
+			client := newClient(t, fake,
+				WithBindings(map[string]Binding{
+					// The destination stays a plain logical name; the pattern
+					// lives in BindingKeys.
+					"orders": {
+						Queue:    Queue{Name: "order-worker", BindingKeys: []string{tt.key}},
+						Exchange: Exchange{Name: "events"},
+					},
+				}),
+				WithDeclare(true),
+			)
+
+			sub, err := client.Subscribe(t.Context(), "orders", func(context.Context, string, *message.Message) error { return nil })
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeSubscription(t, sub)
+
+			channel := fake.channels[0]
+			// An unspecified Exchange.Kind defaults to topic, which is the only
+			// exchange type that evaluates `*` and `#`.
+			if want := []string{"events:topic"}; !reflect.DeepEqual(channel.declaredExchanges, want) {
+				t.Errorf("declared exchanges = %v, want %v", channel.declaredExchanges, want)
+			}
+			if want := []string{"order-worker->events:" + tt.key}; !reflect.DeepEqual(channel.boundQueues, want) {
+				t.Errorf("queue bindings = %v, want %v", channel.boundQueues, want)
+			}
+		})
+	}
+}
+
+// A queue bound with a wildcard receives messages whose routing keys differ from
+// both the binding key and the destination. The handler must see the concrete
+// routing key, because that is the only place the varying token survives.
+func TestWildcardBoundQueueDeliversConcreteRoutingKeys(t *testing.T) {
+	fake := newFakeConn()
+	client := newClient(t, fake,
+		WithBindings(map[string]Binding{
+			"orders": {
+				Queue:    Queue{Name: "order-worker", BindingKeys: []string{"orders.#"}},
+				Exchange: Exchange{Name: "events"},
+			},
+		}),
+		WithDeclare(true),
+	)
+
+	destinations := make(chan string, 1)
+	keys := make(chan string, 1)
+	sub, err := client.Subscribe(t.Context(), "orders", func(_ context.Context, destination string, msg *message.Message) error {
+		destinations <- destination
+		keys <- msg.Key
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeSubscription(t, sub)
+
+	channel := fake.channels[0]
+	for _, routingKey := range []string{"orders.created", "orders.created.eu.paid"} {
+		channel.deliver(amqp.Delivery{
+			Acknowledger: channel.acknowledger(),
+			RoutingKey:   routingKey,
+			Body:         []byte("payload"),
+		})
+		if got := <-destinations; got != routingKey {
+			t.Errorf("destination = %q, want the concrete routing key %q", got, routingKey)
+		}
+		// With no forge-message-key header the routing key also becomes Key, so
+		// the varying token stays reachable from the message itself.
+		if got := <-keys; got != routingKey {
+			t.Errorf("Key = %q, want the concrete routing key %q", got, routingKey)
+		}
+	}
+}
+
+// The destination is a map key, not a pattern. Passing a wildcard as the
+// destination finds no binding and fails at registration rather than silently
+// never delivering.
+func TestWildcardDestinationIsNotABinding(t *testing.T) {
+	client := newClient(t, newFakeConn(), WithBindings(map[string]Binding{
+		"orders": {Queue: Queue{Name: "order-worker", BindingKeys: []string{"orders.#"}}, Exchange: Exchange{Name: "events"}},
+	}))
+	_, err := client.Subscribe(t.Context(), "orders.#", func(context.Context, string, *message.Message) error { return nil })
+	if !errors.Is(err, ErrBindingNotFound) {
+		t.Fatalf("Subscribe(%q) error = %v, want ErrBindingNotFound", "orders.#", err)
+	}
+}
+
 func TestSubscribeValidatesArguments(t *testing.T) {
 	client := newClient(t, newFakeConn(), WithBindings(map[string]Binding{"orders": {Queue: Queue{Name: "orders"}}}))
 	handler := func(context.Context, string, *message.Message) error { return nil }

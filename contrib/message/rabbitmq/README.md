@@ -52,6 +52,51 @@ several values becomes an AMQP array, because field tables have no repeated-key
 form. Non-string values sent by other producers are rendered as strings rather
 than dropped.
 
+## Destination Semantics
+
+A RabbitMQ `destination` is a **logical name**, not an address. It is a key into
+the `WithBindings` map, resolving to the queue to consume from and to the
+exchange and routing key to publish with. It is never matched as a pattern, and
+the adapter does not split it on `.`. An unbound destination still publishes,
+through the default exchange, where the routing key is a queue name.
+
+Wildcards are therefore declared in the binding's `BindingKeys`, not in the
+destination:
+
+    rabbitmq.WithBindings(map[string]rabbitmq.Binding{
+        "orders": {
+            Queue:    rabbitmq.Queue{Name: "order-worker", BindingKeys: []string{"orders.#"}},
+            Exchange: rabbitmq.Exchange{Name: "events", Kind: amqp.ExchangeTopic},
+        },
+    })
+
+    server.Handle("orders", handleOrder)   // the logical name, not the pattern
+
+Binding keys are evaluated by a **topic** exchange, which is the default `Kind`
+when the adapter declares one. Tokens are separated by `.`:
+
+| | Syntax | Position |
+| --- | --- | --- |
+| Single token | `*` | any token, and must occupy the whole token |
+| Multi token | `#` | **any position**, including the middle |
+
+`#` in the middle is legal here and is not in MQTT, so binding keys are not
+portable between the two. A `direct` or `fanout` exchange ignores both
+characters and treats the key literally.
+
+The adapter passes binding keys to `QueueBind` verbatim and never parses them;
+matching is entirely the broker's. Because `BindingKeys` only take effect when
+the adapter declares topology, a deployment that owns its own topology declares
+these bindings out of band and the adapter never sees the patterns at all.
+
+Passing a pattern such as `orders.#` as the destination is a missing map key:
+`Subscribe` fails with `ErrBindingNotFound` rather than returning a subscription
+that never delivers.
+
+A queue bound with a wildcard receives messages whose routing keys vary, so the
+`destination` the core `Handler` receives is the **concrete routing key** of the
+delivery, not the logical name it was registered under.
+
 ## Semantics
 
 - **Publish** puts the channel in confirm mode and waits for the broker's

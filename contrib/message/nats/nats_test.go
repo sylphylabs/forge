@@ -64,6 +64,86 @@ func TestPublishSubscribeWithHeaders(t *testing.T) {
 	}
 }
 
+// Core NATS subjects are wire addresses: the subject passes through to the
+// server untouched and the server does the matching. The destination the handler
+// receives is therefore the concrete published subject, not the pattern the
+// subscription was registered with.
+func TestWildcardSubjectsPassThroughToTheServer(t *testing.T) {
+	tests := []struct {
+		name      string
+		filter    string
+		published string
+	}{
+		{name: "single token", filter: "orders.*", published: "orders.created"},
+		{name: "single token mid subject", filter: "orders.*.eu", published: "orders.created.eu"},
+		{name: "multi token", filter: "orders.>", published: "orders.created.eu.paid"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			url := runNATSServer(t)
+			client := newClient(t, url)
+			destinations := make(chan string, 1)
+
+			sub, err := client.Subscribe(t.Context(), tt.filter, func(_ context.Context, destination string, _ *message.Message) error {
+				destinations <- destination
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer sub.Close(t.Context())
+
+			if err := client.Publish(timeoutContext(t), tt.published, message.New([]byte("payload"))); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case got := <-destinations:
+				if got != tt.published {
+					t.Fatalf("destination = %q, want the concrete subject %q", got, tt.published)
+				}
+			case <-time.After(time.Second):
+				t.Fatalf("no delivery for %q published to %q", tt.filter, tt.published)
+			}
+		})
+	}
+}
+
+// `*` matches exactly one token and `>` only matches at the tail, so a subject
+// at the wrong depth is not delivered. This is the server's rule, not the
+// adapter's: the adapter neither parses nor rewrites the subject.
+func TestWildcardTokenDepthIsEnforcedByTheServer(t *testing.T) {
+	url := runNATSServer(t)
+	client := newClient(t, url)
+	delivered := make(chan string, 1)
+
+	sub, err := client.Subscribe(t.Context(), "orders.*", func(_ context.Context, destination string, _ *message.Message) error {
+		delivered <- destination
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sub.Close(t.Context())
+
+	// Two tokens below the prefix: `*` spans one token, so this must not match.
+	if err := client.Publish(timeoutContext(t), "orders.created.eu", message.New([]byte("deep"))); err != nil {
+		t.Fatal(err)
+	}
+	// A matching publish afterwards proves the subscription is live, so the
+	// absence above is depth mismatch rather than a lost race.
+	if err := client.Publish(timeoutContext(t), "orders.created", message.New([]byte("flat"))); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-delivered:
+		if got != "orders.created" {
+			t.Fatalf("destination = %q, want orders.created; a deeper subject matched %q", got, "orders.*")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for the matching delivery")
+	}
+}
+
 func TestMessageServerLifecycleWithNATS(t *testing.T) {
 	url := runNATSServer(t)
 	client := newClient(t, url)
