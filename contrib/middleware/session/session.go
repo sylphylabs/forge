@@ -8,7 +8,7 @@
 // This package defines the contract and the middleware. It deliberately ships
 // no Store: the choice of Redis, a database, or anything else belongs to the
 // application, and a default in-memory store would silently break the moment a
-// service ran more than one replica. See docs/adr/0004.
+// service ran more than one replica.
 package session
 
 import (

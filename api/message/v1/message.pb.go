@@ -44,7 +44,7 @@ type Subscription struct {
 	// where the adapter's broker defines them, and are declared in the adapter's
 	// bindings where it does not. An adapter that cannot honour a destination
 	// rejects it when the subscription is registered, rather than silently
-	// receiving no messages. See docs/adr/0015.
+	// receiving no messages.
 	Destination   string `protobuf:"bytes,1,opt,name=destination,proto3" json:"destination,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

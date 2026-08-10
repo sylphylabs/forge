@@ -11,7 +11,7 @@ import (
 
 // KindMessage identifies the asynchronous message transport. It is declared
 // here rather than in the transport package because transport.Kind is an open
-// type; see docs/adr/0001.
+// type.
 const KindMessage transport.Kind = "message"
 
 var _ transport.Transporter = (*Transport)(nil)

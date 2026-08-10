@@ -83,8 +83,8 @@ func TestHeaderCarrierRoundTrip(t *testing.T) {
 	}
 }
 
-// The whole point of ADR-0001: a non-RPC transport now reaches framework
-// middleware that reads transport.Transporter.
+// The point of implementing Transporter: a non-RPC transport now reaches
+// framework middleware that reads transport.Transporter.
 func TestServerDeliveryCarriesTransport(t *testing.T) {
 	var (
 		gotKind      transport.Kind

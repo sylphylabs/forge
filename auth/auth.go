@@ -2,7 +2,7 @@
 //
 // It answers one question — who is calling — and deliberately answers no
 // others. Tenancy is an application model rather than a transport property, so
-// it belongs in application code; see docs/adr/0003.
+// it belongs in application code.
 package auth
 
 import "context"

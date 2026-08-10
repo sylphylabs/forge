@@ -12,7 +12,7 @@ import (
 )
 
 // KindMCP identifies the MCP transport. It is declared here rather than in the
-// transport package because transport.Kind is an open type; see docs/adr/0001.
+// transport package because transport.Kind is an open type.
 const KindMCP transport.Kind = "mcp"
 
 var _ transport.Transporter = (*Transport)(nil)
