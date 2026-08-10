@@ -13,12 +13,16 @@ import (
 const Name = "protojson"
 
 var (
-	// MarshalOptions is a configurable JSON format marshaller.
-	MarshalOptions = protojson.MarshalOptions{
+	// marshalOptions pins the wire-format settings for all protojson responses produced by
+	// this codec. Keeping this unexported prevents any imported package from silently
+	// changing the serialisation behaviour of unrelated code running in the same process.
+	marshalOptions = protojson.MarshalOptions{
 		EmitUnpopulated: true,
 	}
-	// UnmarshalOptions is a configurable JSON format parser.
-	UnmarshalOptions = protojson.UnmarshalOptions{
+	// unmarshalOptions pins the wire-format settings for all protojson parsing done by
+	// this codec. Keeping this unexported prevents any imported package from silently
+	// changing the deserialisation behaviour of unrelated code running in the same process.
+	unmarshalOptions = protojson.UnmarshalOptions{
 		DiscardUnknown: true,
 	}
 )
@@ -35,7 +39,7 @@ func (codec) Marshal(v any) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("failed to marshal, message is %T, want proto.Message", v)
 	}
-	return MarshalOptions.Marshal(m)
+	return marshalOptions.Marshal(m)
 }
 
 func (codec) Unmarshal(data []byte, v any) error {
@@ -46,7 +50,7 @@ func (codec) Unmarshal(data []byte, v any) error {
 	if !ok {
 		return fmt.Errorf("failed to unmarshal, message is %T, want proto.Message", v)
 	}
-	return UnmarshalOptions.Unmarshal(data, m)
+	return unmarshalOptions.Unmarshal(data, m)
 }
 
 func (codec) Name() string {

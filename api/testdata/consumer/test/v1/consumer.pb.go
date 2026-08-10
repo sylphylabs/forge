@@ -164,10 +164,10 @@ const file_test_v1_consumer_proto_rawDesc = "" +
 	"\x12GetDocumentRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"&\n" +
 	"\x10GetDocumentReply\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name*]\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name*[\n" +
 	"\rFailureReason\x12\x1e\n" +
-	"\x1aFAILURE_REASON_UNSPECIFIED\x10\x00\x12$\n" +
-	"\x18FAILURE_REASON_NOT_FOUND\x10\x01\x1a\x06\xb0\x98\xf4\x01\x94\x03\x1a\x06\xa8\x98\xf4\x01\xf4\x032k\n" +
+	"\x1aFAILURE_REASON_UNSPECIFIED\x10\x00\x12#\n" +
+	"\x18FAILURE_REASON_NOT_FOUND\x10\x01\x1a\x05\xb0\x98\xf4\x01\x06\x1a\x05\xa8\x98\xf4\x01\x0e2k\n" +
 	"\x0fDocumentService\x12X\n" +
 	"\vGetDocument\x12\".sylphy.test.v1.GetDocumentRequest\x1a .sylphy.test.v1.GetDocumentReply\"\x03\x90\x02\x02B0Z.example.com/sylphy/api-consumer/test/v1;testv1b\x06proto3"
 

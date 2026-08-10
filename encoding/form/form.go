@@ -8,6 +8,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/sylphylabs/forge/encoding"
+	"github.com/sylphylabs/forge/internal/formtag"
 )
 
 const (
@@ -22,9 +23,9 @@ var (
 	decoder = form.NewDecoder()
 )
 
-// This variable can be replaced with -ldflags like below:
-// go build "-ldflags=-X github.com/sylphylabs/forge/encoding/form.tagName=form"
-var tagName = "json"
+// tagName is the struct tag this package binds by. It lives in a leaf package
+// so that transport/http can share it without importing this one.
+var tagName = formtag.Name
 
 func init() {
 	decoder.SetTagName(tagName)
@@ -76,6 +77,10 @@ func Unmarshal(vs url.Values, v any) error {
 		}
 		rv = rv.Elem()
 	}
+	// Check both the original value and the fully-dereferenced value so that
+	// pointer-to-pointer types (e.g. **MyProto) are handled correctly: the
+	// outer pointer layers are stripped by the loop above, so rv.Interface()
+	// may satisfy proto.Message even when v itself does not.
 	if m, ok := v.(proto.Message); ok {
 		return DecodeValues(m, vs)
 	}

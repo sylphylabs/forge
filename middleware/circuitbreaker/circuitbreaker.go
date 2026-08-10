@@ -10,8 +10,9 @@ import (
 	"github.com/sylphylabs/forge/transport"
 )
 
-// ErrNotAllowed is request failed due to circuit breaker triggered.
-var ErrNotAllowed = errors.New(503, "CIRCUITBREAKER", "request failed due to circuit breaker triggered")
+// ErrNotAllowed is returned when the circuit breaker is open.
+var ErrNotAllowed = errors.MustDefine(errors.KindUnavailable, errors.Domain, "CIRCUIT_BREAKER_OPEN").
+	Msg("request rejected because the circuit breaker is open")
 
 // CircuitBreaker is a circuit breaker.
 type CircuitBreaker = internalbreaker.CircuitBreaker
@@ -57,7 +58,7 @@ func Client(opts ...Option) middleware.UnaryMiddleware {
 			}
 			// allowed
 			reply, err := handler(ctx, req)
-			if err != nil && (errors.IsInternalServer(err) || errors.IsServiceUnavailable(err) || errors.IsGatewayTimeout(err)) {
+			if err != nil && isServerFault(err) {
 				breaker.MarkFailed()
 			} else {
 				breaker.MarkSuccess()
@@ -65,4 +66,24 @@ func Client(opts ...Option) middleware.UnaryMiddleware {
 			return reply, err
 		}
 	}
+}
+
+// isServerFault reports whether err indicates the callee is at fault, and so
+// should count against the breaker.
+//
+// A caller-side failure — a malformed argument, a missing entity, a denied
+// permission — says nothing about the callee's health and must not trip the
+// breaker, however often it occurs.
+func isServerFault(err error) bool {
+	switch errors.KindOf(err) {
+	case errors.KindInternal, errors.KindDataLoss,
+		errors.KindUnavailable, errors.KindDeadlineExceeded, errors.KindUnknown:
+		return true
+	case errors.KindInvalidArgument, errors.KindFailedPrecondition, errors.KindOutOfRange,
+		errors.KindUnauthenticated, errors.KindPermissionDenied, errors.KindNotFound,
+		errors.KindAlreadyExists, errors.KindConflict, errors.KindResourceExhausted,
+		errors.KindCanceled, errors.KindUnimplemented:
+		return false
+	}
+	return false
 }

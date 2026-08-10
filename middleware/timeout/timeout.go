@@ -15,7 +15,8 @@ import (
 )
 
 // ErrTimeout is returned when the handler misses the configured deadline.
-var ErrTimeout = errors.GatewayTimeout("TIMEOUT", "request timed out")
+var ErrTimeout = errors.MustDefine(errors.KindDeadlineExceeded, errors.Domain, "TIMEOUT").
+	Msg("request timed out")
 
 // Option is timeout option.
 type Option func(*options)

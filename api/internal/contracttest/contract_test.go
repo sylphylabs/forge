@@ -14,11 +14,16 @@ import (
 
 func TestErrorStatusRoundTrip(t *testing.T) {
 	want := &errors.Status{
-		Code:    404,
+		Kind:    errors.Kind_KIND_NOT_FOUND,
+		Domain:  "sylphy.test.v1",
 		Reason:  "DOCUMENT_NOT_FOUND",
 		Message: "document not found",
 		Metadata: map[string]string{
 			"name": "documents/42",
+		},
+		TraceId: "trace-42",
+		Violations: []*errors.Violation{
+			{Field: "name", Description: "must not be empty"},
 		},
 	}
 	wire, err := proto.Marshal(want)
@@ -48,9 +53,15 @@ func TestErrorStatusRoundTrip(t *testing.T) {
 
 func TestCustomOptions(t *testing.T) {
 	enumOptions := new(descriptorpb.EnumOptions)
-	proto.SetExtension(enumOptions, errors.E_DefaultCode, int32(500))
-	if got := proto.GetExtension(enumOptions, errors.E_DefaultCode); got != int32(500) {
-		t.Fatalf("default error code = %v, want 500", got)
+	proto.SetExtension(enumOptions, errors.E_DefaultKind, errors.Kind_KIND_INTERNAL)
+	if got := proto.GetExtension(enumOptions, errors.E_DefaultKind); got != errors.Kind_KIND_INTERNAL {
+		t.Fatalf("default kind = %v, want KIND_INTERNAL", got)
+	}
+
+	valueOptions := new(descriptorpb.EnumValueOptions)
+	proto.SetExtension(valueOptions, errors.E_Kind, errors.Kind_KIND_NOT_FOUND)
+	if got := proto.GetExtension(valueOptions, errors.E_Kind); got != errors.Kind_KIND_NOT_FOUND {
+		t.Fatalf("kind = %v, want KIND_NOT_FOUND", got)
 	}
 }
 
@@ -60,8 +71,8 @@ func TestExtensionAllocations(t *testing.T) {
 		number  protoreflect.FieldNumber
 		name    protoreflect.FullName
 	}{
-		{"google.protobuf.EnumOptions", 500101, "sylphy.errors.v1.default_code"},
-		{"google.protobuf.EnumValueOptions", 500102, "sylphy.errors.v1.code"},
+		{"google.protobuf.EnumOptions", 500101, "sylphy.errors.v1.default_kind"},
+		{"google.protobuf.EnumValueOptions", 500102, "sylphy.errors.v1.kind"},
 	}
 	for _, test := range tests {
 		extension, err := protoregistry.GlobalTypes.FindExtensionByNumber(test.message, test.number)

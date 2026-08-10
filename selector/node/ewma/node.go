@@ -165,9 +165,10 @@ func isHealthFailure(err error, handler func(error) bool) bool {
 		return true
 	}
 	var netErr net.Error
+	kind := errors.KindOf(err)
 	return errors.Is(err, context.DeadlineExceeded) ||
-		errors.IsServiceUnavailable(err) ||
-		errors.IsGatewayTimeout(err) ||
+		kind == errors.KindUnavailable ||
+		kind == errors.KindDeadlineExceeded ||
 		errors.As(err, &netErr)
 }
 

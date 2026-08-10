@@ -7,7 +7,9 @@ import (
 
 	"github.com/sylphylabs/forge/registry"
 	"github.com/sylphylabs/forge/selector"
+	"github.com/sylphylabs/forge/selector/wrr"
 	"github.com/sylphylabs/forge/transport"
+	"github.com/sylphylabs/forge/transport/grpc/resolver/discovery"
 )
 
 const (
@@ -19,19 +21,32 @@ var (
 	_ balancer.Picker    = (*balancerPicker)(nil)
 )
 
+// gRPC keys balancers by name in a map that its documentation requires be
+// written only during initialization and that a ClientConn reads unsynchronized
+// on every service-config update. One balancer is therefore registered here,
+// once, and the per-client policy reaches its picker through address
+// attributes instead of through a second registration.
 func init() {
 	b := base.NewBalancerBuilder(
 		balancerName,
-		&balancerBuilder{
-			builder: selector.GlobalSelector(),
-		},
+		&balancerBuilder{},
 		base.Config{HealthCheck: true},
 	)
 	balancer.Register(b)
 }
 
 type balancerBuilder struct {
+	// builder is the policy to apply when an address names none. It is set
+	// only in tests; the registered balancer leaves it nil and falls back to
+	// defaultSelectorBuilder.
 	builder selector.Builder
+}
+
+// defaultSelectorBuilder is the policy for a client that configured none.
+// Weighted round robin needs no feedback beyond the weights discovery already
+// reports, so it behaves sensibly without tuning.
+func defaultSelectorBuilder() selector.Builder {
+	return wrr.NewBuilder()
 }
 
 // Build creates a grpc Picker.
@@ -41,16 +56,25 @@ func (b *balancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 		return base.NewErrPicker(balancer.ErrNoSubConnAvailable)
 	}
 	nodes := make([]selector.Node, 0, len(info.ReadySCs))
+	// Every address in one channel comes from the same client, so the first
+	// policy found describes the whole set.
+	var configured selector.Builder
 	for conn, info := range info.ReadySCs {
 		ins, _ := info.Address.Attributes.Value("rawServiceInstance").(*registry.ServiceInstance)
+		if configured == nil {
+			configured = discovery.SelectorBuilderFromAddress(info.Address)
+		}
 		nodes = append(nodes, &grpcNode{
 			Node:    selector.NewNode("grpc", info.Address.Addr, ins),
 			subConn: conn,
 		})
 	}
-	builder := b.builder
+	builder := configured
 	if builder == nil {
-		builder = selector.GlobalSelector()
+		builder = b.builder
+	}
+	if builder == nil {
+		builder = defaultSelectorBuilder()
 	}
 	p := &balancerPicker{
 		selector: builder.Build(),

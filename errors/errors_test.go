@@ -1,210 +1,308 @@
 package errors
 
 import (
-	"encoding/json"
-	"errors"
+	stderrors "errors"
 	"fmt"
-	"net/http"
-	"reflect"
+	"go/build"
+	"strings"
 	"testing"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-
-	errorapi "github.com/sylphylabs/forge/api/errors/v1"
 )
 
-type TestError struct{ message string }
+// errSentinel stands in for a service's generated error.
+var errSentinel = MustDefine(KindNotFound, "test.v1", "SESSION_NOT_FOUND")
 
-func (e *TestError) Error() string { return e.message }
+type causeError struct{ msg string }
 
-func TestErrors(t *testing.T) {
-	var base *Error
-	err := Newf(http.StatusBadRequest, "reason", "message")
-	err2 := Newf(http.StatusBadRequest, "reason", "message")
-	err3 := err.WithMetadata(map[string]string{
-		"foo": "bar",
-	})
-	werr := fmt.Errorf("wrap %w", err)
+func (e *causeError) Error() string { return e.msg }
 
-	if errors.Is(err, new(Error)) {
-		t.Errorf("should not be equal: %v", err)
-	}
-	if !errors.Is(werr, err) {
-		t.Errorf("should be equal: %v", err)
-	}
-	if !errors.Is(werr, err2) {
-		t.Errorf("should be equal: %v", err)
-	}
+// A typed-nil *Error reaches KindOf through errors.As, which matches it. Every
+// accessor must tolerate that rather than dereference nil.
+func TestTypedNilNeverPanics(t *testing.T) {
+	var typed *Error
+	var err error = typed
 
-	if !errors.As(err, &base) {
-		t.Errorf("should be matches: %v", err)
+	// Each of these would panic if an accessor dereferenced without a check.
+	if got := KindOf(err); got != KindUnknown {
+		t.Errorf("KindOf(typed-nil) = %v, want KindUnknown", got)
 	}
-	if !IsBadRequest(err) {
-		t.Errorf("should be matches: %v", err)
+	if got := ReasonOf(err); got != "" {
+		t.Errorf("ReasonOf(typed-nil) = %q, want empty", got)
 	}
-
-	if reason := Reason(err); reason != err3.Reason {
-		t.Errorf("got %s want: %s", reason, err)
+	if got := DomainOf(err); got != "" {
+		t.Errorf("DomainOf(typed-nil) = %q, want empty", got)
 	}
-
-	if err3.Metadata["foo"] != "bar" {
-		t.Error("not expected metadata")
+	if got := FromError(err); got == nil {
+		t.Error("FromError(typed-nil) = nil, want a non-nil *Error")
 	}
-
-	gs := err.GRPCStatus()
-	se := FromError(gs.Err())
-	if se.Reason != "reason" {
-		t.Errorf("got %+v want %+v", se, err)
-	}
-
-	gs2 := status.New(codes.InvalidArgument, "bad request")
-	se2 := FromError(gs2.Err())
-	// codes.InvalidArgument should convert to http.StatusBadRequest
-	if se2.Code != http.StatusBadRequest {
-		t.Errorf("convert code err, got %d want %d", UnknownCode, http.StatusBadRequest)
-	}
-	if FromError(nil) != nil {
-		t.Errorf("FromError(nil) should be nil")
-	}
-	e := FromError(errors.New("test"))
-	if !reflect.DeepEqual(e.Code, int32(UnknownCode)) {
-		t.Errorf("no expect value: %v, but got: %v", e.Code, int32(UnknownCode))
+	if got := typed.Error(); got != "<nil>" {
+		t.Errorf("(*Error)(nil).Error() = %q", got)
 	}
 }
 
-func TestIs(t *testing.T) {
-	tests := []struct {
-		name string
-		e    *Error
-		err  error
-		want bool
-	}{
-		{
-			name: "true",
-			e:    New(404, "test", ""),
-			err:  New(http.StatusNotFound, "test", ""),
-			want: true,
-		},
-		{
-			name: "false",
-			e:    New(0, "test", ""),
-			err:  errors.New("test"),
-			want: false,
-		},
+func TestNilErrorHandling(t *testing.T) {
+	if got := KindOf(nil); got != KindUnknown {
+		t.Errorf("KindOf(nil) = %v, want KindUnknown", got)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if ok := tt.e.Is(tt.err); ok != tt.want {
-				t.Errorf("Error.Error() = %v, want %v", ok, tt.want)
-			}
-		})
+	if got := FromError(nil); got != nil {
+		t.Errorf("FromError(nil) = %v, want nil", got)
 	}
 }
 
-func TestCause(t *testing.T) {
-	testError := &TestError{message: "test"}
-	err := BadRequest("foo", "bar").WithCause(testError)
-	if !errors.Is(err, testError) {
-		t.Fatalf("want %v but got %v", testError, err)
+// A sentinel is shared package state. Deriving from one must never change it.
+func TestSentinelIsImmutable(t *testing.T) {
+	base := MustDefine(KindNotFound, "test.v1", "THING_NOT_FOUND")
+	derived := base.Msg("first").Meta("k", "v").Wrap(&causeError{msg: "boom"})
+
+	if base.Message() != "" {
+		t.Errorf("sentinel message = %q, want empty", base.Message())
 	}
-	if te := new(TestError); errors.As(err, &te) {
-		if te.message != testError.message {
-			t.Fatalf("want %s but got %s", testError.message, te.message)
+	if base.Metadata() != nil {
+		t.Errorf("sentinel metadata = %v, want nil", base.Metadata())
+	}
+	if base.Unwrap() != nil {
+		t.Errorf("sentinel cause = %v, want nil", base.Unwrap())
+	}
+	if derived.Message() != "first" {
+		t.Errorf("derived message = %q, want %q", derived.Message(), "first")
+	}
+
+	// Two derivations from one sentinel must not observe each other.
+	a := base.Msg("a")
+	b := base.Msg("b")
+	if a.Message() == b.Message() {
+		t.Error("derived errors share message state")
+	}
+}
+
+// Metadata returned to a caller must not alias the error's own map.
+func TestMetadataIsCopied(t *testing.T) {
+	e := errSentinel.Meta("tenant", "acme")
+	md := e.Metadata()
+	md["tenant"] = "mutated"
+	if got := e.Metadata()["tenant"]; got != "acme" {
+		t.Errorf("metadata was mutated through the returned map: got %q", got)
+	}
+}
+
+func TestIsMatchesOnIdentity(t *testing.T) {
+	// The message is descriptive, so two reports of one failure must match.
+	a := errSentinel.Msgf("session %q", "x")
+	b := errSentinel.Msgf("session %q", "y")
+	if !stderrors.Is(a, errSentinel) {
+		t.Error("derived error does not match its sentinel")
+	}
+	if !stderrors.Is(a, b) {
+		t.Error("two derivations of one sentinel do not match")
+	}
+
+	// A different reason in the same domain must not match.
+	other := MustDefine(KindNotFound, "test.v1", "USER_NOT_FOUND")
+	if stderrors.Is(a, other) {
+		t.Error("errors with different reasons matched")
+	}
+
+	// The same reason in a different domain must not match: that is what
+	// domains are for.
+	foreign := MustDefine(KindNotFound, "other.v1", "SESSION_NOT_FOUND")
+	if stderrors.Is(a, foreign) {
+		t.Error("errors from different domains matched")
+	}
+
+	// An unrelated sentinel must never match.
+	if stderrors.Is(a, stderrors.New("unrelated")) {
+		t.Error("matched an unrelated error")
+	}
+}
+
+// An Is method must compare target shallowly. Traversing the target's chain
+// reverses the standard errors.Is search direction and creates false matches.
+func TestIsDoesNotUnwrapTarget(t *testing.T) {
+	wrappedTarget := fmt.Errorf("target context: %w", errSentinel)
+	if stderrors.Is(errSentinel, wrappedTarget) {
+		t.Error("Error.Is traversed the target error chain")
+	}
+}
+
+// Matching must survive an intervening fmt.Errorf wrap.
+func TestIsThroughWrapping(t *testing.T) {
+	err := fmt.Errorf("handler: %w", errSentinel.Msg("gone"))
+	if !stderrors.Is(err, errSentinel) {
+		t.Error("wrapped error does not match its sentinel")
+	}
+	if got := KindOf(err); got != KindNotFound {
+		t.Errorf("KindOf(wrapped) = %v, want KindNotFound", got)
+	}
+}
+
+// Wrap must preserve the chain so that As reaches the underlying cause.
+func TestWrapPreservesChain(t *testing.T) {
+	cause := &causeError{msg: "connection refused"}
+	err := errSentinel.Msg("lookup failed").Wrap(fmt.Errorf("repo: %w", cause))
+
+	var target *causeError
+	if !stderrors.As(err, &target) {
+		t.Fatal("As did not reach the wrapped cause")
+	}
+	if target.msg != cause.msg {
+		t.Errorf("reached the wrong cause: %q", target.msg)
+	}
+}
+
+func TestWrapNilIsNoOp(t *testing.T) {
+	cause := &causeError{msg: "connection refused"}
+	err := errSentinel.Wrap(cause)
+	got := err.Wrap(nil)
+	if got != err {
+		t.Error("Wrap(nil) returned a different error")
+	}
+	if !stderrors.Is(got, cause) {
+		t.Error("Wrap(nil) cleared the existing cause")
+	}
+}
+
+func TestEmptyViolationsYieldNoError(t *testing.T) {
+	var v Violations
+	if !v.Empty() {
+		t.Error("a fresh Violations is not empty")
+	}
+	if err := v.Err(KindInvalidArgument); err != nil {
+		t.Errorf("Err() on an empty set = %v, want nil", err)
+	}
+}
+
+func TestKindNames(t *testing.T) {
+	for k := KindUnknown; k <= KindDataLoss; k++ {
+		name := k.String()
+		parsed, ok := ParseKind(name)
+		if !ok || parsed != k {
+			t.Errorf("ParseKind(%q) = %v, %v; want %v, true", name, parsed, ok, k)
+		}
+	}
+	if _, ok := ParseKind("NOT_A_KIND"); ok {
+		t.Error("ParseKind accepted an unknown name")
+	}
+}
+
+func TestErrorString(t *testing.T) {
+	e := errSentinel.Msg("session is gone")
+	want := "NOT_FOUND test.v1/SESSION_NOT_FOUND: session is gone"
+	if got := e.Error(); got != want {
+		t.Errorf("Error() = %q, want %q", got, want)
+	}
+}
+
+// Error follows the usual Go wrapping convention and includes its local cause.
+// Transports serialize Message instead, so this detail never crosses the wire.
+func TestErrorStringIncludesCause(t *testing.T) {
+	e := errSentinel.Msg("outer").Wrap(&causeError{msg: "inner detail"})
+	if got := e.Error(); !strings.Contains(got, "inner detail") {
+		t.Errorf("Error() omitted the cause: %q", got)
+	}
+}
+
+func TestErrorStringDoesNotRepeatIdenticalMessageAndCause(t *testing.T) {
+	cause := &causeError{msg: "same detail"}
+	e := New(KindUnknown).Msg(cause.Error()).Wrap(cause)
+	if got := e.Error(); strings.Count(got, cause.Error()) != 1 {
+		t.Errorf("Error() duplicated an identical message and cause: %q", got)
+	}
+}
+
+// The package must stay a leaf: a library that wants Forge's error vocabulary
+// should not link protobuf reflection or the gRPC runtime to get it. Each
+// transport owns its own projection for that reason, so a new import here is a
+// regression rather than a detail.
+func TestPackageImportsStandardLibraryOnly(t *testing.T) {
+	pkg, err := build.ImportDir(".", 0)
+	if err != nil {
+		t.Fatalf("ImportDir: %v", err)
+	}
+	for _, path := range pkg.Imports {
+		if strings.Contains(path, ".") {
+			t.Errorf("non-standard import %q; move the projection to its transport", path)
 		}
 	}
 }
 
-func TestStatusContract(t *testing.T) {
-	want := New(409, "DOCUMENT_CONFLICT", "document changed").WithMetadata(map[string]string{
-		"document": "documents/42",
-	})
+// What crosses a boundary is decided by construction, not by inspection.
+//
+// The policy model this replaced read the Kind and guessed; it could not see a
+// secret in metadata or a driver's text in a violation, and its three policies
+// were writable package variables. PublicOf discloses exactly what a caller
+// declared and never a cause.
+func TestPublicOfExcludesTheCause(t *testing.T) {
+	secret := &causeError{msg: "dial tcp 10.0.0.1:5432: password=hunter2"}
+	e := errSentinel.Msg("session not found").Meta("tenant", "acme").Wrap(secret)
 
-	wire, err := proto.Marshal(want)
-	if err != nil {
-		t.Fatalf("proto.Marshal() error = %v", err)
+	public := PublicOf(e)
+	if public.Message != "session not found" {
+		t.Errorf("message = %q, want the declared one", public.Message)
 	}
-	var status errorapi.Status
-	if err := proto.Unmarshal(wire, &status); err != nil {
-		t.Fatalf("proto.Unmarshal() error = %v", err)
+	if public.Metadata["tenant"] != "acme" {
+		t.Errorf("metadata = %v, want the declared entry", public.Metadata)
 	}
-	if !proto.Equal(&status, &want.Status) {
-		t.Fatalf("wire status = %v, want %v", &status, &want.Status)
-	}
-	grpcRoundTrip := FromError(want.GRPCStatus().Err())
-	if !proto.Equal(&grpcRoundTrip.Status, &want.Status) {
-		t.Fatalf("gRPC status = %v, want %v", &grpcRoundTrip.Status, &want.Status)
-	}
-
-	for name, marshal := range map[string]func(any) ([]byte, error){
-		"encoding/json": json.Marshal,
-		"protojson": func(v any) ([]byte, error) {
-			return protojson.Marshal(v.(proto.Message))
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			data, err := marshal(want)
-			if err != nil {
-				t.Fatalf("Marshal() error = %v", err)
-			}
-			var got map[string]any
-			if err := json.Unmarshal(data, &got); err != nil {
-				t.Fatalf("json.Unmarshal() error = %v", err)
-			}
-			if len(got) != 4 {
-				t.Errorf("JSON body %s has %d fields, want 4", data, len(got))
-			}
-			if got["code"] != float64(409) {
-				t.Errorf("JSON code = %v, want 409", got["code"])
-			}
-			if got["reason"] != "DOCUMENT_CONFLICT" {
-				t.Errorf("JSON reason = %v, want DOCUMENT_CONFLICT", got["reason"])
-			}
-			if got["message"] != "document changed" {
-				t.Errorf("JSON message = %v, want document changed", got["message"])
-			}
-			metadata, ok := got["metadata"].(map[string]any)
-			if !ok || metadata["document"] != "documents/42" {
-				t.Errorf("JSON metadata = %v, want document=documents/42", got["metadata"])
-			}
-		})
+	if strings.Contains(public.Message, "hunter2") {
+		t.Error("the cause reached the public snapshot")
 	}
 }
 
-func TestOther(t *testing.T) {
-	err := Errorf(10001, "test code 10001", "message")
-	// Code
-	if !reflect.DeepEqual(Code(nil), 200) {
-		t.Errorf("Code(nil) = %v, want %v", Code(nil), 200)
+// The snapshot owns its data, so a transport cannot mutate the error it came
+// from — including a shared sentinel.
+func TestPublicOfOwnsItsData(t *testing.T) {
+	e := errSentinel.Meta("tenant", "acme")
+	public := PublicOf(e)
+	public.Metadata["tenant"] = "mutated"
+	if got := e.Metadata()["tenant"]; got != "acme" {
+		t.Errorf("metadata was mutated through the snapshot: %q", got)
 	}
-	if !reflect.DeepEqual(Code(errors.New("test")), UnknownCode) {
-		t.Errorf(`Code(errors.New("test")) = %v, want %v`, Code(nil), 200)
+}
+
+// An error from elsewhere has text written for an operator, not a caller, so it
+// discloses nothing but its classification.
+func TestPublicOfForeignErrorDisclosesNothing(t *testing.T) {
+	public := PublicOf(stderrors.New("dial tcp 10.0.0.1:5432: password=hunter2"))
+	if public.Message != "" {
+		t.Errorf("message = %q, want empty", public.Message)
 	}
-	if !reflect.DeepEqual(Code(err), 10001) {
-		t.Errorf(`Code(err) = %v, want %v`, Code(err), 10001)
+	if public.Kind != KindUnknown {
+		t.Errorf("kind = %v, want KindUnknown", public.Kind)
 	}
-	// Reason
-	if !reflect.DeepEqual(Reason(nil), UnknownReason) {
-		t.Errorf(`Reason(nil) = %v, want %v`, Reason(nil), UnknownReason)
+}
+
+func TestPublicOfNil(t *testing.T) {
+	if got := PublicOf(nil); got.Kind != KindUnknown || got.Message != "" {
+		t.Errorf("PublicOf(nil) = %+v, want the zero value", got)
 	}
-	if !reflect.DeepEqual(Reason(errors.New("test")), UnknownReason) {
-		t.Errorf(`Reason(errors.New("test")) = %v, want %v`, Reason(nil), UnknownReason)
+	var typed *Error
+	if got := PublicOf(typed); got.Kind != KindUnknown {
+		t.Errorf("PublicOf(typed-nil) = %+v, want the zero value", got)
 	}
-	if !reflect.DeepEqual(Reason(err), "test code 10001") {
-		t.Errorf(`Reason(err) = %v, want %v`, Reason(err), "test code 10001")
+}
+
+// An identity is meaningful only as a complete pair; keeping half of one would
+// let unrelated failures compare equal.
+func TestFromPublicRequiresCompleteIdentity(t *testing.T) {
+	for _, p := range []Public{
+		{Kind: KindNotFound, Domain: "test.v1"},
+		{Kind: KindNotFound, Reason: "GONE"},
+	} {
+		got := FromPublic(p)
+		if got.Domain() != "" || got.Reason() != "" {
+			t.Errorf("partial identity %+v was kept as %q/%q", p, got.Domain(), got.Reason())
+		}
+		if got.Kind() != KindNotFound {
+			t.Errorf("kind = %v, want it preserved", got.Kind())
+		}
 	}
-	// Clone
-	err400 := Newf(http.StatusBadRequest, "BAD_REQUEST", "param invalid")
-	err400.Metadata = map[string]string{
-		"key1": "val1",
-		"key2": "val2",
+
+	complete := FromPublic(Public{Kind: KindNotFound, Domain: "test.v1", Reason: "SESSION_NOT_FOUND"})
+	if !stderrors.Is(complete, errSentinel) {
+		t.Error("a complete identity does not match its sentinel")
 	}
-	if cerr := Clone(err400); cerr == nil || cerr.Error() != err400.Error() {
-		t.Errorf("Clone(err) = %v, want %v", Clone(err400), err400)
+	if !complete.IsRemote() {
+		t.Error("a decoded error must be marked remote")
 	}
-	if cerr := Clone(nil); cerr != nil {
-		t.Errorf("Clone(nil) = %v, want %v", Clone(err400), err400)
+	if complete.Unwrap() != nil {
+		t.Error("a decoded error must carry no cause")
 	}
 }

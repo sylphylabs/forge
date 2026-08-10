@@ -4,11 +4,10 @@ import (
 	"context"
 	"net/url"
 
-	// init encoding
-	_ "github.com/sylphylabs/forge/encoding/form"
+	// Codecs that need no schema runtime. The Protobuf codecs are registered
+	// by transport/http/transcoding instead, so a service that never speaks
+	// Protobuf does not link its reflection machinery.
 	_ "github.com/sylphylabs/forge/encoding/json"
-	_ "github.com/sylphylabs/forge/encoding/proto"
-	_ "github.com/sylphylabs/forge/encoding/protojson"
 	_ "github.com/sylphylabs/forge/encoding/xml"
 	_ "github.com/sylphylabs/forge/encoding/yaml"
 )

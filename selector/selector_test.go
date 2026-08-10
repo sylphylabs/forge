@@ -300,15 +300,12 @@ func TestNoPick(t *testing.T) {
 	}
 }
 
-func TestGlobalSelector(t *testing.T) {
+func TestDefaultBuilderBuild(t *testing.T) {
 	builder := DefaultBuilder{
 		Node:     &mockWeightedNodeBuilder{},
 		Balancer: &mockBalancerBuilder{},
 	}
-	SetGlobalSelector(&builder)
-
-	gBuilder := GlobalSelector()
-	if gBuilder == nil {
-		t.Errorf("expect %v, got %v", nil, gBuilder)
+	if builder.Build() == nil {
+		t.Error("expect a selector, got nil")
 	}
 }

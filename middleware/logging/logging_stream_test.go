@@ -67,7 +67,7 @@ func TestServerStreamLogsInitialRequest(t *testing.T) {
 func TestServerStreamLogsError(t *testing.T) {
 	handler := &captureHandler{}
 	logger := slog.New(handler)
-	want := errors.InternalServer("STREAM_FAILED", "stream failed")
+	want := errors.New(errors.KindInternal).WithReason("STREAM_FAILED").Msg("stream failed")
 
 	next := ServerStream(logger)(func(any, middleware.ServerStream) error { return want })
 	if err := next(nil, &testStream{ctx: t.Context()}); err != want {
@@ -81,8 +81,8 @@ func TestServerStreamLogsError(t *testing.T) {
 	if got := attrs["reason"]; got != "STREAM_FAILED" {
 		t.Errorf("reason = %v, want %q", got, "STREAM_FAILED")
 	}
-	if got := attrs["code"]; got != int64(500) {
-		t.Errorf("code = %v, want 500", got)
+	if got := attrs["error_kind"]; got != "INTERNAL" {
+		t.Errorf("error_kind = %v, want INTERNAL", got)
 	}
 }
 

@@ -35,7 +35,7 @@ func TestTable(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			v := Validator()(mock)
 			_, err := v(context.Background(), test)
-			if want, have := test.isErr, forgeerrors.IsBadRequest(err); want != have {
+			if want, have := test.isErr, forgeerrors.KindOf(err) == forgeerrors.KindInvalidArgument; want != have {
 				t.Errorf("fail data %v, want %v, have %v", test, want, have)
 			}
 		})

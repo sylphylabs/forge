@@ -51,7 +51,7 @@ func TestBindQuery(t *testing.T) {
 				vars:   map[string][]string{"age": {"forge"}, "url": {"https://go-kratos.dev/"}},
 				target: &testBind2{},
 			},
-			err: forgeerror.BadRequest("CODEC", "Field Namespace:age ERROR:Invalid Integer Value 'forge' Type 'int' Namespace 'age'"),
+			err: ErrCodec.Msg("Field Namespace:age ERROR:Invalid Integer Value 'forge' Type 'int' Namespace 'age'"),
 		},
 		{
 			name: "test2",
@@ -157,14 +157,14 @@ func TestBindForm(t *testing.T) {
 				},
 				target: &testBind2{},
 			},
-			err:  forgeerror.BadRequest("CODEC", "Field Namespace:age ERROR:Invalid Integer Value 'a' Type 'int' Namespace 'age'"),
+			err:  ErrCodec.Msg("Field Namespace:age ERROR:Invalid Integer Value 'a' Type 'int' Namespace 'age'"),
 			want: nil,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := bindForm(tt.args.req, tt.args.target)
-			if !reflect.DeepEqual(err, tt.err) {
+			if !matchesExpectedError(err, tt.err) {
 				t.Fatalf("bindForm() error = %v, err %v", err, tt.err)
 			}
 			if err == nil && !reflect.DeepEqual(tt.args.target, tt.want) {
@@ -172,4 +172,23 @@ func TestBindForm(t *testing.T) {
 			}
 		})
 	}
+}
+
+// matchesExpectedError compares a produced error with an expected one.
+//
+// A Forge error is compared by identity, since its message carries per-call
+// detail. Any other error is compared by message, because the binder returns a
+// plain error the test cannot construct an identical value of.
+func matchesExpectedError(got, want error) bool {
+	if want == nil {
+		return got == nil
+	}
+	if got == nil {
+		return false
+	}
+	var wantForge *forgeerror.Error
+	if errors.As(want, &wantForge) {
+		return forgeerror.Is(got, want)
+	}
+	return got.Error() == want.Error()
 }

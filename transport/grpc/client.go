@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"crypto/tls"
+	stderrors "errors"
 	"fmt"
 	"time"
 
@@ -10,23 +11,18 @@ import (
 	"google.golang.org/grpc/credentials"
 	grpcinsecure "google.golang.org/grpc/credentials/insecure"
 	grpcmd "google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
+	"github.com/sylphylabs/forge/errors"
 	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/registry"
 	"github.com/sylphylabs/forge/selector"
-	"github.com/sylphylabs/forge/selector/wrr"
 	"github.com/sylphylabs/forge/transport"
 	"github.com/sylphylabs/forge/transport/grpc/resolver/discovery"
 
 	// init resolver
 	_ "github.com/sylphylabs/forge/transport/grpc/resolver/direct"
 )
-
-func init() {
-	if selector.GlobalSelector() == nil {
-		selector.SetGlobalSelector(wrr.NewBuilder())
-	}
-}
 
 // ClientOption is gRPC client option.
 type ClientOption func(o *clientOptions)
@@ -109,6 +105,17 @@ func WithNodeFilter(filters ...selector.NodeFilter) ClientOption {
 	}
 }
 
+// WithSelector sets the load-balancing policy this client uses to pick a node
+// among the ones discovery reports. Each client balances independently.
+//
+// The policy applies to a discovery endpoint. A client dialing a fixed address
+// has one node to choose from, so no policy is consulted.
+func WithSelector(sb selector.Builder) ClientOption {
+	return func(o *clientOptions) {
+		o.selectorBuilder = sb
+	}
+}
+
 // WithHealthCheck with health check
 func WithHealthCheck(healthCheck bool) ClientOption {
 	return func(o *clientOptions) {
@@ -132,6 +139,7 @@ type clientOptions struct {
 	grpcOpts          []grpc.DialOption
 	balancerName      string
 	filters           []selector.NodeFilter
+	selectorBuilder   selector.Builder
 	healthCheckConfig string
 }
 
@@ -178,6 +186,7 @@ func NewClient(ctx context.Context, opts ...ClientOption) (*grpc.ClientConn, err
 					discovery.WithInsecure(isInsecure),
 					discovery.WithTimeout(options.timeout),
 					discovery.WithSubset(options.subsetSize),
+					discovery.WithSelector(options.selectorBuilder),
 				)))
 	}
 	if isInsecure {
@@ -221,7 +230,11 @@ func unaryClientInterceptor(ms []middleware.UnaryMiddleware, timeout time.Durati
 				}
 				ctx = grpcmd.AppendToOutgoingContext(ctx, keyvals...)
 			}
-			return reply, invoker(ctx, method, req, reply, cc, opts...)
+			// Convert here, inside the invoker, so middleware sees a Forge
+			// error rather than a raw status. Retry and circuit breaking
+			// classify by Kind, and the errors package cannot recognize a
+			// status on its own.
+			return reply, convertClientError(invoker(ctx, method, req, reply, cc, opts...))
 		}
 		if len(ms) > 0 {
 			h = middleware.ChainUnary(ms...)(h)
@@ -231,6 +244,46 @@ func unaryClientInterceptor(ms []middleware.UnaryMiddleware, timeout time.Durati
 		_, err := h(ctx, req)
 		return err
 	}
+}
+
+// convertClientError makes a server's gRPC status reachable as a Forge error,
+// so a caller matches a remote failure against the same sentinel it would use
+// for a local one.
+//
+// The conversion happens here because the errors package holds no gRPC types:
+// the transport that understands the status is the one that translates it.
+//
+// The original status is preserved rather than replaced. Callers and
+// interceptors that read a code with status.Code or status.FromError must keep
+// working, so the result carries both views: errors.As reaches the Forge error,
+// and GRPCStatus still reports the status the server sent.
+//
+// No error is marked with [transport.MarkNotSent], which withholds automatic
+// retries from non-idempotent gRPC calls by design. grpc-go supplies no
+// evidence this layer can act on: a call that never found a listener and a
+// call whose connection died after the request was written both arrive as a
+// codes.Unavailable *status.Error with no Unwrap method, no typed cause and no
+// status detail. The two are separated only by free text inside the message
+// ("Error while dialing" versus "error reading server preface"), which is an
+// unstable internal string and, more importantly, still cannot rule out the
+// case that actually matters — a request delivered and executed whose reply
+// was lost. Marking on that basis would assert proof this transport does not
+// have. Callers whose gRPC operations tolerate repeat execution declare it
+// with retry.Idempotent.
+func convertClientError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var already *errors.Error
+	if stderrors.As(err, &already) {
+		return err
+	}
+	converted, ok := ErrorFrom(err)
+	if !ok {
+		return err
+	}
+	gs, _ := status.FromError(err)
+	return &statusError{err: converted, status: gs}
 }
 
 // wrappedClientStream wraps the grpc.ClientStream and applies middleware
@@ -245,8 +298,11 @@ func (w *wrappedClientStream) Context() context.Context {
 }
 
 func (w *wrappedClientStream) SendMsg(m any) error {
+	// Convert inside the handler, as the unary path does, so middleware sees a
+	// Forge error rather than a raw status: retry and circuit breaking classify
+	// by Kind, and the errors package cannot recognize a status on its own.
 	h := func(_ context.Context, req any) (any, error) {
-		return req, w.ClientStream.SendMsg(m)
+		return req, convertClientError(w.ClientStream.SendMsg(m))
 	}
 
 	_, ok := transport.FromClientContext(w.ctx)
@@ -264,7 +320,7 @@ func (w *wrappedClientStream) SendMsg(m any) error {
 
 func (w *wrappedClientStream) RecvMsg(m any) error {
 	h := func(_ context.Context, req any) (any, error) {
-		return req, w.ClientStream.RecvMsg(m)
+		return req, convertClientError(w.ClientStream.RecvMsg(m))
 	}
 
 	_, ok := transport.FromClientContext(w.ctx)
@@ -293,7 +349,7 @@ func streamClientInterceptor(ms []middleware.UnaryMiddleware, filters []selector
 
 		clientStream, err := streamer(ctx, desc, cc, method, opts...)
 		if err != nil {
-			return nil, err
+			return nil, convertClientError(err)
 		}
 
 		wrappedStream := &wrappedClientStream{

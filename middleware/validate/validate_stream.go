@@ -61,17 +61,55 @@ func (s *validatingStream) RecvMsg(m any) error {
 	return validate(m, s.validators)
 }
 
+// ErrValidation identifies a request rejected by a validator.
+var ErrValidation = errors.MustDefine(errors.KindInvalidArgument, errors.Domain, "VALIDATION_FAILED")
+
 // validate runs the self-validation hook and every configured validator.
 func validate(msg any, validators []ValidatorFunc) error {
 	if v, ok := msg.(validator); ok {
 		if err := v.Validate(); err != nil {
-			return errors.BadRequest("VALIDATOR", err.Error()).WithCause(err)
+			return validationError(err)
 		}
 	}
 	for _, v := range validators {
 		if err := v(msg); err != nil {
-			return errors.BadRequest("VALIDATOR", err.Error()).WithCause(err)
+			return validationError(err)
 		}
 	}
 	return nil
+}
+
+// FieldReporter is implemented by a validation error that knows which fields
+// failed. A validator whose error satisfies it produces an aggregate Forge
+// error, so a client can show a user every field that was wrong rather than
+// only the first.
+//
+// Validators that report a single opaque message need not implement it; their
+// error becomes a plain [ErrValidation] with the message preserved.
+type FieldReporter interface {
+	// FieldViolations returns one entry per failed field.
+	FieldViolations() []errors.Violation
+}
+
+// validationError converts a validator's error into a Forge error, preserving
+// per-field detail when the validator reported any.
+//
+// The cause is always wrapped so that a handler can still reach the validator's
+// own error type with [errors.As].
+func validationError(err error) error {
+	var reporter FieldReporter
+	if errors.As(err, &reporter) {
+		if fields := reporter.FieldViolations(); len(fields) > 0 {
+			var v errors.Violations
+			for _, f := range fields {
+				v.Add(f.Field, f.Description)
+			}
+			return errors.FromError(v.Err(errors.KindInvalidArgument)).
+				WithDomain(errors.Domain).
+				WithReason("VALIDATION_FAILED").
+				Msg(err.Error()).
+				Wrap(err)
+		}
+	}
+	return ErrValidation.Msg(err.Error()).Wrap(err)
 }

@@ -10,8 +10,9 @@ import (
 	"github.com/sylphylabs/forge/transport"
 )
 
-// ErrLimitExceed is service unavailable due to rate limit exceeded.
-var ErrLimitExceed = errors.New(429, "RATELIMIT", "service unavailable due to rate limit exceeded")
+// ErrLimitExceed is returned when a request exceeds the configured rate limit.
+var ErrLimitExceed = errors.MustDefine(errors.KindResourceExhausted, errors.Domain, "RATE_LIMIT_EXCEEDED").
+	Msg("request rejected because the rate limit was exceeded")
 
 // DoneFunc records request completion.
 type DoneFunc = internalratelimit.DoneFunc

@@ -120,7 +120,7 @@ func TestClientMarksServerErrorAsFailed(t *testing.T) {
 	breaker := &circuitBreakerMock{}
 	ctx := transport.NewClientContext(context.Background(), &transportMock{operation: "/foo"})
 	next := func(context.Context, any) (any, error) {
-		return nil, forgeerrors.InternalServer("", "")
+		return nil, forgeerrors.New(forgeerrors.KindInternal).WithReason("").Msg("")
 	}
 
 	_, _ = Client(WithBreakerFactory(func() CircuitBreaker {

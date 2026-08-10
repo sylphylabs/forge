@@ -33,7 +33,7 @@ func ServerStream(opts ...Option) middleware.StreamMiddleware {
 			for _, k := range header.Keys() {
 				if options.hasPrefix(k) {
 					for _, v := range header.Values(k) {
-						md.Add(k, v)
+						md.Add(k, decodeValue(v))
 					}
 				}
 			}

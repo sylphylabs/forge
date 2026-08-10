@@ -36,7 +36,7 @@ func instant(context.Context, any) (any, error) { return "ok", nil }
 
 func TestServerAppliesDeadline(t *testing.T) {
 	handler := Server(WithTimeout(10 * time.Millisecond))(waitForDeadline)
-	if _, err := handler(context.Background(), nil); !errors.IsGatewayTimeout(err) {
+	if _, err := handler(context.Background(), nil); errors.KindOf(err) != errors.KindDeadlineExceeded {
 		t.Fatalf("slow handler must time out with ErrTimeout, got %v", err)
 	}
 
@@ -68,7 +68,7 @@ func TestServerKeepsEarlierDeadline(t *testing.T) {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("want context.DeadlineExceeded, got %v", err)
 	}
-	if errors.IsGatewayTimeout(err) {
+	if errors.KindOf(err) == errors.KindDeadlineExceeded {
 		t.Fatal("an inherited deadline miss must not be remapped to ErrTimeout")
 	}
 }
@@ -79,13 +79,13 @@ func TestServerWithRulesHotUpdate(t *testing.T) {
 
 	// Tighten one operation at runtime; the built chain observes it.
 	rules.Replace(map[string]time.Duration{"/svc/Slow": 10 * time.Millisecond})
-	if _, err := handler(serverCtx("/svc/Slow"), nil); !errors.IsGatewayTimeout(err) {
+	if _, err := handler(serverCtx("/svc/Slow"), nil); errors.KindOf(err) != errors.KindDeadlineExceeded {
 		t.Fatalf("tightened rule must time out, got %v", err)
 	}
 
 	// The wildcard rule reaches every other operation.
 	rules.Replace(map[string]time.Duration{governance.Wildcard: 10 * time.Millisecond})
-	if _, err := handler(serverCtx("/svc/Other"), nil); !errors.IsGatewayTimeout(err) {
+	if _, err := handler(serverCtx("/svc/Other"), nil); errors.KindOf(err) != errors.KindDeadlineExceeded {
 		t.Fatalf("wildcard rule must time out, got %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestServerWithRulesHotUpdate(t *testing.T) {
 	// accidentally disabling the timeout.
 	zero := governance.NewRules[time.Duration](0)
 	fast := Server(WithRules(zero), WithTimeout(10*time.Millisecond))(waitForDeadline)
-	if _, err := fast(serverCtx("/svc/Slow"), nil); !errors.IsGatewayTimeout(err) {
+	if _, err := fast(serverCtx("/svc/Slow"), nil); errors.KindOf(err) != errors.KindDeadlineExceeded {
 		t.Fatalf("zero rule must fall back to the static deadline, got %v", err)
 	}
 }

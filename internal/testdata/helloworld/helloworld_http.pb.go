@@ -9,6 +9,7 @@ package helloworld
 import (
 	context "context"
 	http "github.com/sylphylabs/forge/transport/http"
+	transcoding "github.com/sylphylabs/forge/transport/http/transcoding"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -16,10 +17,11 @@ import (
 var _ = new(context.Context)
 
 const _ = http.SupportPackageIsVersion5
+const _ = transcoding.SupportPackageIsVersion1
 
 const OperationGreeterSayHello = "/helloworld.Greeter/SayHello"
 
-var _Greeter_SayHello0_HTTP_Path = http.MustCompilePath("/helloworld/{name}", new(HelloRequest), http.WithQueryParams())
+var _Greeter_SayHello0_HTTP_Path = transcoding.MustCompilePath("/helloworld/{name}", new(HelloRequest), transcoding.WithQueryParams())
 
 const _GreeterHTTPMethodSet = 1
 
@@ -48,7 +50,7 @@ func _Greeter_SayHello0_HTTP_Handler(srv GreeterHTTPServer) func(ctx http.Contex
 			return err
 		}
 		reply := out
-		return ctx.JSON(200, http.NewProtoJSON(reply))
+		return ctx.JSON(200, transcoding.NewProtoJSON(reply))
 	}
 }
 
@@ -78,7 +80,7 @@ func (c *GreeterHTTPClientImpl) SayHello(ctx context.Context, in *HelloRequest, 
 		http.Operation(OperationGreeterSayHello),
 		http.PathTemplate(pattern),
 	}, opts...)
-	err = c.cc.Invoke(ctx, "GET", path, nil, http.NewProtoJSON(&out), opts...)
+	err = c.cc.Invoke(ctx, "GET", path, nil, transcoding.NewProtoJSON(&out), opts...)
 	if err != nil {
 		return nil, err
 	}

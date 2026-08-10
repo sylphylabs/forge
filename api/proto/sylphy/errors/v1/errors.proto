@@ -8,20 +8,64 @@ option go_package = "github.com/sylphylabs/forge/api/errors/v1;errors";
 option java_multiple_files = true;
 option java_package = "com.github.sylphy.errors.v1";
 
+// Kind classifies a failure independently of any transport. It is the single
+// source of truth for an error's category: transports project a Kind onto their
+// own status vocabulary, never the reverse.
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  KIND_INVALID_ARGUMENT = 1;
+  KIND_FAILED_PRECONDITION = 2;
+  KIND_OUT_OF_RANGE = 3;
+  KIND_UNAUTHENTICATED = 4;
+  KIND_PERMISSION_DENIED = 5;
+  KIND_NOT_FOUND = 6;
+  KIND_ALREADY_EXISTS = 7;
+  KIND_CONFLICT = 8;
+  KIND_RESOURCE_EXHAUSTED = 9;
+  KIND_CANCELED = 10;
+  KIND_DEADLINE_EXCEEDED = 11;
+  KIND_UNAVAILABLE = 12;
+  KIND_UNIMPLEMENTED = 13;
+  KIND_INTERNAL = 14;
+  KIND_DATA_LOSS = 15;
+}
+
+// Violation is a single field-level failure within an aggregate error.
+message Violation {
+  // Field identifies what failed, as a path into the request message.
+  string field = 1;
+  // Description explains the failure in terms a caller can act on.
+  string description = 2;
+}
+
 // Status is the portable error representation used by Forge transports.
 message Status {
-  int32 code = 1;
-  string reason = 2;
-  string message = 3;
-  map<string, string> metadata = 4;
+  // Kind classifies the failure. Transports project it onto their own status
+  // vocabulary.
+  Kind kind = 1;
+  // Domain namespaces the reason, normally the Protobuf package that declared
+  // it.
+  string domain = 2;
+  // Reason is the stable machine-readable identifier for this failure.
+  string reason = 3;
+  // Message describes the failure for a human reader. It is not stable and
+  // must not be parsed.
+  string message = 4;
+  // Metadata carries additional structured context.
+  map<string, string> metadata = 5;
+  // TraceID correlates this failure with a distributed trace. It is the
+  // supported way to follow a failure across process boundaries.
+  string trace_id = 6;
+  // Violations carries per-field failures for an aggregate error.
+  repeated Violation violations = 7;
 }
 
-// default_code declares the default transport status for an error enum.
+// default_kind declares the default classification for an error enum.
 extend google.protobuf.EnumOptions {
-  int32 default_code = 500101;
+  Kind default_kind = 500101;
 }
 
-// code overrides the transport status for one error enum value.
+// kind overrides the classification for one error enum value.
 extend google.protobuf.EnumValueOptions {
-  int32 code = 500102;
+  Kind kind = 500102;
 }

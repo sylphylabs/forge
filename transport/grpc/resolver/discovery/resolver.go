@@ -13,7 +13,31 @@ import (
 	"github.com/sylphylabs/forge/internal/subset"
 	"github.com/sylphylabs/forge/log"
 	"github.com/sylphylabs/forge/registry"
+	"github.com/sylphylabs/forge/selector"
 )
+
+// selectorBuilderKey names the address attribute carrying the client's
+// load-balancing policy. It is an unexported empty struct type so no other
+// package can read or overwrite the entry.
+type selectorBuilderKey struct{}
+
+// NewAddressWithSelectorBuilder returns addr carrying sb as the policy its
+// channel should balance with. The balancer package uses it to build addresses
+// in tests; production addresses are built by this resolver's update loop.
+func NewAddressWithSelectorBuilder(addr resolver.Address, sb selector.Builder) resolver.Address {
+	addr.Attributes = addr.Attributes.WithValue(selectorBuilderKey{}, sb)
+	return addr
+}
+
+// SelectorBuilderFromAddress returns the load-balancing policy the client that
+// owns this address configured, or nil when it did not configure one.
+func SelectorBuilderFromAddress(addr resolver.Address) selector.Builder {
+	if addr.Attributes == nil {
+		return nil
+	}
+	builder, _ := addr.Attributes.Value(selectorBuilderKey{}).(selector.Builder)
+	return builder
+}
 
 type discoveryResolver struct {
 	w  registry.Watcher
@@ -22,9 +46,10 @@ type discoveryResolver struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	insecure    bool
-	selectorKey string
-	subsetSize  int
+	insecure        bool
+	selectorKey     string
+	subsetSize      int
+	selectorBuilder selector.Builder
 }
 
 func (r *discoveryResolver) watch() {
@@ -75,9 +100,13 @@ func (r *discoveryResolver) update(ins []*registry.ServiceInstance) {
 	addrs := make([]resolver.Address, 0, len(filtered))
 	for _, in := range filtered {
 		ept, _ := endpoint.ParseEndpoint(in.Endpoints, endpoint.Scheme("grpc", !r.insecure))
+		attrs := parseAttributes(in.Metadata).WithValue("rawServiceInstance", in)
+		if r.selectorBuilder != nil {
+			attrs = attrs.WithValue(selectorBuilderKey{}, r.selectorBuilder)
+		}
 		addr := resolver.Address{
 			ServerName: in.Name,
-			Attributes: parseAttributes(in.Metadata).WithValue("rawServiceInstance", in),
+			Attributes: attrs,
 			Addr:       ept,
 		}
 		addrs = append(addrs, addr)

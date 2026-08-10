@@ -9,6 +9,11 @@ import (
 	"strings"
 	"testing"
 
+	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/pluginpb"
+
 	"github.com/sylphylabs/forge/cmd/internal/generator/testutil"
 )
 
@@ -44,15 +49,15 @@ func TestHTTPTemplateClientUsesCompiledPathAndGoogleJSON(t *testing.T) {
 	got := sd.execute()
 	for _, want := range []string{
 		`out, err := srv.SayHello(ctx, &in)`,
-		`var _Greeter_SayHello0_HTTP_Path = http.MustCompilePath("/helloworld/{name}", new(HelloRequest), http.WithQueryParams())`,
-		`var _Greeter_CreateHello0_HTTP_Path = http.MustCompilePath("/helloworld", new(CreateHelloRequest))`,
+		`var _Greeter_SayHello0_HTTP_Path = transcoding.MustCompilePath("/helloworld/{name}", new(HelloRequest), transcoding.WithQueryParams())`,
+		`var _Greeter_CreateHello0_HTTP_Path = transcoding.MustCompilePath("/helloworld", new(CreateHelloRequest))`,
 		`path, err := _Greeter_SayHello0_HTTP_Path.Build(in)`,
 		`path, err := _Greeter_CreateHello0_HTTP_Path.Build(in)`,
 		`if err != nil`,
 		`http.Accept("application/json")`,
 		`http.ContentType("application/json")`,
-		`http.NewProtoJSON(in)`,
-		`http.NewProtoJSON(&out)`,
+		`transcoding.NewProtoJSON(in)`,
+		`transcoding.NewProtoJSON(&out)`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("generated template missing %q in:\n%s", want, got)
@@ -92,8 +97,8 @@ func TestHTTPTemplateClientRejectsAmbiguousPrimaryRules(t *testing.T) {
 	}
 	got := sd.execute()
 	for _, want := range []string{
-		"return nil, http.ErrUnspecifiedHTTPMethod",
-		"return nil, http.ErrUnboundPathWildcard",
+		"return nil, transcoding.ErrUnspecifiedHTTPMethod",
+		"return nil, transcoding.ErrUnboundPathWildcard",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("generated template missing %q in:\n%s", want, got)
@@ -199,19 +204,26 @@ func TestHTTPTemplateStreamsAndHTTPBody(t *testing.T) {
 		`ChatHello(Greeter_ChatHelloHTTPServer) error`,
 		`stream, err := http.NewWebSocketServerStream(ctx)`,
 		`func (x *Greeter_ChatHelloHTTPClient) open(m *HelloRequest) error`,
-		`path *http.CompiledPath`,
+		`path *transcoding.CompiledPath`,
 		`path, err := x.path.Build(m)`,
 		`stream, err := x.cc.WebSocket(x.ctx, path, opts...)`,
 		`http.ContentType("application/protojson")`,
 		`return &Greeter_ChatHelloHTTPClient{ctx: ctx, cc: c.cc, path: _Greeter_ChatHello0_HTTP_Path, opts: opts}, nil`,
 		`http.ContentType(http.BodyContentType(in.GetBody()))`,
-		`http.WithOmitFields("body")`,
+		`transcoding.WithOmitFields("body")`,
 		`return ctx.Blob(200, http.BodyContentType(reply.GetBody()), reply.GetBody().GetData())`,
 		// Client-streaming RPC with a streamable (message-kind) named body field.
 		`stream, err := http.NewWebSocketServerStream(ctx, http.WithStreamBodyField("data"))`,
-		`return x.ClientStream.Send(m.GetData())`,
+		`return x.SendingClientStream.SendMsg(m.GetData())`,
 		// Client-streaming RPC with a scalar named body: whole message is streamed.
 		`func (x *Greeter_ChatTextHTTPClient) Send(m *ChatTextRequest) error`,
+		// A client-streaming RPC needs the sending half, so its client embeds the
+		// capability interface and gets Send at compile time.
+		"type Greeter_ChatHelloHTTPClient struct {\n\thttp.SendingClientStream",
+		// A server-streaming-only RPC never sends, so its client embeds the core
+		// interface, which has no Send to call.
+		"type Greeter_ListHelloHTTPClient struct {\n\thttp.ClientStream",
+		`if err := x.ClientStream.RecvMsg(m); err != nil {`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("generated template missing %q in:\n%s", want, got)
@@ -219,12 +231,131 @@ func TestHTTPTemplateStreamsAndHTTPBody(t *testing.T) {
 	}
 	// The whole-message streaming client (ChatHello) and the scalar-body streaming
 	// client (ChatText) must both send the whole message, not a sub-field.
-	if !strings.Contains(got, "return x.ClientStream.Send(m)\n") {
+	if !strings.Contains(got, "return x.SendingClientStream.SendMsg(m)\n") {
 		t.Fatalf("generated template should send whole message for non-streamable body:\n%s", got)
+	}
+	// A server-streaming-only client must never reach for the sending capability;
+	// embedding it would reintroduce a send method the SSE wire cannot honour.
+	if strings.Contains(got, "type Greeter_ListHelloHTTPClient struct {\n\thttp.SendingClientStream") {
+		t.Fatalf("server-streaming client must not embed the sending capability:\n%s", got)
 	}
 	// The scalar-body server handler must NOT receive a stream body-field option.
 	if strings.Contains(got, `http.WithStreamBodyField("text")`) {
 		t.Fatalf("scalar named body should not emit WithStreamBodyField:\n%s", got)
+	}
+}
+
+// newCollidingPlugin builds a plugin whose service messages live in an imported
+// Go package named goPackage. Naming that package "http", "context" or
+// "transcoding" makes it compete with a support package for the same alias.
+func newCollidingPlugin(t *testing.T, goPackage string) (*protogen.Plugin, string) {
+	t.Helper()
+	messages := &descriptorpb.FileDescriptorProto{
+		Name:    proto.String("collide/msg.proto"),
+		Package: proto.String("collide.msg"),
+		Syntax:  proto.String("proto3"),
+		Options: &descriptorpb.FileOptions{
+			GoPackage: proto.String("collide.test/" + goPackage + ";" + goPackage),
+		},
+		MessageType: []*descriptorpb.DescriptorProto{
+			{Name: proto.String("HelloRequest")},
+			{Name: proto.String("HelloReply")},
+		},
+	}
+	service := &descriptorpb.FileDescriptorProto{
+		Name:       proto.String("collide/svc.proto"),
+		Package:    proto.String("collide.svc"),
+		Syntax:     proto.String("proto3"),
+		Dependency: []string{"collide/msg.proto"},
+		Options:    &descriptorpb.FileOptions{GoPackage: proto.String("collide.test/svcpkg;svcpkg")},
+		Service: []*descriptorpb.ServiceDescriptorProto{{
+			Name: proto.String("Greeter"),
+			Method: []*descriptorpb.MethodDescriptorProto{{
+				Name:       proto.String("SayHello"),
+				InputType:  proto.String(".collide.msg.HelloRequest"),
+				OutputType: proto.String(".collide.msg.HelloReply"),
+			}},
+		}},
+	}
+	request := &pluginpb.CodeGeneratorRequest{
+		FileToGenerate: []string{service.GetName()},
+		ProtoFile:      []*descriptorpb.FileDescriptorProto{messages, service},
+	}
+	plugin, err := (protogen.Options{}).New(request)
+	if err != nil {
+		t.Fatalf("protogen.Options.New() error = %v", err)
+	}
+	return plugin, service.GetName()
+}
+
+// A .proto whose message package is named after one of the support packages must
+// still generate compilable code.
+//
+// protogen hands out an unsuffixed alias to whichever package claims it first and
+// suffixes the loser, so the generator cannot assume it owns "http", "context" or
+// "transcoding". The template therefore renders whatever alias protogen actually
+// assigned. To prove that resolution works rather than relying on the order the
+// generator happens to emit in today, each case qualifies the message type before
+// the support packages are referenced, which is what hands the bare name to the
+// message package.
+func TestGeneratesCorrectAliasesWhenMessagePackageCollides(t *testing.T) {
+	for _, goPackage := range []string{"http", "context", "transcoding"} {
+		t.Run(goPackage, func(t *testing.T) {
+			plugin, path := newCollidingPlugin(t, goPackage)
+			file := plugin.FilesByPath[path]
+			g := plugin.NewGeneratedFile("collide/svc_http.pb.go", file.GoImportPath)
+			g.P("package svcpkg")
+
+			// Claim the alias for the message package first, which is what forces
+			// protogen to suffix the support package that wants the same name.
+			messageIdent := g.QualifiedGoIdent(file.Services[0].Methods[0].Input.GoIdent)
+			if want := goPackage + ".HelloRequest"; messageIdent != want {
+				t.Fatalf("message package did not win the alias: got %q, want %q", messageIdent, want)
+			}
+
+			if err := generateHTTPFileContent(plugin, file, g, false, "/api"); err != nil {
+				t.Fatalf("generateHTTPFileContent() error = %v", err)
+			}
+			content, err := g.Content()
+			if err != nil {
+				t.Fatalf("Content() error = %v", err)
+			}
+			got := string(content)
+
+			// The support package lost the bare name, so every reference to it must
+			// carry the suffixed alias that protogen assigned instead.
+			suffixed := goPackage + "1"
+			var want []string
+			switch goPackage {
+			case "http":
+				want = []string{
+					"s *" + suffixed + ".Server",
+					"ctx " + suffixed + ".Context",
+					suffixed + ".SetOperation(",
+					suffixed + ".CallOption",
+				}
+			case "context":
+				want = []string{"ctx " + suffixed + ".Context"}
+			case "transcoding":
+				want = []string{suffixed + ".MustCompilePath(", suffixed + ".NewProtoJSON("}
+			}
+			for _, w := range want {
+				if !strings.Contains(got, w) {
+					t.Errorf("generated output is missing %q:\n%s", w, got)
+				}
+			}
+
+			// The message package owns the bare name here, so a bare qualifier that
+			// resolves to a support-package symbol is the defect this guards against.
+			for _, bad := range []string{
+				goPackage + ".Server", goPackage + ".CallOption", goPackage + ".SetOperation(",
+				goPackage + ".MustCompilePath(", goPackage + ".NewProtoJSON(",
+			} {
+				if strings.Contains(got, bad) {
+					t.Errorf("generated output references the message package as a support package (%q):\n%s", bad, got)
+				}
+			}
+		})
 	}
 }
 
@@ -295,8 +426,8 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 		`r.Handle("*", "/v1/any/{name}", _OpenService_AnyMethod0_HTTP_Handler(srv))`,
 		`out, err := srv.Alternate(ctx, &in)`,
 		`pattern := "/v1/{name=items/*}"`,
-		`return nil, http.ErrUnspecifiedHTTPMethod`,
-		`return nil, http.ErrUnboundPathWildcard`,
+		`return nil, transcoding.ErrUnspecifiedHTTPMethod`,
+		`return nil, transcoding.ErrUnboundPathWildcard`,
 	} {
 		if !bytes.Contains(generated, []byte(want)) {
 			t.Fatalf("generated output missing %q:\n%s", want, generated)
@@ -348,6 +479,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	forgehttp "github.com/sylphylabs/forge/transport/http"
+	forgetranscoding "github.com/sylphylabs/forge/transport/http/transcoding"
 	openpb "opaque.test/openpb"
 	testpb "opaque.test/testpb"
 )
@@ -586,43 +718,43 @@ func TestGeneratedGoogleHTTPConformance(t *testing.T) {
 		}
 	}
 
-	if _, err := openClient.AnyMethod(t.Context(), new(openpb.RouteRequest)); !errors.Is(err, forgehttp.ErrUnspecifiedHTTPMethod) {
+	if _, err := openClient.AnyMethod(t.Context(), new(openpb.RouteRequest)); !errors.Is(err, forgetranscoding.ErrUnspecifiedHTTPMethod) {
 		t.Fatalf("AnyMethod error = %v", err)
 	}
-	if _, err := openClient.BareWildcard(t.Context(), new(openpb.RouteRequest)); !errors.Is(err, forgehttp.ErrUnboundPathWildcard) {
+	if _, err := openClient.BareWildcard(t.Context(), new(openpb.RouteRequest)); !errors.Is(err, forgetranscoding.ErrUnboundPathWildcard) {
 		t.Fatalf("BareWildcard error = %v", err)
 	}
 }
 
 func echoField(in, out proto.Message, field string) {
-	data, err := json.Marshal(forgehttp.NewProtoJSONField(in, field))
+	data, err := json.Marshal(forgetranscoding.NewProtoJSONField(in, field))
 	if err != nil {
 		panic(err)
 	}
-	if err := json.Unmarshal(data, forgehttp.NewProtoJSONField(out, field)); err != nil {
+	if err := json.Unmarshal(data, forgetranscoding.NewProtoJSONField(out, field)); err != nil {
 		panic(err)
 	}
 }
 
 func echoMessage(in, out proto.Message) {
-	data, err := json.Marshal(forgehttp.NewProtoJSON(in))
+	data, err := json.Marshal(forgetranscoding.NewProtoJSON(in))
 	if err != nil {
 		panic(err)
 	}
-	if err := json.Unmarshal(data, forgehttp.NewProtoJSON(out)); err != nil {
+	if err := json.Unmarshal(data, forgetranscoding.NewProtoJSON(out)); err != nil {
 		panic(err)
 	}
 }
 
 func setFieldJSON(t *testing.T, message proto.Message, field, value string) {
 	t.Helper()
-	if err := json.Unmarshal([]byte(value), forgehttp.NewProtoJSONField(message, field)); err != nil {
+	if err := json.Unmarshal([]byte(value), forgetranscoding.NewProtoJSONField(message, field)); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func fieldJSON(message proto.Message, field string) string {
-	data, err := json.Marshal(forgehttp.NewProtoJSONField(message, field))
+	data, err := json.Marshal(forgetranscoding.NewProtoJSONField(message, field))
 	if err != nil {
 		panic(err)
 	}

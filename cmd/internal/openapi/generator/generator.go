@@ -52,9 +52,12 @@ type Configuration struct {
 }
 
 const (
-	infoURL                 = "https://github.com/sylphylabs/forge/tree/main/cmd/protoc-gen-openapi"
-	defaultOpenAPIVersion   = "3.2.0"
-	defaultErrorSchemaName  = "sylphy.errors.v1.Status"
+	infoURL = "https://github.com/sylphylabs/forge/tree/main/cmd/protoc-gen-openapi"
+	// DefaultOpenAPIVersion and DefaultErrorSchemaName are exported because the
+	// plugin uses them as flag defaults. Declaring them twice let the flag
+	// default and the fallback drift apart.
+	DefaultOpenAPIVersion   = "3.2.0"
+	DefaultErrorSchemaName  = "sylphy.errors.v1.Status"
 	defaultErrorDescription = "Forge error response"
 )
 
@@ -124,7 +127,7 @@ func (g *OpenAPIv3Generator) buildDocumentV3() (*v3.Document, error) {
 	d := &v3.Document{}
 	rules := httpbinding.NewSet()
 
-	d.Openapi = stringValue(g.conf.OpenAPIVersion, defaultOpenAPIVersion)
+	d.Openapi = stringValue(g.conf.OpenAPIVersion, DefaultOpenAPIVersion)
 	d.Info = &v3.Info{
 		Version:     *g.conf.Version,
 		Title:       *g.conf.Title,
@@ -301,6 +304,26 @@ func (g *OpenAPIv3Generator) buildQueryParamsV3(field *protogen.Field, coveredFi
 }
 
 // depths are used to keep track of how many times a message's fields has been seen
+// queryParameter builds an optional query parameter.
+//
+// Six arms of the well-known-type switch below differ only in how they compute
+// the schema, so the parameter they wrap is written once here. Path parameters
+// are not built through it: they are required and carry a different location,
+// and folding those differences in would mean passing them as flags.
+func queryParameter(name, description string, schema *v3.SchemaOrReference) *v3.ParameterOrReference {
+	return &v3.ParameterOrReference{
+		Oneof: &v3.ParameterOrReference_Parameter{
+			Parameter: &v3.Parameter{
+				Name:        name,
+				In:          inQuery,
+				Description: description,
+				Required:    false,
+				Schema:      schema,
+			},
+		},
+	}
+}
+
 func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, fieldPath string, depths map[string]int, covered []string) []*v3.ParameterOrReference {
 	parameters := []*v3.ParameterOrReference{}
 	if contains(covered, fieldPath) {
@@ -332,17 +355,7 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, fieldPat
 		case typeName == protobufValueTypeName:
 			fieldSchema := g.reflect.schemaOrReferenceForField(field.Desc)
 			parameters = append(parameters,
-				&v3.ParameterOrReference{
-					Oneof: &v3.ParameterOrReference_Parameter{
-						Parameter: &v3.Parameter{
-							Name:        queryFieldName,
-							In:          inQuery,
-							Description: fieldDescription,
-							Required:    false,
-							Schema:      fieldSchema,
-						},
-					},
-				})
+				queryParameter(queryFieldName, fieldDescription, fieldSchema))
 			return parameters
 
 		case typeName == ".google.protobuf.BoolValue", typeName == ".google.protobuf.BytesValue",
@@ -353,48 +366,18 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, fieldPat
 			valueField := getValueField(field.Message.Desc)
 			fieldSchema := g.reflect.schemaOrReferenceForField(valueField)
 			parameters = append(parameters,
-				&v3.ParameterOrReference{
-					Oneof: &v3.ParameterOrReference_Parameter{
-						Parameter: &v3.Parameter{
-							Name:        queryFieldName,
-							In:          inQuery,
-							Description: fieldDescription,
-							Required:    false,
-							Schema:      fieldSchema,
-						},
-					},
-				})
+				queryParameter(queryFieldName, fieldDescription, fieldSchema))
 			return parameters
 
 		case typeName == ".google.protobuf.Timestamp":
 			fieldSchema := g.reflect.schemaOrReferenceForMessage(field.Message.Desc)
 			parameters = append(parameters,
-				&v3.ParameterOrReference{
-					Oneof: &v3.ParameterOrReference_Parameter{
-						Parameter: &v3.Parameter{
-							Name:        queryFieldName,
-							In:          inQuery,
-							Description: fieldDescription,
-							Required:    false,
-							Schema:      fieldSchema,
-						},
-					},
-				})
+				queryParameter(queryFieldName, fieldDescription, fieldSchema))
 			return parameters
 		case typeName == ".google.protobuf.Duration":
 			fieldSchema := g.reflect.schemaOrReferenceForMessage(field.Message.Desc)
 			parameters = append(parameters,
-				&v3.ParameterOrReference{
-					Oneof: &v3.ParameterOrReference_Parameter{
-						Parameter: &v3.Parameter{
-							Name:        queryFieldName,
-							In:          inQuery,
-							Description: fieldDescription,
-							Required:    false,
-							Schema:      fieldSchema,
-						},
-					},
-				})
+				queryParameter(queryFieldName, fieldDescription, fieldSchema))
 			return parameters
 		}
 
@@ -407,17 +390,7 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, fieldPat
 		if typeName == ".google.protobuf.FieldMask" {
 			fieldSchema := g.reflect.schemaOrReferenceForField(field.Desc)
 			parameters = append(parameters,
-				&v3.ParameterOrReference{
-					Oneof: &v3.ParameterOrReference_Parameter{
-						Parameter: &v3.Parameter{
-							Name:        queryFieldName,
-							In:          inQuery,
-							Description: fieldDescription,
-							Required:    false,
-							Schema:      fieldSchema,
-						},
-					},
-				})
+				queryParameter(queryFieldName, fieldDescription, fieldSchema))
 			return parameters
 		}
 
@@ -447,17 +420,7 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, fieldPat
 		fieldSchema := g.reflect.schemaOrReferenceForField(field.Desc)
 
 		parameters = append(parameters,
-			&v3.ParameterOrReference{
-				Oneof: &v3.ParameterOrReference_Parameter{
-					Parameter: &v3.Parameter{
-						Name:        queryFieldName,
-						In:          inQuery,
-						Description: fieldDescription,
-						Required:    false,
-						Schema:      fieldSchema,
-					},
-				},
-			})
+			queryParameter(queryFieldName, fieldDescription, fieldSchema))
 	}
 
 	return parameters
@@ -717,7 +680,7 @@ func (g *OpenAPIv3Generator) addOperationToDocumentV3(d *v3.Document, op *v3.Ope
 }
 
 func (g *OpenAPIv3Generator) forgeErrorSchemaName() string {
-	return stringValue(g.conf.ErrorSchemaName, defaultErrorSchemaName)
+	return stringValue(g.conf.ErrorSchemaName, DefaultErrorSchemaName)
 }
 
 func (g *OpenAPIv3Generator) forgeErrorContent(d *v3.Document) *v3.MediaTypes {

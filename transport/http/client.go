@@ -7,12 +7,12 @@ import (
 	stderrors "errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"reflect"
 	"time"
 
 	"github.com/sylphylabs/forge/encoding"
-	"github.com/sylphylabs/forge/errors"
 	"github.com/sylphylabs/forge/internal/host"
 	"github.com/sylphylabs/forge/internal/httputil"
 	"github.com/sylphylabs/forge/middleware"
@@ -21,12 +21,6 @@ import (
 	"github.com/sylphylabs/forge/selector/wrr"
 	"github.com/sylphylabs/forge/transport"
 )
-
-func init() {
-	if selector.GlobalSelector() == nil {
-		selector.SetGlobalSelector(wrr.NewBuilder())
-	}
-}
 
 // DecodeErrorFunc is decode error func.
 type DecodeErrorFunc func(ctx context.Context, res *http.Response) error
@@ -56,10 +50,20 @@ type clientOptions struct {
 	transport            http.RoundTripper
 	roundTripperWrappers []RoundTripperWrapper
 	nodeFilters          []selector.NodeFilter
+	selectorBuilder      selector.Builder
 	discovery            registry.Discovery
 	middleware           []middleware.UnaryMiddleware
 	block                bool
 	subsetSize           int
+}
+
+// WithSelector sets the load-balancing policy this client uses to pick a node
+// among the ones discovery reports. Each client builds its own selector from
+// the builder, so two clients in one process can balance differently.
+func WithSelector(builder selector.Builder) ClientOption {
+	return func(o *clientOptions) {
+		o.selectorBuilder = builder
+	}
 }
 
 // WithSubset with client discovery subset size.
@@ -182,9 +186,16 @@ func NewClient(ctx context.Context, opts ...ClientOption) (*Client, error) {
 		errorDecoder: DefaultErrorDecoder,
 		transport:    http.DefaultTransport,
 		subsetSize:   25,
+		// Weighted round robin is the default policy because it needs no
+		// feedback beyond the weights discovery already reports, so it behaves
+		// sensibly for a client that never states a preference.
+		selectorBuilder: wrr.NewBuilder(),
 	}
 	for _, o := range opts {
 		o(&options)
+	}
+	if options.selectorBuilder == nil {
+		return nil, stderrors.New("[http client] selector builder is nil")
 	}
 	if isNilRoundTripper(options.transport) {
 		return nil, stderrors.New("[http client] transport is nil")
@@ -216,7 +227,7 @@ func NewClient(ctx context.Context, opts ...ClientOption) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	selector := selector.GlobalSelector().Build()
+	selector := options.selectorBuilder.Build()
 	var r *resolver
 	if options.discovery != nil {
 		if target.Scheme == schemeDiscovery {
@@ -359,7 +370,9 @@ func (client *Client) do(req *http.Request) (*http.Response, error) {
 			node selector.Node
 		)
 		if node, done, err = client.selector.Select(req.Context(), selector.WithNodeFilter(client.opts.nodeFilters...)); err != nil {
-			return nil, errors.ServiceUnavailable("NODE_NOT_FOUND", err.Error())
+			// Selection failed, so no connection was ever attempted and no
+			// byte of the request left this process.
+			return nil, transport.MarkNotSent(ErrNodeNotFound.Msg(err.Error()).Wrap(err))
 		}
 		if client.insecure {
 			req.URL.Scheme = schemeHTTP
@@ -370,6 +383,9 @@ func (client *Client) do(req *http.Request) (*http.Response, error) {
 		req.Host = node.Address()
 	}
 	resp, err := client.cc.Do(req)
+	if err != nil {
+		err = markUndelivered(err)
+	}
 	if err == nil {
 		t, ok := transport.FromClientContext(req.Context())
 		if ok {
@@ -389,6 +405,33 @@ func (client *Client) do(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
+// markUndelivered attaches [transport.MarkNotSent] to the errors an HTTP
+// round trip produces only before the request reaches the wire, and leaves
+// every other error untouched.
+//
+// The one shape that qualifies is a *net.OpError with Op "dial" anywhere in
+// the chain. net/http's Transport writes a request only after a connection is
+// established, so a failure attributed to the dial — connection refused, host
+// unresolved, TLS handshake rejected, the dial deadline expiring — happened
+// with no connection to write to. Acquiring a pooled connection funnels into
+// the same dial when the pool is empty, and a failure to obtain one surfaces
+// as that dial's error.
+//
+// Everything else stays unmarked, including the shapes that look retryable.
+// A request that was written and then lost its connection surfaces as a bare
+// io.EOF under *url.Error with no *net.OpError, which is indistinguishable at
+// this layer from a server that executed the request and failed to reply. A
+// response-side read error carries an OpError with Op "read", by which point
+// the request has certainly been delivered. Both are left for the caller to
+// treat as "may have executed".
+func markUndelivered(err error) error {
+	var oe *net.OpError
+	if stderrors.As(err, &oe) && oe.Op == "dial" {
+		return transport.MarkNotSent(err)
+	}
+	return err
+}
+
 // Close tears down the Transport and all underlying connections.
 func (client *Client) Close() error {
 	if client.r != nil {
@@ -405,9 +448,9 @@ func DefaultRequestEncoder(_ context.Context, contentType string, in any) ([]byt
 	name := httputil.ContentSubtype(contentType)
 	codec := encoding.GetCodec(name)
 	if codec == nil {
-		return nil, errors.BadRequest("CODEC", fmt.Sprintf("unregister Content-Type: %s", contentType))
+		return nil, ErrCodec.Msgf("unregistered Content-Type: %s", contentType)
 	}
-	body, err := codec.Marshal(in)
+	body, err := encodeWithCodec(codec, in)
 	if err != nil {
 		return nil, err
 	}
@@ -422,14 +465,19 @@ func DefaultResponseDecoder(_ context.Context, res *http.Response, v any) error 
 		return err
 	}
 	if body, ok := httpBody(v); ok {
-		body.ContentType = res.Header.Get("Content-Type")
-		body.Data = data
+		body.SetContentType(res.Header.Get("Content-Type"))
+		body.SetData(data)
 		return nil
 	}
-	return CodecForResponse(res).Unmarshal(data, v)
+	return decodeWithCodec(CodecForResponse(res), data, v)
 }
 
 // DefaultErrorDecoder is an HTTP error decoder.
+//
+// A body carrying a Forge error representation is preferred, because it names
+// the kind and reason the server chose. The status line is only a fallback: it
+// is the one signal available when the peer is not a Forge server, or when a
+// proxy replaced the body.
 func DefaultErrorDecoder(_ context.Context, res *http.Response) error {
 	if res.StatusCode >= 200 && res.StatusCode <= 299 {
 		return nil
@@ -437,13 +485,11 @@ func DefaultErrorDecoder(_ context.Context, res *http.Response) error {
 	defer res.Body.Close()
 	data, err := io.ReadAll(res.Body)
 	if err == nil {
-		e := new(errors.Error)
-		if err = CodecForResponse(res).Unmarshal(data, e); err == nil {
-			e.Code = int32(res.StatusCode)
-			return e
+		if decoded, ok := unmarshalProblem(res.Header.Get("Content-Type"), data, res.StatusCode); ok {
+			return decoded
 		}
 	}
-	return errors.Newf(res.StatusCode, errors.UnknownReason, "").WithCause(err)
+	return ErrorFromStatus(res.StatusCode).Wrap(err)
 }
 
 // CodecForResponse get encoding.Codec via http.Response

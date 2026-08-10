@@ -363,8 +363,8 @@ func validateOpenAPI32(t *testing.T, content string) {
 	if err != nil {
 		t.Fatalf("parse generated OpenAPI with libopenapi: %v", err)
 	}
-	if document.GetSpecInfo().Version != defaultOpenAPIVersion {
-		t.Fatalf("independent parser version = %q, want %q", document.GetSpecInfo().Version, defaultOpenAPIVersion)
+	if document.GetSpecInfo().Version != openapigen.DefaultOpenAPIVersion {
+		t.Fatalf("independent parser version = %q, want %q", document.GetSpecInfo().Version, openapigen.DefaultOpenAPIVersion)
 	}
 	compiler := jsonschema.NewCompiler()
 	officialSchema, err := jsonschema.UnmarshalJSON(bytes.NewBufferString(document.GetSpecInfo().APISchema))
@@ -742,7 +742,7 @@ func newOpenAPIPluginForFile(t *testing.T, file *descriptorpb.FileDescriptorProt
 }
 
 func testConfig() openapigen.Configuration {
-	openapiVersion := defaultOpenAPIVersion
+	openapiVersion := openapigen.DefaultOpenAPIVersion
 	version := "v1"
 	title := "Test API"
 	description := ""
@@ -751,7 +751,7 @@ func testConfig() openapigen.Configuration {
 	enumType := "string"
 	circularDepth := 2
 	defaultResponse := true
-	errorSchemaName := defaultErrorSchemaName
+	errorSchemaName := openapigen.DefaultErrorSchemaName
 	outputMode := "merged"
 	return openapigen.Configuration{
 		OpenAPIVersion:  &openapiVersion,

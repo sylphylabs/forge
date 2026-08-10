@@ -6,13 +6,40 @@ import (
 	"log/slog"
 	"time"
 
-	"google.golang.org/grpc/codes"
-
 	"github.com/sylphylabs/forge/errors"
 	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/transport"
-	"github.com/sylphylabs/forge/transport/http/status"
 )
+
+// errorAttrs describes err for a log record.
+//
+// A failure is logged by kind and reason rather than by a transport status
+// code: the kind is what the service decided, while a status code is a
+// projection of it that differs per transport. The trace ID is included so that
+// an operator handed one by a caller can find this record, which is what makes
+// a redacted response diagnosable.
+func errorAttrs(err error) []slog.Attr {
+	if err == nil {
+		return []slog.Attr{slog.String("error_kind", errors.KindUnknown.String())}
+	}
+	e := errors.FromError(err)
+	attrs := []slog.Attr{
+		slog.String("error_kind", e.Kind().String()),
+		slog.String("reason", e.Reason()),
+	}
+	if domain := e.Domain(); domain != "" {
+		attrs = append(attrs, slog.String("domain", domain))
+	}
+	if trace := e.TraceID(); trace != "" {
+		attrs = append(attrs, slog.String("trace_id", trace))
+	}
+	// The full error, including the cause chain that never crosses the wire.
+	attrs = append(attrs, slog.Any("error", err))
+	if _, stack := extractError(err); stack != "" {
+		attrs = append(attrs, slog.String("stack", stack))
+	}
+	return attrs
+}
 
 // Redacter defines how to log an object
 type Redacter interface {
@@ -38,28 +65,14 @@ func Server(logger *slog.Logger) middleware.UnaryMiddleware {
 				return
 			}
 
-			code := int32(status.FromGRPCCode(codes.OK))
-			var reason string
-			if se := errors.FromError(err); se != nil {
-				code = se.Code
-				reason = se.Reason
-			}
-			_, stack := extractError(err)
 			attrs := []slog.Attr{
 				slog.String("kind", "server"),
 				slog.String("component", kind),
 				slog.String("operation", operation),
 				slog.String("args", extractArgs(req)),
-				slog.Int64("code", int64(code)),
-				slog.String("reason", reason),
 				slog.Float64("latency", time.Since(startTime).Seconds()),
 			}
-			if err != nil {
-				attrs = append(attrs, slog.Any("error", err))
-				if stack != "" {
-					attrs = append(attrs, slog.String("stack", stack))
-				}
-			}
+			attrs = append(attrs, errorAttrs(err)...)
 			logger.LogAttrs(ctx, level, "server request", attrs...)
 			return
 		}
@@ -85,28 +98,14 @@ func Client(logger *slog.Logger) middleware.UnaryMiddleware {
 				return
 			}
 
-			code := int32(status.FromGRPCCode(codes.OK))
-			var reason string
-			if se := errors.FromError(err); se != nil {
-				code = se.Code
-				reason = se.Reason
-			}
-			_, stack := extractError(err)
 			attrs := []slog.Attr{
 				slog.String("kind", "client"),
 				slog.String("component", kind),
 				slog.String("operation", operation),
 				slog.String("args", extractArgs(req)),
-				slog.Int64("code", int64(code)),
-				slog.String("reason", reason),
 				slog.Float64("latency", time.Since(startTime).Seconds()),
 			}
-			if err != nil {
-				attrs = append(attrs, slog.Any("error", err))
-				if stack != "" {
-					attrs = append(attrs, slog.String("stack", stack))
-				}
-			}
+			attrs = append(attrs, errorAttrs(err)...)
 			logger.LogAttrs(ctx, level, "client request", attrs...)
 			return
 		}

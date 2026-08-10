@@ -24,7 +24,7 @@ func TestRecoveryStreamRecoversPanic(t *testing.T) {
 		if _, ok := ctx.Value(Latency{}).(float64); !ok {
 			t.Error("latency missing from context")
 		}
-		return errors.InternalServer("RECOVERY", fmt.Sprintf("panic triggered: %v", rerr))
+		return errors.New(errors.KindInternal).WithReason("RECOVERY").Msg(fmt.Sprintf("panic triggered: %v", rerr))
 	}))(next)(nil, &testStream{ctx: t.Context()})
 
 	if err == nil {
@@ -60,7 +60,7 @@ func TestRecoveryStreamWithoutPanic(t *testing.T) {
 }
 
 func TestRecoveryStreamPropagatesHandlerError(t *testing.T) {
-	want := errors.InternalServer("STREAM", "stream failed")
+	want := errors.New(errors.KindInternal).WithReason("STREAM").Msg("stream failed")
 	next := func(any, middleware.ServerStream) error {
 		return want
 	}

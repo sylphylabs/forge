@@ -3,7 +3,7 @@ package http
 import (
 	"context"
 	"crypto/tls"
-	"errors"
+	stderrors "errors"
 	"net"
 	"net/http"
 	"net/url"
@@ -297,7 +297,7 @@ func (s *Server) Start(ctx context.Context) error {
 	} else {
 		err = s.Serve(s.lis)
 	}
-	if !errors.Is(err, http.ErrServerClosed) {
+	if !stderrors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil

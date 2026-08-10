@@ -4,12 +4,8 @@ import (
 	"log/slog"
 	"time"
 
-	"google.golang.org/grpc/codes"
-
-	"github.com/sylphylabs/forge/errors"
 	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/transport"
-	"github.com/sylphylabs/forge/transport/http/status"
 )
 
 // ServerStream is a server logging middleware for streaming methods.
@@ -43,32 +39,18 @@ func ServerStream(logger *slog.Logger) middleware.StreamMiddleware {
 				return err
 			}
 
-			code := int32(status.FromGRPCCode(codes.OK))
-			var reason string
-			if se := errors.FromError(err); se != nil {
-				code = se.Code
-				reason = se.Reason
-			}
 			var args string
 			if request != nil {
 				args = extractArgs(request)
 			}
-			_, stack := extractError(err)
 			attrs := []slog.Attr{
 				slog.String("kind", "server"),
 				slog.String("component", kind),
 				slog.String("operation", operation),
 				slog.String("args", args),
-				slog.Int64("code", int64(code)),
-				slog.String("reason", reason),
 				slog.Float64("latency", time.Since(startTime).Seconds()),
 			}
-			if err != nil {
-				attrs = append(attrs, slog.Any("error", err))
-				if stack != "" {
-					attrs = append(attrs, slog.String("stack", stack))
-				}
-			}
+			attrs = append(attrs, errorAttrs(err)...)
 			logger.LogAttrs(ctx, level, "server stream", attrs...)
 			return err
 		}

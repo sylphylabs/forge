@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -22,6 +23,8 @@ import (
 	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/registry"
 	"github.com/sylphylabs/forge/selector"
+	"github.com/sylphylabs/forge/selector/wrr"
+	"github.com/sylphylabs/forge/transport"
 )
 
 type mockRoundTripper struct{}
@@ -242,6 +245,73 @@ func TestWithNodeFilter(t *testing.T) {
 	}
 }
 
+// countingBuilder records how many selectors it built, so a test can tell
+// whether a client consulted the policy it was given.
+type countingBuilder struct {
+	built int
+	inner selector.Builder
+}
+
+func (b *countingBuilder) Build() selector.Selector {
+	b.built++
+	return b.inner.Build()
+}
+
+func TestNewClientUsesConfiguredSelector(t *testing.T) {
+	configured := &countingBuilder{inner: wrr.NewBuilder()}
+	client, err := NewClient(t.Context(), WithSelector(configured))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	if configured.built != 1 {
+		t.Fatalf("configured selector built %d times, want 1", configured.built)
+	}
+}
+
+// TestNewClientSelectorsAreIndependent proves two clients in one process
+// balance with their own policy rather than a shared one.
+func TestNewClientSelectorsAreIndependent(t *testing.T) {
+	first := &countingBuilder{inner: wrr.NewBuilder()}
+	second := &countingBuilder{inner: wrr.NewBuilder()}
+
+	for _, b := range []*countingBuilder{first, second} {
+		client, err := NewClient(t.Context(), WithSelector(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer client.Close()
+	}
+
+	if first.built != 1 || second.built != 1 {
+		t.Fatalf("built first=%d second=%d, want 1 each", first.built, second.built)
+	}
+	if first.inner == second.inner {
+		t.Fatal("expected two independent policies")
+	}
+}
+
+func TestNewClientRejectsNilSelector(t *testing.T) {
+	if _, err := NewClient(t.Context(), WithSelector(nil)); err == nil {
+		t.Fatal("expected an error for a nil selector builder, got nil")
+	}
+}
+
+// TestNewClientDefaultsToWRR pins the default policy to the package rather
+// than to whichever transport happened to be linked first.
+func TestNewClientDefaultsToWRR(t *testing.T) {
+	client, err := NewClient(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	if client.selector == nil {
+		t.Fatal("expected a default selector, got nil")
+	}
+}
+
 func TestDefaultRequestEncoder(t *testing.T) {
 	r, _ := http.NewRequest(http.MethodPost, "", io.NopCloser(bytes.NewBufferString(`{"a":"1", "b": 2}`)))
 	r.Header.Set("Content-Type", "application/xml")
@@ -287,8 +357,8 @@ func TestDefaultRequestEncoderUnknownCodec(t *testing.T) {
 	if !errors.As(err, &se) {
 		t.Fatalf("expected forge error, got %T", err)
 	}
-	if se.Reason != "CODEC" {
-		t.Errorf("expected %v, got %v", "CODEC", se.Reason)
+	if se.Reason() != "CODEC" {
+		t.Errorf("expected %v, got %v", "CODEC", se.Reason())
 	}
 }
 
@@ -417,23 +487,60 @@ func TestDefaultErrorDecoder(t *testing.T) {
 		t.Errorf("expected error, got nil")
 	}
 
+	// A body carrying a Forge error is preferred over the status line, because
+	// it names the kind and reason the server chose.
 	resp2 := &http.Response{
-		Header:     make(http.Header),
-		StatusCode: 500,
-		Body:       io.NopCloser(bytes.NewBufferString(`{"code":54321, "message": "hi", "reason": "FOO"}`)),
+		Header:     http.Header{"Content-Type": []string{ProblemContentType}},
+		StatusCode: http.StatusNotFound,
+		Body: io.NopCloser(bytes.NewBufferString(
+			`{"kind":"NOT_FOUND", "domain":"test.v1", "reason":"FOO", "message":"hi"}`)),
 	}
 	err := DefaultErrorDecoder(context.TODO(), resp2)
 	if err == nil {
-		t.Errorf("expected error, got nil")
+		t.Fatal("expected error, got nil")
 	}
-	if err.(*forgeerrors.Error).Code != int32(500) {
-		t.Errorf("expected %v, got %v", 500, err.(*forgeerrors.Error).Code)
+	decoded, ok := err.(*forgeerrors.Error)
+	if !ok {
+		t.Fatalf("error type = %T, want *forgeerrors.Error", err)
 	}
-	if err.(*forgeerrors.Error).Message != "hi" {
-		t.Errorf("expected %v, got %v", "hi", err.(*forgeerrors.Error).Message)
+	if decoded.Kind() != forgeerrors.KindNotFound {
+		t.Errorf("kind = %v, want KindNotFound", decoded.Kind())
 	}
-	if err.(*forgeerrors.Error).Reason != "FOO" {
-		t.Errorf("expected %v, got %v", "FOO", err.(*forgeerrors.Error).Reason)
+	if decoded.Message() != "hi" {
+		t.Errorf("message = %q, want %q", decoded.Message(), "hi")
+	}
+	if decoded.Reason() != "FOO" {
+		t.Errorf("reason = %q, want %q", decoded.Reason(), "FOO")
+	}
+
+	// UNKNOWN is a real wire kind, not evidence that the body is unrelated.
+	// Its identity and diagnostic fields must survive instead of being replaced
+	// by the 500 status fallback.
+	respUnknown := &http.Response{
+		Header:     http.Header{"Content-Type": []string{ProblemContentType}},
+		StatusCode: http.StatusInternalServerError,
+		Body: io.NopCloser(bytes.NewBufferString(
+			`{"kind":"UNKNOWN", "domain":"test.v1", "reason":"OPAQUE", "message":"redacted"}`)),
+	}
+	unknown := DefaultErrorDecoder(context.TODO(), respUnknown)
+	unknownError, ok := unknown.(*forgeerrors.Error)
+	if !ok {
+		t.Fatalf("unknown error type = %T, want *forgeerrors.Error", unknown)
+	}
+	if unknownError.Kind() != forgeerrors.KindUnknown || unknownError.Reason() != "OPAQUE" {
+		t.Errorf("unknown error = %v/%q", unknownError.Kind(), unknownError.Reason())
+	}
+
+	// A body that carries no Forge error leaves the status line as the only
+	// signal, which is what happens when the peer is not a Forge server.
+	resp3 := &http.Response{
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		StatusCode: http.StatusServiceUnavailable,
+		Body:       io.NopCloser(bytes.NewBufferString(`{"unrelated":"payload"}`)),
+	}
+	fallback := DefaultErrorDecoder(context.TODO(), resp3)
+	if got := forgeerrors.KindOf(fallback); got != forgeerrors.KindUnavailable {
+		t.Errorf("fallback kind = %v, want KindUnavailable", got)
 	}
 }
 
@@ -655,4 +762,67 @@ func TestNewClientRejectsInvalidRoundTripperWrappers(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The retry layer trusts the transport's claim that a request never left the
+// process, so the boundary between "never dialed" and "sent and lost" has to
+// hold on real connections rather than by inspection of the code.
+func TestClientMarksOnlyUndeliveredRequests(t *testing.T) {
+	t.Run("dial failure is marked", func(t *testing.T) {
+		// Port 1 on loopback refuses connections, so the request body is
+		// never written.
+		client, err := NewClient(context.Background(), WithEndpoint("127.0.0.1:1"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = client.Close() })
+
+		var reply struct{}
+		err = client.Invoke(context.Background(), http.MethodPost, "/x", map[string]string{"a": "b"}, &reply)
+		if err == nil {
+			t.Fatal("want a dial failure")
+		}
+		if !transport.WasNotSent(err) {
+			t.Errorf("a refused dial must be marked undelivered, got %v", err)
+		}
+	})
+
+	t.Run("a delivered request whose reply is lost is not marked", func(t *testing.T) {
+		// Read the request to completion, then drop the connection without
+		// answering. The server may well have executed the work, so this
+		// must not be marked.
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = ln.Close() })
+		go func() {
+			for {
+				c, acceptErr := ln.Accept()
+				if acceptErr != nil {
+					return
+				}
+				go func(c net.Conn) {
+					defer c.Close()
+					buf := make([]byte, 4096)
+					_, _ = c.Read(buf)
+				}(c)
+			}
+		}()
+
+		client, err := NewClient(context.Background(), WithEndpoint(ln.Addr().String()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = client.Close() })
+
+		var reply struct{}
+		err = client.Invoke(context.Background(), http.MethodPost, "/x", map[string]string{"a": "b"}, &reply)
+		if err == nil {
+			t.Fatal("want a transport failure")
+		}
+		if transport.WasNotSent(err) {
+			t.Errorf("a request that reached the server must not be marked undelivered, got %v", err)
+		}
+	})
 }

@@ -31,7 +31,7 @@ type flakyGreeter struct {
 
 func (s *flakyGreeter) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	if s.calls.Add(1) <= s.failures {
-		return nil, errors.ServiceUnavailable("FLAKY", "transient failure")
+		return nil, errors.New(errors.KindUnavailable).WithReason("FLAKY").Msg("transient failure")
 	}
 	return &pb.HelloReply{Message: fmt.Sprintf("Hello %s", in.Name)}, nil
 }
@@ -66,7 +66,10 @@ func TestGRPCClientRetries(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 
-	reply, err := pb.NewGreeterClient(conn).SayHello(ctx, &pb.HelloRequest{Name: "forge"})
+	// The server receives and rejects each attempt, so there is no proof the
+	// request went undelivered; the declaration is what authorizes the retry.
+	idem := retry.Idempotent(ctx)
+	reply, err := pb.NewGreeterClient(conn).SayHello(idem, &pb.HelloRequest{Name: "forge"})
 	if err != nil {
 		t.Fatalf("call must succeed within the retry budget, got %v", err)
 	}
@@ -81,7 +84,7 @@ func TestGRPCClientRetries(t *testing.T) {
 	// surfaces the last error.
 	greeter.calls.Store(0)
 	greeter.failures = 99
-	if _, err := pb.NewGreeterClient(conn).SayHello(ctx, &pb.HelloRequest{Name: "forge"}); !errors.IsServiceUnavailable(err) {
+	if _, err := pb.NewGreeterClient(conn).SayHello(idem, &pb.HelloRequest{Name: "forge"}); errors.KindOf(err) != errors.KindUnavailable {
 		t.Fatalf("want the last transient error, got %v", err)
 	}
 	if got := greeter.calls.Load(); got != 3 {
@@ -122,7 +125,9 @@ func TestHTTPClientRetries(t *testing.T) {
 		Message string `json:"message"`
 	}
 	args := map[string]string{"name": "forge"}
-	if err := client.Invoke(ctx, http.MethodPost, "/hello", args, &reply); err != nil {
+	// The server answers each attempt with 503, which proves delivery rather
+	// than the opposite, so the retry rests on the idempotence declaration.
+	if err := client.Invoke(retry.Idempotent(ctx), http.MethodPost, "/hello", args, &reply); err != nil {
 		t.Fatalf("call must succeed within the retry budget, got %v", err)
 	}
 	if reply.Message != "ok" {
@@ -164,7 +169,7 @@ func TestHTTPClientDoesNotRetryClientErrors(t *testing.T) {
 	t.Cleanup(func() { _ = client.Close() })
 
 	var reply struct{}
-	if err := client.Invoke(ctx, http.MethodGet, "/hello", nil, &reply); !errors.IsBadRequest(err) {
+	if err := client.Invoke(ctx, http.MethodGet, "/hello", nil, &reply); errors.KindOf(err) != errors.KindInvalidArgument {
 		t.Fatalf("want the client error unchanged, got %v", err)
 	}
 	if got := calls.Load(); got != 1 {

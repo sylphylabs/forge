@@ -14,12 +14,16 @@ import (
 const Name = "json"
 
 var (
-	// MarshalOptions is a configurable JSON format marshaller.
-	MarshalOptions = protojson.MarshalOptions{
+	// marshalOptions pins the wire-format settings for all protojson responses produced by
+	// this codec. Keeping this unexported prevents any imported package from silently
+	// changing the serialisation behaviour of unrelated code running in the same process.
+	marshalOptions = protojson.MarshalOptions{
 		EmitUnpopulated: true,
 	}
-	// UnmarshalOptions is a configurable JSON format parser.
-	UnmarshalOptions = protojson.UnmarshalOptions{
+	// unmarshalOptions pins the wire-format settings for all protojson parsing done by
+	// this codec. Keeping this unexported prevents any imported package from silently
+	// changing the deserialisation behaviour of unrelated code running in the same process.
+	unmarshalOptions = protojson.UnmarshalOptions{
 		DiscardUnknown: true,
 	}
 )
@@ -36,7 +40,7 @@ func (codec) Marshal(v any) ([]byte, error) {
 	case json.Marshaler:
 		return m.MarshalJSON()
 	case proto.Message:
-		return MarshalOptions.Marshal(m)
+		return marshalOptions.Marshal(m)
 	default:
 		return json.Marshal(m)
 	}
@@ -50,7 +54,7 @@ func (codec) Unmarshal(data []byte, v any) error {
 	case json.Unmarshaler:
 		return m.UnmarshalJSON(data)
 	case proto.Message:
-		return UnmarshalOptions.Unmarshal(data, m)
+		return unmarshalOptions.Unmarshal(data, m)
 	default:
 		rv := reflect.ValueOf(v)
 		for rv := rv; rv.Kind() == reflect.Pointer; {
@@ -60,7 +64,7 @@ func (codec) Unmarshal(data []byte, v any) error {
 			rv = rv.Elem()
 		}
 		if m, ok := reflect.Indirect(rv).Interface().(proto.Message); ok {
-			return UnmarshalOptions.Unmarshal(data, m)
+			return unmarshalOptions.Unmarshal(data, m)
 		}
 		return json.Unmarshal(data, m)
 	}

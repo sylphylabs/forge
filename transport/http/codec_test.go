@@ -11,7 +11,6 @@ import (
 
 	"google.golang.org/genproto/googleapis/api/httpbody"
 
-	"github.com/sylphylabs/forge/encoding"
 	_ "github.com/sylphylabs/forge/encoding/protojson"
 	"github.com/sylphylabs/forge/errors"
 	"github.com/sylphylabs/forge/internal/testdata/binding"
@@ -98,7 +97,7 @@ func TestDefaultRequestDecoderNonEmptyBodyRequiresContentType(t *testing.T) {
 	}
 	var target struct{}
 	err = DefaultRequestDecoder(r, &target)
-	if err == nil || !strings.Contains(err.Error(), "unregister Content-Type") {
+	if err == nil || !strings.Contains(err.Error(), "unregistered Content-Type") {
 		t.Fatalf("non-empty body error = %v, want unregistered Content-Type", err)
 	}
 }
@@ -224,20 +223,6 @@ func (w *mockResponseWriter) WriteHeader(statusCode int) {
 	w.StatusCode = statusCode
 }
 
-type errorCodec struct{}
-
-func (errorCodec) Marshal(any) ([]byte, error) {
-	return nil, errors.New(500, "mock", "marshal error")
-}
-
-func (errorCodec) Unmarshal([]byte, any) error {
-	return nil
-}
-
-func (errorCodec) Name() string {
-	return "mock"
-}
-
 func TestDefaultResponseEncoder(t *testing.T) {
 	var (
 		w    = &mockResponseWriter{StatusCode: 200, header: make(http.Header)}
@@ -290,16 +275,17 @@ func TestDefaultErrorEncoder(t *testing.T) {
 	var (
 		w    = &mockResponseWriter{header: make(http.Header)}
 		r, _ = http.NewRequest(http.MethodPost, "", nil)
-		err  = errors.New(511, "", "")
+		err  = errors.New(errors.KindInternal)
 	)
 	r.Header.Set("Content-Type", "application/json")
 
 	DefaultErrorEncoder(w, r, err)
-	if w.Header().Get("Content-Type") != "application/json" {
-		t.Errorf("expected %v, got %v", "application/json", w.Header().Get("Content-Type"))
+	// An error has one representation whatever the request asked for.
+	if w.Header().Get("Content-Type") != ProblemContentType {
+		t.Errorf("expected %v, got %v", ProblemContentType, w.Header().Get("Content-Type"))
 	}
-	if w.StatusCode != 511 {
-		t.Errorf("expected %v, got %v", 511, w.StatusCode)
+	if w.StatusCode != http.StatusInternalServerError {
+		t.Errorf("status = %v, want %v", w.StatusCode, http.StatusInternalServerError)
 	}
 	if w.Data == nil {
 		t.Errorf("expected not nil, got %v", w.Data)
@@ -320,22 +306,28 @@ func TestDefaultErrorEncoderRedirect(t *testing.T) {
 	}
 }
 
-func TestDefaultErrorEncoderMarshalError(t *testing.T) {
-	encoding.RegisterCodec(errorCodec{})
-	w := &mockResponseWriter{header: make(http.Header)}
-	r, _ := http.NewRequest(http.MethodGet, "", nil)
-	r.Header.Set("Accept", "application/mock")
+// An error response does not take part in content negotiation, so a codec that
+// cannot marshal is no longer reachable from this path. What must hold instead
+// is that an exotic Accept header changes nothing about the response.
+func TestDefaultErrorEncoderIgnoresAccept(t *testing.T) {
+	for _, accept := range []string{"", "application/json", "application/protojson", "application/mock"} {
+		w := &mockResponseWriter{header: make(http.Header)}
+		r, _ := http.NewRequest(http.MethodGet, "", nil)
+		if accept != "" {
+			r.Header.Set("Accept", accept)
+		}
 
-	DefaultErrorEncoder(w, r, errors.New(500, "mock", "marshal error"))
+		DefaultErrorEncoder(w, r, errors.New(errors.KindInternal).WithReason("MOCK").Msg("boom"))
 
-	if w.StatusCode != http.StatusInternalServerError {
-		t.Errorf("expected %v, got %v", http.StatusInternalServerError, w.StatusCode)
-	}
-	if w.Header().Get("Content-Type") != "" {
-		t.Errorf("expected empty content type, got %v", w.Header().Get("Content-Type"))
-	}
-	if w.Data != nil {
-		t.Errorf("expected nil, got %v", w.Data)
+		if got := w.Header().Get("Content-Type"); got != ProblemContentType {
+			t.Errorf("Accept %q: content type = %v, want %v", accept, got, ProblemContentType)
+		}
+		if w.StatusCode != http.StatusInternalServerError {
+			t.Errorf("Accept %q: status = %v, want %v", accept, w.StatusCode, http.StatusInternalServerError)
+		}
+		if !bytes.Contains(w.Data, []byte(`"reason":"MOCK"`)) {
+			t.Errorf("Accept %q: body = %s, want it to carry the reason", accept, w.Data)
+		}
 	}
 }
 

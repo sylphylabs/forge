@@ -20,6 +20,7 @@ import (
 const (
 	contextPackage       = protogen.GoImportPath("context")
 	transportHTTPPackage = protogen.GoImportPath("github.com/sylphylabs/forge/transport/http")
+	transcodingPackage   = protogen.GoImportPath("github.com/sylphylabs/forge/transport/http/transcoding")
 	httpBodyFullName     = protoreflect.FullName("google.api.HttpBody")
 )
 
@@ -57,15 +58,45 @@ func generateHTTPFileContent(gen *protogen.Plugin, file *protogen.File, g *proto
 	g.P("// is compatible with the forge package it is being compiled against.")
 	g.P("var _ = new(", contextPackage.Ident("Context"), ")")
 	g.P("const _ = ", transportHTTPPackage.Ident("SupportPackageIsVersion5"))
+	// Generated bindings project Protobuf messages onto HTTP, so they carry the
+	// schema runtime. A service without generated bindings never imports it and
+	// therefore never links the Protobuf reflection it needs.
+	g.P("const _ = ", transcodingPackage.Ident("SupportPackageIsVersion1"))
 	g.P()
+
+	// QualifiedGoIdent returns the name protogen will use for the package in this
+	// file, which the template needs in order to qualify its references. The
+	// assertions above claim these three packages before any message type is
+	// qualified, so today they win the unsuffixed alias and a message package that
+	// wants the same name is renamed instead. Resolving the names rather than
+	// assuming them keeps the output correct if that order ever changes.
+	idents := packageIdents{
+		http:        resolveIdent(g, transportHTTPPackage, "Server"),
+		context:     resolveIdent(g, contextPackage, "Context"),
+		transcoding: resolveIdent(g, transcodingPackage, "MustCompilePath"),
+	}
 
 	rules := httpbinding.NewSet()
 	for _, service := range file.Services {
-		if err := genService(gen, file, g, service, omitempty, omitemptyPrefix, rules); err != nil {
+		if err := genService(gen, file, g, service, omitempty, omitemptyPrefix, rules, idents); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// packageIdents carries the resolved package aliases from the generated file to
+// the template.
+type packageIdents struct {
+	http        string
+	context     string
+	transcoding string
+}
+
+// resolveIdent returns the alias protogen assigns to pkg in g, by qualifying a
+// symbol known to exist in it and dropping the symbol suffix.
+func resolveIdent(g *protogen.GeneratedFile, pkg protogen.GoImportPath, symbol string) string {
+	return strings.TrimSuffix(g.QualifiedGoIdent(pkg.Ident(symbol)), "."+symbol)
 }
 
 func genService(
@@ -76,6 +107,7 @@ func genService(
 	omitempty bool,
 	omitemptyPrefix string,
 	rules *httpbinding.Set,
+	idents packageIdents,
 ) error {
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 		g.P("//")
@@ -83,10 +115,13 @@ func genService(
 	}
 	// HTTP Server.
 	sd := &serviceDesc{
-		ServiceType: service.GoName,
-		ServiceName: string(service.Desc.FullName()),
-		Metadata:    file.Desc.Path(),
-		MethodSet:   1,
+		ServiceType:      service.GoName,
+		ServiceName:      string(service.Desc.FullName()),
+		Metadata:         file.Desc.Path(),
+		MethodSet:        1,
+		HTTPIdent:        idents.http,
+		ContextIdent:     idents.context,
+		TranscodingIdent: idents.transcoding,
 	}
 	if !omitempty {
 		sd.MethodSet = 2

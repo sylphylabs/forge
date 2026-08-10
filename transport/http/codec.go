@@ -2,16 +2,10 @@ package http
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"net/http"
-	"reflect"
-
-	"google.golang.org/genproto/googleapis/api/httpbody"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/sylphylabs/forge/encoding"
-	"github.com/sylphylabs/forge/encoding/form"
 	"github.com/sylphylabs/forge/errors"
 	"github.com/sylphylabs/forge/internal/httputil"
 )
@@ -22,8 +16,6 @@ const (
 )
 
 const defaultHTTPBodyContentType = "application/octet-stream"
-
-var protoMessageType = reflect.TypeOf((*proto.Message)(nil)).Elem()
 
 // Redirector replies to the request with a redirect to url
 // which may be a path relative to the request path.
@@ -52,15 +44,15 @@ type EncodeErrorFunc func(http.ResponseWriter, *http.Request, error)
 
 // DefaultRequestVars decodes the request vars to object.
 func DefaultRequestVars(r *http.Request, v any) error {
-	if msg, ok := v.(proto.Message); ok && msg != nil {
-		if route, ok := routeFromRequest(r); ok {
-			for _, variable := range route.vars {
-				if err := form.DecodeValue(msg, variable.name, r.PathValue(variable.name)); err != nil {
-					return errors.BadRequest("CODEC", err.Error())
-				}
-			}
-			return nil
+	if route, ok := routeFromRequest(r); ok && schemaOwns(v) {
+		vars := make([]PathVar, 0, len(route.vars))
+		for _, variable := range route.vars {
+			vars = append(vars, PathVar{Name: variable.name, Value: r.PathValue(variable.name)})
 		}
+		if err := schema.BindPath(v, vars); err != nil {
+			return ErrCodec.Msg(err.Error()).Wrap(err)
+		}
+		return nil
 	}
 	return bindQuery(requestVars(r), v)
 }
@@ -79,26 +71,26 @@ func DefaultRequestDecoder(r *http.Request, v any) error {
 		data, err := io.ReadAll(r.Body)
 		r.Body = newReplayBody(data)
 		if err != nil {
-			return errors.BadRequest("CODEC", err.Error())
+			return ErrCodec.Msg(err.Error()).Wrap(err)
 		}
-		body.ContentType = r.Header.Get("Content-Type")
-		body.Data = data
+		body.SetContentType(r.Header.Get("Content-Type"))
+		body.SetData(data)
 		return nil
 	}
 	data, err := io.ReadAll(r.Body)
 	r.Body = newReplayBody(data)
 	if err != nil {
-		return errors.BadRequest("CODEC", err.Error())
+		return ErrCodec.Msg(err.Error()).Wrap(err)
 	}
 	if len(data) == 0 {
 		return nil
 	}
 	codec, ok := CodecForRequest(r, "Content-Type")
 	if !ok {
-		return errors.BadRequest("CODEC", fmt.Sprintf("unregister Content-Type: %s", r.Header.Get("Content-Type")))
+		return ErrCodec.Msgf("unregistered Content-Type: %s", r.Header.Get("Content-Type"))
 	}
 	if err = decodeWithCodec(codec, data, v); err != nil {
-		return errors.BadRequest("CODEC", fmt.Sprintf("body unmarshal %s", err.Error()))
+		return ErrCodec.Msgf("body unmarshal: %s", err.Error()).Wrap(err)
 	}
 	return nil
 }
@@ -135,7 +127,7 @@ func DefaultResponseEncoder(w http.ResponseWriter, r *http.Request, v any) error
 		return nil
 	}
 	codec, _ := CodecForRequest(r, "Accept")
-	data, err := codec.Marshal(v)
+	data, err := encodeWithCodec(codec, v)
 	if err != nil {
 		return err
 	}
@@ -148,22 +140,33 @@ func DefaultResponseEncoder(w http.ResponseWriter, r *http.Request, v any) error
 }
 
 // DefaultErrorEncoder encodes the error to the HTTP response.
+//
+// What it discloses is the error's public data; a cause never leaves the
+// process. A server that needs a different representation supplies its own
+// encoder.
 func DefaultErrorEncoder(w http.ResponseWriter, r *http.Request, err error) {
+	encodeError(w, r, err)
+}
+
+func encodeError(w http.ResponseWriter, r *http.Request, err error) {
 	var rd *redirect
 	if errors.As(err, &rd) {
 		url, code := rd.Redirect()
 		http.Redirect(w, r, url, code)
 		return
 	}
-	se := errors.FromError(err)
-	codec, _ := CodecForRequest(r, "Accept")
-	body, err := codec.Marshal(se)
-	if err != nil {
+	public := errors.PublicOf(err)
+	// An error has one representation regardless of what the request asked
+	// for. Negotiating it produced two incompatible spellings of the same
+	// value, and a client reading the one it did not expect lost the kind or
+	// the reason without any error being raised.
+	body, marshalErr := marshalProblem(public)
+	if marshalErr != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", httputil.ContentType(codec.Name()))
-	w.WriteHeader(int(se.Code))
+	w.Header().Set("Content-Type", ProblemContentType)
+	w.WriteHeader(StatusOf(public.Kind))
 	_, _ = w.Write(body)
 }
 
@@ -178,53 +181,21 @@ func CodecForRequest(r *http.Request, name string) (encoding.Codec, bool) {
 	return encoding.GetCodec("json"), false
 }
 
-func httpBody(v any) (*httpbody.HttpBody, bool) {
-	switch body := v.(type) {
-	case *httpbody.HttpBody:
-		return body, body != nil
-	case **httpbody.HttpBody:
-		if body == nil {
-			return nil, false
-		}
-		if *body == nil {
-			*body = new(httpbody.HttpBody)
-		}
-		return *body, true
-	default:
+func httpBody(v any) (RawBody, bool) {
+	if !schemaOwns(v) {
 		return nil, false
 	}
+	return schema.RawBody(v)
+}
+
+// encodeWithCodec encodes v with the codec the schema runtime prefers for it,
+// falling back to the negotiated one for a plain Go value.
+func encodeWithCodec(codec encoding.Codec, v any) ([]byte, error) {
+	return schemaCodec(codec, v).Marshal(v)
 }
 
 func decodeWithCodec(codec encoding.Codec, data []byte, v any) error {
-	switch codec.Name() {
-	case "proto", "protojson":
-	default:
-		return codec.Unmarshal(data, v)
-	}
-
-	if msg, ok := v.(proto.Message); ok {
-		rv := reflect.ValueOf(v)
-		if rv.Kind() == reflect.Pointer && rv.IsNil() {
-			return codec.Unmarshal(data, v)
-		}
-		return codec.Unmarshal(data, msg)
-	}
-
-	rv := reflect.ValueOf(v)
-	if !rv.IsValid() || rv.Kind() != reflect.Pointer || rv.IsNil() {
-		return codec.Unmarshal(data, v)
-	}
-
-	elem := rv.Type().Elem()
-	if elem.Kind() != reflect.Pointer || !elem.Implements(protoMessageType) {
-		return codec.Unmarshal(data, v)
-	}
-
-	target := rv.Elem()
-	if target.IsNil() {
-		target.Set(reflect.New(elem.Elem()))
-	}
-	return codec.Unmarshal(data, target.Interface())
+	return schemaCodec(codec, v).Unmarshal(data, schemaTarget(v))
 }
 
 // BodyContentType returns the content type carried by v or a binary default.

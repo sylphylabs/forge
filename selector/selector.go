@@ -6,8 +6,9 @@ import (
 	"github.com/sylphylabs/forge/errors"
 )
 
-// ErrNoAvailable is no available node.
-var ErrNoAvailable = errors.ServiceUnavailable("no_available_node", "")
+// ErrNoAvailable is returned when no node passed the configured filters.
+var ErrNoAvailable = errors.MustDefine(errors.KindUnavailable, errors.Domain, "NO_AVAILABLE_NODE").
+	Msg("no available node")
 
 // Selector is node pick balancer.
 type Selector interface {

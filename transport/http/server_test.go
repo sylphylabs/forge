@@ -55,9 +55,9 @@ func TestServeHTTP(t *testing.T) {
 	mux := NewServer(Listener(ln))
 	mux.HandleFunc("/index", h)
 	mux.Route("/errors").GET("/cause", func(Context) error {
-		return forgeerrors.BadRequest("xxx", "zzz").
+		return forgeerrors.New(forgeerrors.KindInvalidArgument).WithReason("xxx").Msg("zzz").
 			WithMetadata(map[string]string{"foo": "bar"}).
-			WithCause(errors.New("error cause"))
+			Wrap(errors.New("error cause"))
 	})
 	if err = mux.WalkRoute(func(r RouteInfo) error {
 		t.Logf("WalkRoute: %+v", r)
@@ -93,9 +93,9 @@ func TestServer(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(testData{Path: r.RequestURI})
 	})
 	srv.Route("/errors").GET("/cause", func(Context) error {
-		return forgeerrors.BadRequest("xxx", "zzz").
+		return forgeerrors.New(forgeerrors.KindInvalidArgument).WithReason("xxx").Msg("zzz").
 			WithMetadata(map[string]string{"foo": "bar"}).
-			WithCause(errors.New("error cause"))
+			Wrap(errors.New("error cause"))
 	})
 
 	if e, err := srv.Endpoint(); err != nil || e == nil || strings.HasSuffix(e.Host, ":0") {
@@ -141,7 +141,7 @@ func testAccept(t *testing.T, srv *Server) {
 		}
 		req.Header.Set("Content-Type", test.contentType)
 		resp, err := client.Do(req)
-		if forgeerrors.Code(err) != 400 {
+		if httpStatusOfError(err) != 400 {
 			t.Errorf("expected 400 got %v", err)
 		}
 		if err == nil {
@@ -210,7 +210,7 @@ func testClient(t *testing.T, srv *Server) {
 			t.Fatal(err)
 		}
 		resp, err := client.Do(req)
-		if forgeerrors.Code(err) != test.code {
+		if httpStatusOfError(err) != test.code {
 			t.Fatalf("want %v, but got %v", test, err)
 		}
 		if err != nil {
@@ -236,7 +236,7 @@ func testClient(t *testing.T, srv *Server) {
 	for _, test := range tests {
 		var res testData
 		err := client.Invoke(context.Background(), test.method, test.path, nil, &res)
-		if forgeerrors.Code(err) != test.code {
+		if httpStatusOfError(err) != test.code {
 			t.Fatalf("want %v, but got %v", test, err)
 		}
 		if err != nil {
@@ -669,4 +669,13 @@ func TestGracefulStopAbandonsDrainOnContextEnd(t *testing.T) {
 		t.Fatalf("in-flight request status = %d, want %d", code, http.StatusOK)
 	}
 	_ = srv.Stop(context.Background())
+}
+
+// httpStatusOfError reports the HTTP status err projects onto, treating the
+// absence of an error as a success.
+func httpStatusOfError(err error) int {
+	if err == nil {
+		return http.StatusOK
+	}
+	return StatusOf(forgeerrors.KindOf(err))
 }

@@ -144,7 +144,7 @@ func TestRouteMuxTranscodingErrorsUseConfiguredEncoder(t *testing.T) {
 	var encoded error
 	srv := NewServer(ErrorEncoder(func(w http.ResponseWriter, _ *http.Request, err error) {
 		encoded = err
-		w.WriteHeader(forgeerrors.Code(err))
+		w.WriteHeader(StatusOf(forgeerrors.KindOf(err)))
 	}))
 	tests := []struct {
 		name string
@@ -163,7 +163,7 @@ func TestRouteMuxTranscodingErrorsUseConfiguredEncoder(t *testing.T) {
 			if encoded == nil {
 				t.Fatal("configured error encoder was not called")
 			}
-			if got := forgeerrors.Code(encoded); got != tt.code {
+			if got := StatusOf(forgeerrors.KindOf(encoded)); got != tt.code {
 				t.Fatalf("code = %d, want %d", got, tt.code)
 			}
 		})

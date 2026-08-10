@@ -30,8 +30,8 @@ func TestValidatorStreamValidatesInitialRequest(t *testing.T) {
 	if !errors.Is(err, want) {
 		t.Errorf("ValidatorStream() error = %v, want it to wrap %v", err, want)
 	}
-	if se := forgeerrors.FromError(err); se == nil || se.Reason != "VALIDATOR" {
-		t.Errorf("reason = %v, want VALIDATOR", se)
+	if se := forgeerrors.FromError(err); se == nil || se.Reason() != "VALIDATION_FAILED" {
+		t.Errorf("reason = %v, want VALIDATION_FAILED", se)
 	}
 	if called {
 		t.Error("handler must not run when the initial request is invalid")

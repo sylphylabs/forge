@@ -11,16 +11,11 @@ import (
 	openapigen "github.com/sylphylabs/forge/cmd/internal/openapi/generator"
 )
 
-const (
-	defaultOpenAPIVersion  = "3.2.0"
-	defaultErrorSchemaName = "sylphy.errors.v1.Status"
-)
-
 var flags flag.FlagSet
 
 func main() {
 	conf := openapigen.Configuration{
-		OpenAPIVersion:  flags.String("openapi_version", defaultOpenAPIVersion, "OpenAPI specification version to emit"),
+		OpenAPIVersion:  flags.String("openapi_version", openapigen.DefaultOpenAPIVersion, "OpenAPI specification version to emit"),
 		Version:         flags.String("version", "0.0.1", "API version number text, e.g. 1.2.3"),
 		Title:           flags.String("title", "", "API title"),
 		Description:     flags.String("description", "", "API description"),
@@ -29,7 +24,7 @@ func main() {
 		EnumType:        flags.String("enum_type", "integer", "enum serialization. Use string for string-based serialization"),
 		CircularDepth:   flags.Int("depth", 2, "query-parameter recursion depth for circular messages"),
 		DefaultResponse: flags.Bool("default_response", true, "add an Forge default error response"),
-		ErrorSchemaName: flags.String("error_schema_name", defaultErrorSchemaName, "Forge error schema component name"),
+		ErrorSchemaName: flags.String("error_schema_name", openapigen.DefaultErrorSchemaName, "Forge error schema component name"),
 		OutputMode:      flags.String("output_mode", "merged", "output mode: merged or source_relative"),
 	}
 

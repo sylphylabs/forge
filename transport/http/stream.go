@@ -13,10 +13,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/sylphylabs/forge/encoding"
 	kerrors "github.com/sylphylabs/forge/errors"
@@ -41,20 +37,74 @@ const (
 	streamModeWebSocket
 )
 
-// ServerStream adapts HTTP streaming transports to grpc generated stream interfaces.
+// ServerStream is one server-side HTTP stream, carried by SSE or by a
+// WebSocket connection.
+//
+// The metadata methods take an [stdhttp.Header] rather than a gRPC metadata
+// map. The two are the same shape, and using the HTTP type keeps a
+// pure-HTTP application from linking the gRPC runtime to serve a stream.
 type ServerStream interface {
-	grpc.ServerStream
+	// SetHeader adds to the header sent with the first message. Calling it
+	// after the header has been sent has no effect on the wire.
+	SetHeader(stdhttp.Header) error
+	// SendHeader adds to and then sends the header.
+	SendHeader(stdhttp.Header) error
+	// SetTrailer adds to the trailer sent when the stream ends.
+	SetTrailer(stdhttp.Header)
+	// Context returns the stream's context.
+	Context() context.Context
+	// SendMsg encodes and sends one message.
+	SendMsg(any) error
+	// RecvMsg receives and decodes the next message.
+	RecvMsg(any) error
+
 	Close(error) error
 	SetContext(context.Context)
 	SetReadDeadline(t time.Time) error
 	SetWriteDeadline(t time.Time) error
 }
 
-// ClientStream adapts HTTP streaming clients to grpc generated stream interfaces.
+// ClientStream is one client-side HTTP stream.
+//
+// It declares only what every client stream can honour, whichever wire
+// carries it. Sending is not part of that set: SSE is one-directional by
+// definition, so an SSE stream can no more send a message than a listener can
+// dial. Streams that do have a sending half implement [SendingClientStream]
+// as well, and a caller discovers that by type assertion, the way it
+// discovers [transport.Healthzer] on a server.
+//
+// CloseSend is here rather than on the sending capability because it means
+// "no more messages from me" — a statement a receive-only stream can make
+// truthfully, and one that releases the underlying response body. Callers can
+// therefore close every stream they open without asking what it is.
 type ClientStream interface {
-	grpc.ClientStream
-	Send(any) error
-	Recv(any) error
+	// Header blocks until the response header is available.
+	Header() (stdhttp.Header, error)
+	// Trailer returns the trailer, valid once the stream has ended.
+	Trailer() stdhttp.Header
+	// CloseSend closes the sending half.
+	CloseSend() error
+	// Context returns the stream's context.
+	Context() context.Context
+	// RecvMsg receives and decodes the next message. It reports io.EOF once
+	// the server has ended the stream normally.
+	RecvMsg(any) error
+}
+
+// SendingClientStream is implemented by client streams that have a sending
+// half, currently the WebSocket stream. It is an optional capability
+// alongside [ClientStream]: consumers type-assert for it, and a stream that
+// does not implement it cannot be asked to send at all.
+//
+// Splitting it out is what turns "this transport cannot send" from a runtime
+// error string into a fact the compiler and a type assertion can both see.
+type SendingClientStream interface {
+	ClientStream
+
+	// SendMsg encodes and sends one message.
+	SendMsg(any) error
+	// CloseAndRecv closes the sending half and receives the single reply that
+	// terminates a client-streaming call.
 	CloseAndRecv(any) error
 }
 
@@ -64,8 +114,8 @@ type serverStream struct {
 	res       stdhttp.ResponseWriter
 	mode      streamMode
 	conn      *websocket.Conn
-	header    metadata.MD
-	trailer   metadata.MD
+	header    stdhttp.Header
+	trailer   stdhttp.Header
 	encoder   encoding.Codec
 	decoder   encoding.Codec
 	started   bool
@@ -179,15 +229,15 @@ func (s *serverStream) SetWriteDeadline(t time.Time) error {
 	}
 }
 
-func (s *serverStream) SetHeader(md metadata.MD) error {
-	s.header = metadata.Join(s.header, md)
+func (s *serverStream) SetHeader(md stdhttp.Header) error {
+	s.header = joinHeader(s.header, md)
 	if s.mode == streamModeSSE && !s.started {
 		copyMetadataToHeader(s.res.Header(), md)
 	}
 	return nil
 }
 
-func (s *serverStream) SendHeader(md metadata.MD) error {
+func (s *serverStream) SendHeader(md stdhttp.Header) error {
 	if err := s.SetHeader(md); err != nil {
 		return err
 	}
@@ -197,8 +247,8 @@ func (s *serverStream) SendHeader(md metadata.MD) error {
 	return nil
 }
 
-func (s *serverStream) SetTrailer(md metadata.MD) {
-	s.trailer = metadata.Join(s.trailer, md)
+func (s *serverStream) SetTrailer(md stdhttp.Header) {
+	s.trailer = joinHeader(s.trailer, md)
 }
 
 func (s *serverStream) Context() context.Context {
@@ -220,20 +270,13 @@ func (s *serverStream) recvMessage(m any) error {
 	if s.bodyField == "" {
 		return readWebSocketMessage(s.conn, m, s.decoder)
 	}
-	pm, ok := m.(proto.Message)
-	if !ok {
-		return fmt.Errorf("http: stream body field %q requires a proto.Message, got %T", s.bodyField, m)
+	if !schemaOwns(m) {
+		return fmt.Errorf("http: stream body field %q needs the schema runtime; "+
+			"import transport/http/transcoding", s.bodyField)
 	}
-	fd := pm.ProtoReflect().Descriptor().Fields().ByName(protoreflect.Name(s.bodyField))
-	if fd == nil || fd.Kind() != protoreflect.MessageKind || fd.IsList() || fd.IsMap() {
-		return fmt.Errorf("http: stream body field %q is not a singular message field", s.bodyField)
-	}
-	sub := pm.ProtoReflect().NewField(fd)
-	if err := readWebSocketMessage(s.conn, sub.Message().Interface(), s.decoder); err != nil {
-		return err
-	}
-	pm.ProtoReflect().Set(fd, sub)
-	return nil
+	return schema.DecodeField(m, s.bodyField, func(target any) error {
+		return readWebSocketMessage(s.conn, target, s.decoder)
+	})
 }
 
 func (s *serverStream) SendMsg(m any) error {
@@ -271,15 +314,19 @@ func (s *serverStream) Close(err error) error {
 		if !s.started {
 			return err
 		}
-		_ = s.sendSSE("error", kerrors.FromError(err))
+		if data, marshalErr := marshalProblem(kerrors.PublicOf(err)); marshalErr == nil {
+			_ = s.sendSSEData("error", data)
+		}
 		return nil
 	case streamModeWebSocket:
 		if s.conn == nil {
 			return err
 		}
 		if err != nil {
-			_ = s.writeWebSocketControl(websocketControlError + err.Error())
-			_ = s.writeWebSocketClose(websocket.CloseInternalServerErr, err.Error())
+			if data, marshalErr := marshalProblem(kerrors.PublicOf(err)); marshalErr == nil {
+				_ = s.writeWebSocketControl(websocketControlError + string(data))
+			}
+			_ = s.writeWebSocketClose(websocket.CloseInternalServerErr, "")
 			_ = s.conn.Close()
 			return nil
 		}
@@ -309,18 +356,22 @@ func (s *serverStream) sendSSE(event string, v any) error {
 	if err != nil {
 		return err
 	}
+	return s.sendSSEData(event, data)
+}
+
+func (s *serverStream) sendSSEData(event string, data []byte) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	s.startSSE()
-	if _, err = fmt.Fprintf(s.res, "event: %s\n", event); err != nil {
+	if _, err := fmt.Fprintf(s.res, "event: %s\n", event); err != nil {
 		return err
 	}
 	for _, line := range bytes.Split(data, []byte("\n")) {
-		if _, err = fmt.Fprintf(s.res, "data: %s\n", line); err != nil {
+		if _, err := fmt.Fprintf(s.res, "data: %s\n", line); err != nil {
 			return err
 		}
 	}
-	if _, err = io.WriteString(s.res, "\n"); err != nil {
+	if _, err := io.WriteString(s.res, "\n"); err != nil {
 		return err
 	}
 	if flusher, ok := s.res.(stdhttp.Flusher); ok {
@@ -352,6 +403,14 @@ func (s *serverStream) writeWebSocketClose(code int, text string) error {
 	return s.conn.WriteControl(websocket.CloseMessage, msg, time.Now().Add(time.Second))
 }
 
+// The two client streams differ in exactly one capability, and these
+// assertions are where that difference is stated: the SSE stream must never
+// acquire a sending half, because the wire it rides on has none.
+var (
+	_ ClientStream        = (*sseClientStream)(nil)
+	_ SendingClientStream = (*websocketClientStream)(nil)
+)
+
 type sseClientStream struct {
 	ctx       context.Context
 	res       *stdhttp.Response
@@ -367,12 +426,12 @@ func newSSEClientStream(ctx context.Context, res *stdhttp.Response, decoder enco
 	return &sseClientStream{ctx: ctx, res: res, scanner: scanner, decoder: decoder}
 }
 
-func (s *sseClientStream) Header() (metadata.MD, error) {
-	return metadataFromHeader(s.res.Header), nil
+func (s *sseClientStream) Header() (stdhttp.Header, error) {
+	return s.res.Header.Clone(), nil
 }
 
-func (s *sseClientStream) Trailer() metadata.MD {
-	return metadataFromHeader(s.res.Trailer)
+func (s *sseClientStream) Trailer() stdhttp.Header {
+	return s.res.Trailer.Clone()
 }
 
 func (s *sseClientStream) CloseSend() error {
@@ -384,22 +443,6 @@ func (s *sseClientStream) Context() context.Context {
 		return context.Background()
 	}
 	return s.ctx
-}
-
-func (s *sseClientStream) Send(any) error {
-	return stderrors.New("SSE client stream does not support Send")
-}
-
-func (s *sseClientStream) Recv(m any) error {
-	return s.RecvMsg(m)
-}
-
-func (s *sseClientStream) CloseAndRecv(any) error {
-	return stderrors.New("SSE client stream does not support CloseAndRecv")
-}
-
-func (s *sseClientStream) SendMsg(any) error {
-	return stderrors.New("SSE client stream does not support SendMsg")
 }
 
 func (s *sseClientStream) RecvMsg(m any) error {
@@ -418,8 +461,7 @@ func (s *sseClientStream) RecvMsg(m any) error {
 			return nil
 		case "error":
 			_ = s.closeBody()
-			se := new(kerrors.Error)
-			if err := unmarshalStreamMessage(data, se, s.decoder); err == nil {
+			if se, ok := unmarshalProblem(ProblemContentType, data, NoStatus); ok {
 				return se
 			}
 			return stderrors.New(string(data))
@@ -481,11 +523,11 @@ type websocketClientStream struct {
 	writeMu    sync.Mutex
 }
 
-func (s *websocketClientStream) Header() (metadata.MD, error) {
-	return metadataFromHeader(s.header), nil
+func (s *websocketClientStream) Header() (stdhttp.Header, error) {
+	return s.header.Clone(), nil
 }
 
-func (s *websocketClientStream) Trailer() metadata.MD {
+func (s *websocketClientStream) Trailer() stdhttp.Header {
 	return nil
 }
 
@@ -505,14 +547,6 @@ func (s *websocketClientStream) Context() context.Context {
 		return context.Background()
 	}
 	return s.ctx
-}
-
-func (s *websocketClientStream) Send(m any) error {
-	return s.SendMsg(m)
-}
-
-func (s *websocketClientStream) Recv(m any) error {
-	return s.RecvMsg(m)
 }
 
 func (s *websocketClientStream) CloseAndRecv(m any) error {
@@ -651,7 +685,11 @@ func (client *Client) ServerSentEvent(ctx context.Context, method, path string, 
 }
 
 // WebSocket opens an HTTP bidirectional streaming call over WebSocket.
-func (client *Client) WebSocket(ctx context.Context, path string, opts ...CallOption) (ClientStream, error) {
+//
+// The return type is the sending capability rather than the bare
+// [ClientStream], so a caller that opened a WebSocket can send without
+// asserting for a capability the wire always has.
+func (client *Client) WebSocket(ctx context.Context, path string, opts ...CallOption) (SendingClientStream, error) {
 	c := defaultCallInfo(path)
 	for _, o := range opts {
 		if err := o.before(&c); err != nil {
@@ -695,7 +733,9 @@ func (client *Client) WebSocket(ctx context.Context, path string, opts ...CallOp
 		if client.r != nil {
 			node, doneFunc, selectErr := client.selector.Select(ctx, selector.WithNodeFilter(client.opts.nodeFilters...))
 			if selectErr != nil {
-				return nil, kerrors.ServiceUnavailable("NODE_NOT_FOUND", selectErr.Error())
+				// No node was chosen, so no connection was attempted and no
+				// application message left this process.
+				return nil, transport.MarkNotSent(ErrNodeNotFound.Msg(selectErr.Error()).Wrap(selectErr))
 			}
 			done = doneFunc
 			if client.insecure {
@@ -727,7 +767,11 @@ func (client *Client) WebSocket(ctx context.Context, path string, opts ...CallOp
 			if done != nil {
 				done(ctx, selector.DoneInfo{Err: dialErr})
 			}
-			return nil, dialErr
+			// The handshake never completed, so the stream carried no
+			// application message. This holds however far the handshake got:
+			// a rejected upgrade means the peer declined the stream rather
+			// than accepting work on it.
+			return nil, transport.MarkNotSent(dialErr)
 		}
 		var resHeader stdhttp.Header
 		if res != nil {
@@ -758,13 +802,25 @@ func (client *Client) WebSocket(ctx context.Context, path string, opts ...CallOp
 	if err != nil {
 		return nil, err
 	}
-	return clientStreamFromHandler(stream)
+	return sendingClientStreamFromHandler(stream)
 }
 
 func clientStreamFromHandler(v any) (ClientStream, error) {
 	stream, ok := v.(ClientStream)
 	if !ok {
 		return nil, stderrors.New("http stream middleware returned non-client stream")
+	}
+	return stream, nil
+}
+
+// sendingClientStreamFromHandler is the WebSocket counterpart. Middleware may
+// wrap the stream it was handed, so the capability has to be re-checked on the
+// way out: a wrapper that dropped the sending half would otherwise be handed
+// back to a caller that is entitled to send on it.
+func sendingClientStreamFromHandler(v any) (SendingClientStream, error) {
+	stream, ok := v.(SendingClientStream)
+	if !ok {
+		return nil, stderrors.New("http stream middleware returned non-sending client stream")
 	}
 	return stream, nil
 }
@@ -791,18 +847,18 @@ func marshalStreamMessage(v any, codec encoding.Codec) ([]byte, error) {
 	if codec == nil {
 		codec = defaultStreamCodec()
 	}
-	return codec.Marshal(v)
+	return encodeWithCodec(codec, v)
 }
 
 func unmarshalStreamMessage(data []byte, v any, codec encoding.Codec) error {
 	if body, ok := httpBody(v); ok {
-		body.Data = data
+		body.SetData(data)
 		return nil
 	}
 	if codec == nil {
 		codec = defaultStreamCodec()
 	}
-	return codec.Unmarshal(data, v)
+	return decodeWithCodec(codec, data, v)
 }
 
 func readWebSocketMessage(conn *websocket.Conn, m any, codec encoding.Codec) error {
@@ -822,7 +878,11 @@ func readWebSocketMessage(conn *websocket.Conn, m any, codec encoding.Codec) err
 		case text == websocketControlEnd:
 			return io.EOF
 		case strings.HasPrefix(text, websocketControlError):
-			return stderrors.New(strings.TrimPrefix(text, websocketControlError))
+			payload := strings.TrimPrefix(text, websocketControlError)
+			if se, ok := unmarshalProblem(ProblemContentType, []byte(payload), NoStatus); ok {
+				return se
+			}
+			return stderrors.New(payload)
 		default:
 			return unmarshalStreamMessage(data, m, codec)
 		}
@@ -861,7 +921,7 @@ func defaultStreamCodec() encoding.Codec {
 	return encoding.GetCodec("json")
 }
 
-func copyMetadataToHeader(h stdhttp.Header, md metadata.MD) {
+func copyMetadataToHeader(h, md stdhttp.Header) {
 	for k, values := range md {
 		for _, v := range values {
 			h.Add(k, v)
@@ -869,12 +929,19 @@ func copyMetadataToHeader(h stdhttp.Header, md metadata.MD) {
 	}
 }
 
-func metadataFromHeader(h stdhttp.Header) metadata.MD {
-	md := metadata.MD{}
-	for k, values := range h {
+// joinHeader returns dst with every entry of src appended. A nil dst is
+// allocated, so a zero-valued stream accepts headers without initialization.
+func joinHeader(dst, src stdhttp.Header) stdhttp.Header {
+	if len(src) == 0 {
+		return dst
+	}
+	if dst == nil {
+		dst = make(stdhttp.Header, len(src))
+	}
+	for k, values := range src {
 		for _, v := range values {
-			md.Append(k, v)
+			dst.Add(k, v)
 		}
 	}
-	return md
+	return dst
 }

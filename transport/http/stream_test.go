@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sylphylabs/forge/encoding"
+	forgeerrors "github.com/sylphylabs/forge/errors"
 	"github.com/sylphylabs/forge/internal/testdata/binding"
 	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/selector"
@@ -59,14 +60,94 @@ func TestServerSentEventStream(t *testing.T) {
 
 	clientStream := newSSEClientStream(context.Background(), res, nil)
 	var out binding.HelloRequest
-	if err := clientStream.Recv(&out); err != nil {
+	if err := clientStream.RecvMsg(&out); err != nil {
 		t.Fatal(err)
 	}
 	if out.GetName() != "forge" {
 		t.Fatalf("expected %v, got %v", "forge", out.GetName())
 	}
-	if err := clientStream.Recv(&out); !errors.Is(err, io.EOF) {
+	if err := clientStream.RecvMsg(&out); !errors.Is(err, io.EOF) {
 		t.Fatalf("expected EOF, got %v", err)
+	}
+}
+
+func TestServerSentEventStreamRedactsTerminalError(t *testing.T) {
+	srv := NewServer()
+	srv.Route("/").GET("/events", func(ctx Context) error {
+		stream := NewServerSentEventServerStream(ctx)
+		if err := stream.SendMsg(&binding.HelloRequest{Name: "forge"}); err != nil {
+			return err
+		}
+		secret := forgeerrors.MustDefine(forgeerrors.KindInternal, "test.v1", "DB_DOWN").
+			Msg("lookup failed").
+			Wrap(errors.New("postgres://admin:secret@db/internal"))
+		return stream.Close(secret)
+	})
+
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	client, err := NewClient(t.Context(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := client.ServerSentEvent(t.Context(), http.MethodGet, "/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out binding.HelloRequest
+	if err := stream.RecvMsg(&out); err != nil {
+		t.Fatalf("receive message: %v", err)
+	}
+	err = stream.RecvMsg(&out)
+	var remote *forgeerrors.Error
+	if !errors.As(err, &remote) {
+		t.Fatalf("terminal error type = %T, want *forgeerrors.Error", err)
+	}
+	if remote.Kind() != forgeerrors.KindInternal || remote.Reason() != "DB_DOWN" {
+		t.Errorf("terminal error = %v/%q", remote.Kind(), remote.Reason())
+	}
+	if strings.Contains(remote.Error(), "hunter2") || strings.Contains(remote.Error(), "postgres://") {
+		t.Errorf("terminal error disclosed its cause: %v", remote)
+	}
+	if !remote.IsRemote() || remote.Unwrap() != nil {
+		t.Error("terminal error must be remote and carry no cause")
+	}
+}
+
+func TestWebSocketStreamRedactsAndRestoresTerminalError(t *testing.T) {
+	srv := NewServer()
+	srv.Route("/").GET("/ws", func(ctx Context) error {
+		stream, err := NewWebSocketServerStream(ctx)
+		if err != nil {
+			return err
+		}
+		secret := forgeerrors.MustDefine(forgeerrors.KindInternal, "test.v1", "DB_DOWN").
+			Msg("lookup failed").
+			Wrap(errors.New("postgres://admin:secret@db/internal"))
+		return stream.Close(secret)
+	})
+
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	client, err := NewClient(t.Context(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := client.WebSocket(t.Context(), "/ws")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out binding.HelloRequest
+	err = stream.RecvMsg(&out)
+	var remote *forgeerrors.Error
+	if !errors.As(err, &remote) {
+		t.Fatalf("terminal error type = %T, want *forgeerrors.Error", err)
+	}
+	if remote.Kind() != forgeerrors.KindInternal || remote.Reason() != "DB_DOWN" {
+		t.Errorf("terminal error = %v/%q", remote.Kind(), remote.Reason())
+	}
+	if strings.Contains(remote.Error(), "hunter2") || strings.Contains(remote.Error(), "postgres://") {
+		t.Errorf("terminal error disclosed its cause: %v", remote)
 	}
 }
 
@@ -100,7 +181,7 @@ func TestServerSentEventStreamUsesAcceptCodec(t *testing.T) {
 	}
 
 	var out binding.HelloRequest
-	if err := stream.Recv(&out); err != nil {
+	if err := stream.RecvMsg(&out); err != nil {
 		t.Fatal(err)
 	}
 	if out.GetName() != "stream-test-codec" {
@@ -148,7 +229,7 @@ func TestServerSentEventStreamUsesClientMiddleware(t *testing.T) {
 	}
 	defer func() { _ = stream.CloseSend() }()
 	var out binding.HelloRequest
-	if err := stream.Recv(&out); err != nil {
+	if err := stream.RecvMsg(&out); err != nil {
 		t.Fatal(err)
 	}
 	if out.GetName() != "forge" {
@@ -162,7 +243,7 @@ func TestSSEClientStreamClosesBodyOnEOF(t *testing.T) {
 	stream := newSSEClientStream(context.Background(), res, nil)
 
 	var out binding.HelloRequest
-	if err := stream.Recv(&out); !errors.Is(err, io.EOF) {
+	if err := stream.RecvMsg(&out); !errors.Is(err, io.EOF) {
 		t.Fatalf("expected EOF, got %v", err)
 	}
 	if body.closed != 1 {
@@ -173,6 +254,53 @@ func TestSSEClientStreamClosesBodyOnEOF(t *testing.T) {
 	}
 	if body.closed != 1 {
 		t.Fatalf("expected idempotent close, got %d", body.closed)
+	}
+}
+
+// A caller holding a bare ClientStream decides whether it may send by asking
+// the type system, not by sending and reading the error back. This is the
+// property the interface split exists to provide: the SSE stream cannot be
+// asserted into the sending capability at all, so "this stream cannot send" is
+// answerable before any I/O happens.
+func TestClientStreamSendCapabilityIsDiscoverableByAssertion(t *testing.T) {
+	srv := NewServer()
+	srv.Route("/").GET("/events", func(ctx Context) error {
+		return NewServerSentEventServerStream(ctx).Close(nil)
+	})
+	srv.Route("/").GET("/ws", func(ctx Context) error {
+		stream, err := NewWebSocketServerStream(ctx)
+		if err != nil {
+			return err
+		}
+		return stream.Close(nil)
+	})
+
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+	client, err := NewClient(t.Context(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sse, err := client.ServerSentEvent(t.Context(), http.MethodGet, "/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sse.CloseSend() }()
+	if sender, ok := sse.(SendingClientStream); ok {
+		t.Fatalf("SSE stream claims a sending half it has no wire for: %T", sender)
+	}
+
+	ws, err := client.WebSocket(t.Context(), "/ws")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ws.CloseSend() }()
+	// WebSocket returns the capability statically, so the assertion below is a
+	// restatement for a caller that erased it back down to ClientStream.
+	var erased ClientStream = ws
+	if _, ok := erased.(SendingClientStream); !ok {
+		t.Fatalf("WebSocket stream lost its sending half: %T", erased)
 	}
 }
 
@@ -211,12 +339,12 @@ func TestWebSocketStreamBindsPathQueryAndExchangesMessages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := stream.Send(&binding.HelloRequest{}); err != nil {
+	if err := stream.SendMsg(&binding.HelloRequest{}); err != nil {
 		t.Fatal(err)
 	}
 
 	var out binding.HelloRequest
-	if err := stream.Recv(&out); err != nil {
+	if err := stream.RecvMsg(&out); err != nil {
 		t.Fatal(err)
 	}
 	if out.GetName() != "forge" {
@@ -225,7 +353,7 @@ func TestWebSocketStreamBindsPathQueryAndExchangesMessages(t *testing.T) {
 	if out.GetSub().GetName() != "go" {
 		t.Fatalf("expected %v, got %v", "go", out.GetSub().GetName())
 	}
-	if err := stream.Recv(&out); !errors.Is(err, io.EOF) {
+	if err := stream.RecvMsg(&out); !errors.Is(err, io.EOF) {
 		t.Fatalf("expected EOF, got %v", err)
 	}
 }
@@ -268,12 +396,12 @@ func TestWebSocketStreamBindsNamedBodyField(t *testing.T) {
 	}
 	// The client streams only the body field (Sub), mirroring generated code that
 	// sends m.Sub instead of the whole request message.
-	if err := stream.Send(&binding.Sub{Name: "go"}); err != nil {
+	if err := stream.SendMsg(&binding.Sub{Name: "go"}); err != nil {
 		t.Fatal(err)
 	}
 
 	var out binding.HelloRequest
-	if err := stream.Recv(&out); err != nil {
+	if err := stream.RecvMsg(&out); err != nil {
 		t.Fatal(err)
 	}
 	if out.GetName() != "forge" {
@@ -282,7 +410,7 @@ func TestWebSocketStreamBindsNamedBodyField(t *testing.T) {
 	if out.GetSub().GetName() != "go" {
 		t.Fatalf("expected %v, got %v", "go", out.GetSub().GetName())
 	}
-	if err := stream.Recv(&out); !errors.Is(err, io.EOF) {
+	if err := stream.RecvMsg(&out); !errors.Is(err, io.EOF) {
 		t.Fatalf("expected EOF, got %v", err)
 	}
 }
@@ -347,11 +475,11 @@ func TestWebSocketStreamUsesContentTypeCodec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := stream.Send(&binding.HelloRequest{Name: "ignored"}); err != nil {
+	if err := stream.SendMsg(&binding.HelloRequest{Name: "ignored"}); err != nil {
 		t.Fatal(err)
 	}
 	var out binding.HelloRequest
-	if err := stream.Recv(&out); err != nil {
+	if err := stream.RecvMsg(&out); err != nil {
 		t.Fatal(err)
 	}
 	if out.GetName() != "stream-test-codec" {
@@ -389,12 +517,12 @@ func TestWebSocketStreamCloseSendPreventsSend(t *testing.T) {
 	if err := stream.CloseSend(); err != nil {
 		t.Fatal(err)
 	}
-	if err := stream.Send(&binding.HelloRequest{Name: "late"}); err == nil {
+	if err := stream.SendMsg(&binding.HelloRequest{Name: "late"}); err == nil {
 		t.Fatal("expected Send after CloseSend to fail")
 	}
 
 	var out binding.HelloRequest
-	if err := stream.Recv(&out); !errors.Is(err, io.EOF) {
+	if err := stream.RecvMsg(&out); !errors.Is(err, io.EOF) {
 		t.Fatalf("expected EOF, got %v", err)
 	}
 }
@@ -438,7 +566,7 @@ func TestWebSocketStreamUsesClientMiddleware(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out binding.HelloRequest
-	if err := stream.Recv(&out); !errors.Is(err, io.EOF) {
+	if err := stream.RecvMsg(&out); !errors.Is(err, io.EOF) {
 		t.Fatalf("expected EOF, got %v", err)
 	}
 }
@@ -478,13 +606,13 @@ func TestWebSocketStreamNormalEOFReportsSelectorSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out binding.HelloRequest
-	if err := stream.Recv(&out); err != nil {
+	if err := stream.RecvMsg(&out); err != nil {
 		t.Fatal(err)
 	}
 	if out.GetName() != "forge" {
 		t.Fatalf("expected %v, got %v", "forge", out.GetName())
 	}
-	if err := stream.Recv(&out); !errors.Is(err, io.EOF) {
+	if err := stream.RecvMsg(&out); !errors.Is(err, io.EOF) {
 		t.Fatalf("expected EOF, got %v", err)
 	}
 	select {
@@ -563,13 +691,13 @@ func TestWebSocketStreamSetWriteDeadline(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out binding.HelloRequest
-	if err := stream.Recv(&out); err != nil {
+	if err := stream.RecvMsg(&out); err != nil {
 		t.Fatal(err)
 	}
 	if out.GetName() != "forge" {
 		t.Fatalf("expected %v, got %v", "forge", out.GetName())
 	}
-	if err := stream.Recv(&out); !errors.Is(err, io.EOF) {
+	if err := stream.RecvMsg(&out); !errors.Is(err, io.EOF) {
 		t.Fatalf("expected EOF, got %v", err)
 	}
 }
@@ -687,13 +815,13 @@ func TestServerSentEventStreamSurvivesServerTimeout(t *testing.T) {
 	}
 	<-serverTimedOut
 	var out binding.HelloRequest
-	if err := stream.Recv(&out); err != nil {
+	if err := stream.RecvMsg(&out); err != nil {
 		t.Fatal(err)
 	}
 	if got := out.GetName(); got != "after-timeout" {
 		t.Fatalf("stream response name = %q, want after-timeout", got)
 	}
-	if err := stream.Recv(&out); !errors.Is(err, io.EOF) {
+	if err := stream.RecvMsg(&out); !errors.Is(err, io.EOF) {
 		t.Fatalf("expected EOF, got %v", err)
 	}
 }
@@ -729,13 +857,13 @@ func TestWebSocketStreamSurvivesServerTimeout(t *testing.T) {
 	}
 	<-serverTimedOut
 	var out binding.HelloRequest
-	if err := stream.Recv(&out); err != nil {
+	if err := stream.RecvMsg(&out); err != nil {
 		t.Fatal(err)
 	}
 	if got := out.GetName(); got != "after-timeout" {
 		t.Fatalf("stream response name = %q, want after-timeout", got)
 	}
-	if err := stream.Recv(&out); !errors.Is(err, io.EOF) {
+	if err := stream.RecvMsg(&out); !errors.Is(err, io.EOF) {
 		t.Fatalf("expected EOF, got %v", err)
 	}
 }

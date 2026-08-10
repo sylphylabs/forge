@@ -17,6 +17,15 @@ type serviceDesc struct {
 	MethodSet     int
 	Methods       []*methodDesc
 	ClientMethods []*methodDesc
+	// HTTPIdent, ContextIdent and TranscodingIdent are how the HTTP transport,
+	// context and transcoding packages are referred to in the generated file.
+	// protogen chooses the name, so the template must not assume one: a message
+	// package that claims "http", "context" or "transcoding" first forces
+	// protogen to suffix the support package's alias, and a template that
+	// hardcoded the bare name would emit references to the wrong package.
+	HTTPIdent        string
+	ContextIdent     string
+	TranscodingIdent string
 }
 
 type methodDesc struct {
@@ -56,7 +65,27 @@ type methodDesc struct {
 	matchKey             string
 }
 
+// bindScope pairs a method with its service so a sub-template can reach both.
+// Invoking a sub-template rebinds "$" to its argument, so the service-scoped
+// package aliases have to travel alongside the method rather than through "$".
+type bindScope struct {
+	Service *serviceDesc
+	Method  *methodDesc
+}
+
 func (s *serviceDesc) execute() string {
+	// Callers that render a service without a generated file (unit tests, and any
+	// caller that does not resolve imports) get the aliases protogen picks when
+	// nothing competes for them, which keeps the rendered output readable.
+	if s.HTTPIdent == "" {
+		s.HTTPIdent = "http"
+	}
+	if s.ContextIdent == "" {
+		s.ContextIdent = "context"
+	}
+	if s.TranscodingIdent == "" {
+		s.TranscodingIdent = "transcoding"
+	}
 	if len(s.ClientMethods) == 0 {
 		seen := make(map[string]struct{})
 		for _, method := range s.Methods {
@@ -68,7 +97,12 @@ func (s *serviceDesc) execute() string {
 		}
 	}
 	buf := new(bytes.Buffer)
-	tmpl, err := template.New("http").Parse(strings.TrimSpace(httpTemplate))
+	funcs := template.FuncMap{
+		"bind": func(service *serviceDesc, method *methodDesc) bindScope {
+			return bindScope{Service: service, Method: method}
+		},
+	}
+	tmpl, err := template.New("http").Funcs(funcs).Parse(strings.TrimSpace(httpTemplate))
 	if err != nil {
 		panic(err)
 	}

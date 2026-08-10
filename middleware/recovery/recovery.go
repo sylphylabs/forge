@@ -13,8 +13,10 @@ import (
 // Latency is recovery latency context key
 type Latency struct{}
 
-// ErrUnknownRequest is unknown request error.
-var ErrUnknownRequest = errors.InternalServer("UNKNOWN", "unknown request error")
+// ErrUnknownRequest is returned when a handler panicked and no recovery
+// handler supplied a more specific error.
+var ErrUnknownRequest = errors.MustDefine(errors.KindInternal, errors.Domain, "PANIC_RECOVERED").
+	Msg("unknown request error")
 
 // HandlerFunc is recovery handler func.
 type HandlerFunc func(ctx context.Context, req, err any) error

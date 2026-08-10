@@ -1,20 +1,18 @@
 // Package retry provides client middleware that re-invokes a failed unary
-// call, with exponential full-jitter backoff and a per-operation policy that
-// can be governed at runtime.
+// call, with an injectable backoff curve — exponential full jitter by
+// default — and a per-operation policy that can be governed at runtime.
 //
-// The default posture is conservative: only errors that prove the request
-// never executed on a server — connection establishment failures and
-// service-unavailable rejections — are retried. Timeout-class errors are
-// ambiguous (the request may have executed) and are retried only for calls
-// the caller has declared idempotent with [Idempotent]. See
-// [DefaultRetryable] for the exact set and its basis.
+// The default posture is conservative: a failed attempt is retried only when
+// the transport proves it never reached a server, or when the caller declares
+// with [Idempotent] that reaching one twice is harmless. An error that offers
+// neither is left alone, because most failures cannot rule out that a server
+// already executed the request. See [DefaultRetryable] for the exact rule.
 package retry
 
 import (
 	"context"
 	"fmt"
 	"math/rand/v2"
-	"net"
 	"net/http"
 	"time"
 
@@ -27,6 +25,10 @@ import (
 
 // Policy is the retry policy for one operation: how many attempts a call may
 // use and how the wait between them grows.
+//
+// Attempts always governs. BaseBackoff and MaxBackoff parameterize the
+// default [ExponentialJitter] curve; a [Backoff] injected with [WithBackoff]
+// replaces the curve outright and those two fields no longer shape any wait.
 type Policy struct {
 	// Attempts is the maximum number of attempts for one call, including
 	// the first. It must be at least 1; 1 disables retries.
@@ -34,9 +36,10 @@ type Policy struct {
 	// BaseBackoff bounds the wait before the first retry. Each subsequent
 	// wait doubles the bound, and every wait is drawn uniformly from
 	// [0, bound) — full jitter. Must be positive when Attempts > 1.
+	// Ignored when a [Backoff] is injected.
 	BaseBackoff time.Duration
 	// MaxBackoff caps the wait bound. Must be at least BaseBackoff when
-	// Attempts > 1.
+	// Attempts > 1. Ignored when a [Backoff] is injected.
 	MaxBackoff time.Duration
 }
 
@@ -69,27 +72,78 @@ func (p Policy) Validate() error {
 	return nil
 }
 
-// backoffBound returns the full-jitter bound for the wait after the given
-// 1-based failed attempt: BaseBackoff doubled per prior attempt, capped at
-// MaxBackoff.
-func (p Policy) backoffBound(attempt int) time.Duration {
-	d := p.BaseBackoff
-	for i := 1; i < attempt && d < p.MaxBackoff; i++ {
+// Backoff computes how long to wait before the next attempt. There is no one
+// best curve — exponential full jitter, decorrelated jitter, linear growth
+// and a constant interval each suit a different dependency — so the curve is
+// replaceable via [WithBackoff] rather than fixed by this package.
+//
+// Next receives the 1-based number of the attempt that just failed: 1 for the
+// wait before the first retry. Implementations must be safe for concurrent
+// use, since one middleware instance serves every call on a client. A
+// non-positive result waits not at all.
+//
+// Next deliberately takes neither a context nor the failing error. A curve is
+// a function of attempt number alone; a decision that needs the error or the
+// call is the retryable predicate's ([WithRetryable]), and mixing the two
+// would give two places to express "do not retry this".
+type Backoff interface {
+	Next(attempt int) time.Duration
+}
+
+// ExponentialJitter is the default [Backoff]: the wait after failed attempt
+// n is drawn uniformly from [0, min(Base·2ⁿ⁻¹, Max)) — exponential growth
+// with full jitter. Full jitter decorrelates the retry storms of many clients
+// that failed at the same moment, which a deterministic or half-jittered
+// schedule re-synchronizes at every step.
+//
+// The zero value waits not at all. [Client] builds one from the [Policy] in
+// effect, so most callers never construct this directly; construct it to pin
+// a curve that governance cannot move.
+type ExponentialJitter struct {
+	// Base bounds the wait before the first retry.
+	Base time.Duration
+	// Max caps the wait bound.
+	Max time.Duration
+
+	// randN draws from [0, n). Nil means math/rand/v2, which needs no
+	// seeding and no locking; tests inject a deterministic draw.
+	randN func(n int64) int64
+}
+
+// Next implements [Backoff].
+func (e ExponentialJitter) Next(attempt int) time.Duration {
+	bound := e.bound(attempt)
+	if bound <= 0 {
+		return 0
+	}
+	draw := e.randN
+	if draw == nil {
+		draw = rand.Int64N
+	}
+	return time.Duration(draw(int64(bound)))
+}
+
+// bound returns the full-jitter bound for the wait after the given 1-based
+// failed attempt: Base doubled per prior attempt, capped at Max.
+func (e ExponentialJitter) bound(attempt int) time.Duration {
+	d := e.Base
+	for i := 1; i < attempt && d < e.Max; i++ {
 		d <<= 1
 		if d <= 0 { // overflow
-			return p.MaxBackoff
+			return e.Max
 		}
 	}
-	return min(d, p.MaxBackoff)
+	return min(d, e.Max)
 }
 
 // idempotentKey marks a context whose call may safely execute more than once.
 type idempotentKey struct{}
 
 // Idempotent returns a context that declares the calls made with it safe to
-// execute more than once. [DefaultRetryable] then also retries timeout-class
-// errors, which are otherwise excluded because the request may have reached
-// a server and executed. The declaration is per call site and per caller: it
+// execute more than once. [DefaultRetryable] then also retries the failures
+// that cannot prove delivery either way — unavailability and timeouts — which
+// are otherwise excluded because the request may have reached a server and
+// executed. The declaration is per call site and per caller: it
 // asserts a property of the operation being invoked, so apply it where the
 // operation is known — typically generated call wrappers or a thin client
 // facade.
@@ -106,29 +160,37 @@ func IsIdempotent(ctx context.Context) bool {
 }
 
 // DefaultRetryable is the retryable predicate used when [WithRetryable] is
-// not set. It is deliberately conservative: an error is retryable only when
-// the failed attempt provably never executed on a server, or when the caller
-// has declared repeat execution safe.
+// not set. A retry re-executes work, so it demands one of two justifications:
+// evidence that the attempt never reached a server, or the caller's
+// declaration that reaching one twice is harmless. An error carrying neither
+// is not retried.
 //
-// The default set is:
+// Evidence comes from the transport. A transport that can prove a request
+// never left this process marks the error with [transport.MarkNotSent], and
+// such an error is retried whatever its Kind and whatever the caller declared:
+// work that never started cannot be duplicated by starting it.
 //
-//   - connection establishment failures — a *net.OpError with Op "dial"
-//     anywhere in the chain: the connection never opened, so no request was
-//     sent;
-//   - service-unavailable errors — [errors.IsServiceUnavailable], HTTP 503
-//     and gRPC Unavailable: the transport or server rejected the request
-//     before executing it, and both protocols document the condition as
-//     transient;
-//   - timeout errors — [errors.IsGatewayTimeout], HTTP 504 and gRPC
-//     DeadlineExceeded — only when ctx carries the [Idempotent] declaration:
-//     a timed-out request may have executed, so retrying it is duplicate
-//     execution unless the operation tolerates that.
+// Declaration comes from the call site. When ctx carries [Idempotent], the
+// caller asserts the operation tolerates repeat execution, and these Kinds are
+// then retried:
 //
-// Everything else is not retried. Client errors (400, 401, 403, 404, 409,
-// 429) are deterministic or load-induced; retrying them cannot succeed or
-// makes overload worse. Internal errors (500) report that the server ran the
-// request and failed. Local context cancellation and deadline expiry are
-// never retryable regardless of any declaration.
+//   - [errors.KindUnavailable]: the transport or server reports itself unable
+//     to serve, a condition both protocols document as transient;
+//   - [errors.KindDeadlineExceeded]: the attempt ran out of time, which says
+//     nothing about whether a server executed it.
+//
+// Both Kinds are ambiguous about delivery on their own — a service can go
+// unavailable after executing a request and before its reply arrives — which
+// is why neither is retried without the declaration.
+//
+// Everything else is not retried. Caller-side failures are deterministic;
+// retrying them cannot succeed. [errors.KindInternal] reports that the server
+// ran the request and failed. [errors.KindResourceExhausted] and
+// [errors.KindConflict] stay out even under the declaration: retrying a
+// rate-limited call without backoff makes overload worse, and retrying a
+// conflict needs the caller to re-read state first. Local context
+// cancellation and deadline expiry are never retryable, since no declaration
+// makes a caller's own abandonment worth repeating.
 func DefaultRetryable(ctx context.Context, err error) bool {
 	if err == nil {
 		return false
@@ -136,14 +198,18 @@ func DefaultRetryable(ctx context.Context, err error) bool {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
-	var oe *net.OpError
-	if errors.As(err, &oe) && oe.Op == "dial" {
+	if transport.WasNotSent(err) {
 		return true
 	}
-	if errors.IsServiceUnavailable(err) {
-		return true
+	if !IsIdempotent(ctx) {
+		return false
 	}
-	return IsIdempotent(ctx) && errors.IsGatewayTimeout(err)
+	switch errors.KindOf(err) {
+	case errors.KindUnavailable, errors.KindDeadlineExceeded:
+		return true
+	default:
+		return false
+	}
 }
 
 // Option is retry option.
@@ -176,6 +242,28 @@ func WithRules(rules *governance.Rules[Policy]) Option {
 	}
 }
 
+// WithBackoff replaces the default [ExponentialJitter] curve with a custom
+// one, for callers whose dependency wants decorrelated jitter, linear growth,
+// a constant interval, or a schedule read from elsewhere.
+//
+// An injected curve is fixed for the life of the middleware and applies to
+// every operation. It takes over the wait entirely, jitter included: the
+// middleware sleeps exactly what [Backoff.Next] returns. Consequently the
+// BaseBackoff and MaxBackoff of the [Policy] in effect stop shaping waits —
+// including the per-operation policies a rule table serves, which continue to
+// govern Attempts and nothing else. A curve that should follow governance
+// must read the governed values itself; this package does not thread a
+// per-call policy into Next, because a per-call curve and a governed curve
+// are two mechanisms for one knob.
+//
+// [Client] rejects a nil Backoff.
+func WithBackoff(b Backoff) Option {
+	return func(o *options) {
+		o.backoff = b
+		o.backoffSet = true
+	}
+}
+
 // WithRetryable replaces [DefaultRetryable] as the judgment of which errors
 // are worth another attempt. The predicate receives the call context, so it
 // can honor the [Idempotent] declaration via [IsIdempotent] or consult its
@@ -195,10 +283,23 @@ type options struct {
 	rulesSet     bool
 	retryable    func(context.Context, error) bool
 	retryableSet bool
+	backoff      Backoff
+	backoffSet   bool
 
 	// test seams; production values are set by Client.
 	sleep func(ctx context.Context, d time.Duration) error
 	randN func(n int64) int64
+}
+
+// backoffFor returns the curve for a call served under policy p: the injected
+// one when set, otherwise the default curve parameterized by that policy — so
+// a governed BaseBackoff/MaxBackoff reaches the default curve, and only the
+// default curve.
+func (o *options) backoffFor(p Policy) Backoff {
+	if o.backoff != nil {
+		return o.backoff
+	}
+	return ExponentialJitter{Base: p.BaseBackoff, Max: p.MaxBackoff, randN: o.randN}
 }
 
 // policyFor resolves the policy for the call in flight.
@@ -232,14 +333,13 @@ func (o *options) policyFor(ctx context.Context) Policy {
 // inside retry observes each attempt, which is the accounting it needs.
 //
 // Client returns an error for a configuration that cannot serve: a nil
-// option, an invalid static policy, an explicitly nil rule table or
-// retryable predicate.
+// option, an invalid static policy, an explicitly nil rule table, retryable
+// predicate, or backoff.
 func Client(opts ...Option) (middleware.UnaryMiddleware, error) {
 	o := &options{
 		policy:    defaultPolicy,
 		retryable: DefaultRetryable,
 		sleep:     sleepContext,
-		randN:     rand.Int64N,
 	}
 	for i, opt := range opts {
 		if opt == nil {
@@ -256,9 +356,13 @@ func Client(opts ...Option) (middleware.UnaryMiddleware, error) {
 	if o.retryableSet && o.retryable == nil {
 		return nil, fmt.Errorf("retry: WithRetryable requires a non-nil predicate")
 	}
+	if o.backoffSet && o.backoff == nil {
+		return nil, fmt.Errorf("retry: WithBackoff requires a non-nil backoff")
+	}
 	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (any, error) {
 			p := o.policyFor(ctx)
+			backoff := o.backoffFor(p)
 			var lastErr error
 			for attempt := 1; ; attempt++ {
 				reply, err := handler(ctx, req)
@@ -269,10 +373,7 @@ func Client(opts ...Option) (middleware.UnaryMiddleware, error) {
 				if attempt >= p.Attempts || ctx.Err() != nil || !o.retryable(ctx, err) {
 					return nil, lastErr
 				}
-				var wait time.Duration
-				if bound := p.backoffBound(attempt); bound > 0 {
-					wait = time.Duration(o.randN(int64(bound)))
-				}
+				wait := max(backoff.Next(attempt), 0)
 				if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) < wait {
 					return nil, lastErr
 				}

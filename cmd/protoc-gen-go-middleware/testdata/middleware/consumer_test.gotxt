@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	nethttp "net/http"
+
 	"google.golang.org/grpc/metadata"
 
 	"github.com/sylphylabs/forge/middleware"
@@ -203,6 +205,9 @@ func (s *nativeStream) SetContext(ctx context.Context)   { s.ctx = ctx }
 func (s *nativeStream) SetReadDeadline(time.Time) error  { return nil }
 func (s *nativeStream) SetWriteDeadline(time.Time) error { return nil }
 
+// httpWatchStream carries HTTP headers rather than gRPC metadata. The two
+// transports spell headers differently, so a stream that serves both has to
+// override the metadata-shaped methods it inherits.
 type httpWatchStream struct{ *nativeStream }
 
 func newHTTPWatchStream(ctx context.Context) *httpWatchStream {
@@ -210,6 +215,10 @@ func newHTTPWatchStream(ctx context.Context) *httpWatchStream {
 }
 
 func (s *httpWatchStream) Send(message *DocumentReply) error { return s.SendMsg(message) }
+
+func (s *httpWatchStream) SetHeader(nethttp.Header) error  { return nil }
+func (s *httpWatchStream) SendHeader(nethttp.Header) error { return nil }
+func (s *httpWatchStream) SetTrailer(nethttp.Header)       {}
 
 type grpcWatchStream struct{ *nativeStream }
 
