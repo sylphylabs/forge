@@ -8,8 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
+	"github.com/sylphylabs/forge/internal/protojsonutil"
 )
 
 var (
@@ -170,10 +169,7 @@ func (v *atomicValue) Scan(obj any) error {
 	if err != nil {
 		return err
 	}
-	if pb, ok := obj.(proto.Message); ok {
-		return protojson.UnmarshalOptions{DiscardUnknown: true}.Unmarshal(data, pb)
-	}
-	return json.Unmarshal(data, obj)
+	return protojsonutil.Unmarshal(data, obj)
 }
 
 type errValue struct {

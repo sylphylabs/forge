@@ -1,16 +1,11 @@
 package config
 
 import (
-	"bytes"
-	"encoding/gob"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
-
+	"github.com/sylphylabs/forge/internal/protojsonutil"
 	"github.com/sylphylabs/forge/log"
 )
 
@@ -76,6 +71,12 @@ func (r *reader) Resolve() error {
 	return r.opts.resolver(r.values)
 }
 
+// cloneMap returns a deep copy of the accumulated values.
+//
+// It shares the merge package's copier rather than round-tripping through gob.
+// The gob encoding it replaced decoded an empty slice as nil, so a config value
+// declared as `[]` became null on the second merge, and gob.Register mutated a
+// process-global registry on every call.
 func (r *reader) cloneMap() (map[string]any, error) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -83,22 +84,8 @@ func (r *reader) cloneMap() (map[string]any, error) {
 }
 
 func cloneMap(src map[string]any) (map[string]any, error) {
-	// https://gist.github.com/soroushjp/0ec92102641ddfc3ad5515ca76405f4d
-	var buf bytes.Buffer
-	gob.Register(map[string]any{})
-	gob.Register([]any{})
-	enc := gob.NewEncoder(&buf)
-	dec := gob.NewDecoder(&buf)
-	err := enc.Encode(src)
-	if err != nil {
-		return nil, err
-	}
-	var clone map[string]any
-	err = dec.Decode(&clone)
-	if err != nil {
-		return nil, err
-	}
-	return clone, nil
+	cloned, _ := cloneMergeValue(src).(map[string]any)
+	return cloned, nil
 }
 
 func convertMap(src any) any {
@@ -158,15 +145,9 @@ func readValue(values map[string]any, path string) (Value, bool) {
 }
 
 func marshalJSON(v any) ([]byte, error) {
-	if m, ok := v.(proto.Message); ok {
-		return protojson.MarshalOptions{EmitUnpopulated: true}.Marshal(m)
-	}
-	return json.Marshal(v)
+	return protojsonutil.Marshal(v)
 }
 
 func unmarshalJSON(data []byte, v any) error {
-	if m, ok := v.(proto.Message); ok {
-		return protojson.UnmarshalOptions{DiscardUnknown: true}.Unmarshal(data, m)
-	}
-	return json.Unmarshal(data, v)
+	return protojsonutil.Unmarshal(data, v)
 }
