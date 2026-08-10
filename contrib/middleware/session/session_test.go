@@ -203,7 +203,7 @@ func TestServerPropagatesStoreError(t *testing.T) {
 	if !errors.Is(err, want) {
 		t.Fatalf("error = %v, want it to wrap %v", err, want)
 	}
-	if se := forgeerrors.FromError(err); se != nil && se.Reason == reason {
+	if forgeerrors.KindOf(err) == forgeerrors.KindUnauthenticated {
 		t.Error("a store outage was reported as an authentication failure")
 	}
 }

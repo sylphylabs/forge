@@ -198,6 +198,7 @@ func (client *configClient) publishConfigFile(name string) error {
 }
 
 func TestConfig(t *testing.T) {
+	requirePolaris(t)
 	name := "forge-polaris-test.yaml"
 	client, err := newConfigClient()
 	if err != nil {
@@ -270,6 +271,7 @@ func TestConfig(t *testing.T) {
 }
 
 func TestExtToFormat(t *testing.T) {
+	requirePolaris(t)
 	name := "forge-polaris-ext.yaml"
 	client, err := newConfigClient()
 	if err != nil {
@@ -320,6 +322,7 @@ func TestExtToFormat(t *testing.T) {
 }
 
 func TestGetMultipleConfig(t *testing.T) {
+	requirePolaris(t)
 	client, err := newConfigClient()
 	files := make([]File, 0, 3)
 	for i := 0; i < 3; i++ {

@@ -30,8 +30,8 @@ func TestProtoValidateStreamInitialRequest(t *testing.T) {
 				if err == nil {
 					t.Fatal("ProtoValidateStream() error = nil, want error")
 				}
-				if se := kerrors.FromError(err); se == nil || se.Reason != "VALIDATOR" {
-					t.Errorf("reason = %v, want VALIDATOR", se)
+				if se := kerrors.FromError(err); se == nil || se.Reason() != "VALIDATION_FAILED" {
+					t.Errorf("reason = %v, want VALIDATION_FAILED", se)
 				}
 				if called {
 					t.Error("handler must not run when the initial request is invalid")
@@ -88,8 +88,8 @@ func TestPerMessageProtoValidateStreamRejectsInvalidMessage(t *testing.T) {
 	if recvErr == nil {
 		t.Fatal("RecvMsg() error = nil, want a validation error")
 	}
-	if se := kerrors.FromError(recvErr); se == nil || se.Reason != "VALIDATOR" {
-		t.Errorf("reason = %v, want VALIDATOR", se)
+	if se := kerrors.FromError(recvErr); se == nil || se.Reason() != "VALIDATION_FAILED" {
+		t.Errorf("reason = %v, want VALIDATION_FAILED", se)
 	}
 }
 

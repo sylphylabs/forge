@@ -5,16 +5,16 @@ go 1.27rc2
 require (
 	github.com/felixge/httpsnoop v1.1.0
 	github.com/sylphylabs/forge v0.0.0
-	go.opentelemetry.io/contrib/bridges/otelslog v0.19.0
-	go.opentelemetry.io/otel v1.44.0
-	go.opentelemetry.io/otel/log v0.20.0
-	go.opentelemetry.io/otel/log/logtest v0.20.0
-	go.opentelemetry.io/otel/metric v1.44.0
-	go.opentelemetry.io/otel/sdk v1.44.0
-	go.opentelemetry.io/otel/sdk/metric v1.44.0
-	go.opentelemetry.io/otel/trace v1.44.0
+	go.opentelemetry.io/contrib/bridges/otelslog v0.20.0
+	go.opentelemetry.io/otel v1.45.0
+	go.opentelemetry.io/otel/log v0.21.0
+	go.opentelemetry.io/otel/log/logtest v0.21.0
+	go.opentelemetry.io/otel/metric v1.45.0
+	go.opentelemetry.io/otel/sdk v1.45.0
+	go.opentelemetry.io/otel/sdk/metric v1.45.0
+	go.opentelemetry.io/otel/trace v1.45.0
 	golang.org/x/net v0.57.0
-	google.golang.org/grpc v1.82.1
+	google.golang.org/grpc v1.83.0
 	google.golang.org/protobuf v1.36.11
 )
 
@@ -26,7 +26,6 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/sylphylabs/forge/api v0.0.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/sync v0.22.0 // indirect
@@ -37,5 +36,3 @@ require (
 )
 
 replace github.com/sylphylabs/forge => ../../
-
-replace github.com/sylphylabs/forge/api => ../../api

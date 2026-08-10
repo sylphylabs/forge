@@ -15,7 +15,8 @@ import (
 
 // ErrLimitExceed is service unavailable due to rate limit exceeded.
 var (
-	ErrLimitExceed = errors.New(429, "RATELIMIT", "service unavailable due to rate limit exceeded")
+	ErrLimitExceed = errors.MustDefine(errors.KindResourceExhausted, "polaris.forge.sylphylabs.io", "RATE_LIMIT_EXCEEDED").
+		Msg("request rejected because the rate limit was exceeded")
 )
 
 // Ratelimit Request rate limit middleware

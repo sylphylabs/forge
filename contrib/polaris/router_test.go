@@ -16,6 +16,7 @@ import (
 )
 
 func TestRouter(t *testing.T) {
+	requirePolaris(t)
 	token, err := getToken("http://127.0.0.1:8090")
 	if err != nil {
 		t.Fatal(err)

@@ -19,19 +19,20 @@ import (
 	forgeerrors "github.com/sylphylabs/forge/errors"
 )
 
-const reason = "UNAUTHORIZED"
+// domain namespaces the reasons this middleware raises.
+const domain = "session.middleware.forge.sylphylabs.io"
 
 var (
 	// ErrMissingSessionID reports a request that carried no session credential.
-	ErrMissingSessionID = forgeerrors.Unauthorized(reason, "Session ID is missing")
+	ErrMissingSessionID = forgeerrors.MustDefine(forgeerrors.KindUnauthenticated, domain, "MISSING_SESSION_ID").Msg("Session ID is missing")
 	// ErrSessionNotFound reports a credential naming no live session.
-	ErrSessionNotFound = forgeerrors.Unauthorized(reason, "Session not found")
+	ErrSessionNotFound = forgeerrors.MustDefine(forgeerrors.KindUnauthenticated, domain, "SESSION_NOT_FOUND").Msg("Session not found")
 	// ErrSessionExpired reports a session past its expiry.
-	ErrSessionExpired = forgeerrors.Unauthorized(reason, "Session has expired")
+	ErrSessionExpired = forgeerrors.MustDefine(forgeerrors.KindUnauthenticated, domain, "SESSION_EXPIRED").Msg("Session has expired")
 	// ErrMissingStore reports a middleware built without a Store.
-	ErrMissingStore = forgeerrors.Unauthorized(reason, "Session store is missing")
+	ErrMissingStore = forgeerrors.MustDefine(forgeerrors.KindUnauthenticated, domain, "MISSING_STORE").Msg("Session store is missing")
 	// ErrWrongContext reports a context carrying no server transport.
-	ErrWrongContext = forgeerrors.Unauthorized(reason, "Wrong context for middleware")
+	ErrWrongContext = forgeerrors.MustDefine(forgeerrors.KindUnauthenticated, domain, "WRONG_CONTEXT").Msg("Wrong context for middleware")
 
 	// ErrNotFound is returned by a Store when no record matches the ID. The
 	// middleware translates it to ErrSessionNotFound; a Store MUST NOT report a

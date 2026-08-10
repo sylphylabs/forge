@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"testing"
 
-	otellog "go.opentelemetry.io/otel/log"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/log/logtest"
 	"go.opentelemetry.io/otel/trace"
 
@@ -147,8 +147,8 @@ func onlyRecording(t *testing.T, results logtest.Recording) (logtest.Scope, []lo
 func recordAttrs(record logtest.Record) map[string]string {
 	attrs := map[string]string{}
 	for _, kv := range record.Attributes {
-		if kv.Value.Kind() == otellog.KindString {
-			attrs[kv.Key] = kv.Value.AsString()
+		if kv.Value.Type() == attribute.STRING {
+			attrs[string(kv.Key)] = kv.Value.AsString()
 		}
 	}
 	return attrs
@@ -157,7 +157,7 @@ func recordAttrs(record logtest.Record) map[string]string {
 func recordAttrCount(record logtest.Record, key string) int {
 	var count int
 	for _, kv := range record.Attributes {
-		if kv.Key == key {
+		if string(kv.Key) == key {
 			count++
 		}
 	}

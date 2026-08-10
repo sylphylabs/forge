@@ -83,7 +83,7 @@ func TestTable(t *testing.T) {
 			handle := ProtoValidate()(mock)
 			_, err := handle(context.Background(), test.req)
 			expect := test.err
-			actual := kerrors.IsBadRequest(err)
+			actual := kerrors.KindOf(err) == kerrors.KindInvalidArgument
 			if expect != actual {
 				t.Errorf("case %s expect %v, actual %v, err %v", test.name, expect, actual, err)
 			}

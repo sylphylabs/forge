@@ -64,7 +64,10 @@ func (t *Tracer) End(_ context.Context, span trace.Span, m any, err error) {
 	if err != nil {
 		span.RecordError(err)
 		if e := errors.FromError(err); e != nil {
-			span.SetAttributes(attribute.Key("forge.error.code").Int64(int64(e.Code)))
+			span.SetAttributes(
+				attribute.Key("forge.error.kind").String(e.Kind().String()),
+				attribute.Key("forge.error.reason").String(e.Reason()),
+			)
 		}
 		span.SetStatus(codes.Error, err.Error())
 	} else {

@@ -13,6 +13,7 @@ import (
 
 // TestRegistry
 func TestRegistry(t *testing.T) {
+	requirePolaris(t)
 	sdk, err := polaris.NewSDKContextByAddress("127.0.0.1:8091")
 	if err != nil {
 		t.Fatal(err)

@@ -26,21 +26,21 @@ const (
 	// authorizationKey holds the key used to store the JWT Token in the request tokenHeader.
 	authorizationKey string = "Authorization"
 
-	// reason holds the error reason.
-	reason string = "UNAUTHORIZED"
+	// domain namespaces the reasons this middleware raises.
+	domain string = "jwt.middleware.forge.sylphylabs.io"
 )
 
 var (
-	ErrMissingJwtToken        = errors.Unauthorized(reason, "JWT token is missing")
-	ErrMissingKeyFunc         = errors.Unauthorized(reason, "keyFunc is missing")
-	ErrTokenInvalid           = errors.Unauthorized(reason, "Token is invalid")
-	ErrTokenExpired           = errors.Unauthorized(reason, "JWT token has expired")
-	ErrTokenParseFail         = errors.Unauthorized(reason, "Fail to parse JWT token ")
-	ErrUnSupportSigningMethod = errors.Unauthorized(reason, "Wrong signing method")
-	ErrWrongContext           = errors.Unauthorized(reason, "Wrong context for middleware")
-	ErrNeedTokenProvider      = errors.Unauthorized(reason, "Token provider is missing")
-	ErrSignToken              = errors.Unauthorized(reason, "Can not sign token.Is the key correct?")
-	ErrGetKey                 = errors.Unauthorized(reason, "Can not get key while signing token")
+	ErrMissingJwtToken        = errors.MustDefine(errors.KindUnauthenticated, domain, "MISSING_TOKEN").Msg("JWT token is missing")
+	ErrMissingKeyFunc         = errors.MustDefine(errors.KindUnauthenticated, domain, "MISSING_KEY_FUNC").Msg("keyFunc is missing")
+	ErrTokenInvalid           = errors.MustDefine(errors.KindUnauthenticated, domain, "TOKEN_INVALID").Msg("Token is invalid")
+	ErrTokenExpired           = errors.MustDefine(errors.KindUnauthenticated, domain, "TOKEN_EXPIRED").Msg("JWT token has expired")
+	ErrTokenParseFail         = errors.MustDefine(errors.KindUnauthenticated, domain, "TOKEN_PARSE_FAILED").Msg("Fail to parse JWT token ")
+	ErrUnSupportSigningMethod = errors.MustDefine(errors.KindUnauthenticated, domain, "UNSUPPORTED_SIGNING_METHOD").Msg("Wrong signing method")
+	ErrWrongContext           = errors.MustDefine(errors.KindUnauthenticated, domain, "WRONG_CONTEXT").Msg("Wrong context for middleware")
+	ErrNeedTokenProvider      = errors.MustDefine(errors.KindUnauthenticated, domain, "MISSING_TOKEN_PROVIDER").Msg("Token provider is missing")
+	ErrSignToken              = errors.MustDefine(errors.KindUnauthenticated, domain, "SIGN_TOKEN_FAILED").Msg("Can not sign token.Is the key correct?")
+	ErrGetKey                 = errors.MustDefine(errors.KindUnauthenticated, domain, "GET_KEY_FAILED").Msg("Can not get key while signing token")
 )
 
 // Option is jwt option.
