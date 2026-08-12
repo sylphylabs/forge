@@ -25,8 +25,10 @@ const (
 // Subscription declares that an RPC is served by the asynchronous message
 // transport rather than by a request/response transport.
 //
-// The RPC's response type is ignored: proto requires every rpc to name one,
-// but a delivered message has no reply channel to carry it.
+// The RPC's response type must be google.protobuf.Empty: proto requires every
+// rpc to name one, but a delivered message has no reply channel to carry it,
+// and the generator rejects any other response type rather than treating it
+// as decoration.
 type Subscription struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// destination names what the handler subscribes to. It is a default, not a

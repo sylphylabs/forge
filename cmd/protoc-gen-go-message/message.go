@@ -77,6 +77,15 @@ func analyzeService(file *protogen.File, service *protogen.Service, declaredBy m
 				file.Desc.Path(), method.Desc.FullName(),
 			)
 		}
+		// A delivered message has no reply channel, so a response type other
+		// than Empty declares something the transport cannot honor. Rejecting
+		// it here keeps the contract honest instead of silently decorative.
+		if output := method.Desc.Output().FullName(); output != "google.protobuf.Empty" {
+			return nil, fmt.Errorf(
+				"proto %q RPC %s: (sylphy.message.v1.subscribe) requires the response type google.protobuf.Empty, not %s: a delivered message has no reply channel to carry a response",
+				file.Desc.Path(), method.Desc.FullName(), output,
+			)
+		}
 		if previous, duplicated := declaredBy[destination]; duplicated {
 			return nil, fmt.Errorf(
 				"proto %q RPC %s: destination %q is already bound by %s",

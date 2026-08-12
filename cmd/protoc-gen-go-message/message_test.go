@@ -33,6 +33,7 @@ func stringPointer(value string) *string { return &value }
 type methodSpec struct {
 	name            string
 	input           string // request message name; defaults to OrderCreated
+	output          string // fully qualified response type; defaults to .google.protobuf.Empty
 	options         *descriptorpb.MethodOptions
 	streamingClient bool
 	streamingServer bool
@@ -46,10 +47,14 @@ func newMessagePlugin(t *testing.T, methods []methodSpec) (*protogen.Plugin, *de
 		if input == "" {
 			input = "OrderCreated"
 		}
+		output := method.output
+		if output == "" {
+			output = ".google.protobuf.Empty"
+		}
 		descriptor := &descriptorpb.MethodDescriptorProto{
 			Name:       proto.String(method.name),
 			InputType:  proto.String(".test.v1." + input),
-			OutputType: proto.String(".google.protobuf.Empty"),
+			OutputType: proto.String(output),
 			Options:    method.options,
 		}
 		if method.streamingClient {
@@ -220,6 +225,19 @@ func TestAnalyzeMessageFileRejectsInvalidSubscriptions(t *testing.T) {
 				streamingClient: true,
 			}},
 			want: []string{"does not support streaming methods"},
+		},
+		{
+			name: "non-empty response type",
+			methods: []methodSpec{{
+				name:    "OnOrderCreated",
+				output:  ".test.v1.OrderShipped",
+				options: subscription(stringPointer("order.created")),
+			}},
+			want: []string{
+				"RPC test.v1.OrderEvents.OnOrderCreated",
+				"requires the response type google.protobuf.Empty, not test.v1.OrderShipped",
+				"no reply channel",
+			},
 		},
 		{
 			name: "duplicate destination",
