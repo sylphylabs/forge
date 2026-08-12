@@ -1,0 +1,47 @@
+name: Buf
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  # Lint and breaking-change checks run on every PR; the breaking baseline is
+  # the main label on the BSR, so a PR cannot break published consumers
+  # without failing here first.
+  check:
+    name: lint & breaking
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: bufbuild/buf-action@v1
+        with:
+          setup_only: true
+      - name: Lint
+        run: buf lint api
+      - name: Breaking against the published module
+        if: github.event_name == 'pull_request'
+        run: buf breaking api --against buf.build/sylphylabs/forge
+        continue-on-error: true # advisory until the first stable label exists
+
+  # Every merge to main pushes the api protos to the BSR under the main label.
+  # BUF_TOKEN is a bot token for the sylphylabs organization
+  # (buf.build > organization settings > bot users / tokens).
+  push:
+    name: push to BSR
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: bufbuild/buf-action@v1
+        with:
+          token: ${{ secrets.BUF_TOKEN }}
+          setup_only: true
+      - name: Push api module
+        run: buf push api --label main
