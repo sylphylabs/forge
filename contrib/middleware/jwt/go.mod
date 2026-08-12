@@ -7,10 +7,6 @@ require (
 	github.com/sylphylabs/forge v0.0.0
 )
 
-require (
-	github.com/kr/text v0.2.0 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
-)
+require go.yaml.in/yaml/v3 v3.0.5 // indirect
 
 replace github.com/sylphylabs/forge => ../../..
-
