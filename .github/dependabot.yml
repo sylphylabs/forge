@@ -5,3 +5,22 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+
+  # One entry covers every Go module: the root, the API and generator modules,
+  # and both contrib layouts (contrib/otel, contrib/registry/etcd). Directory
+  # globs only match paths that contain a go.mod. Updates are grouped per
+  # module and run weekly so 31 modules do not become 31 daily PR streams.
+  - package-ecosystem: "gomod"
+    directories:
+      - "/"
+      - "/api"
+      - "/api/testdata/consumer"
+      - "/cmd"
+      - "/contrib/*"
+      - "/contrib/*/*"
+    schedule:
+      interval: "weekly"
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"

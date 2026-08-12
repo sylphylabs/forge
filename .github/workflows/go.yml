@@ -89,9 +89,47 @@ jobs:
         run: |
           cd cmd
           GOWORK=off go build ./...
-          GOWORK=off go test ./...
+          GOWORK=off go test -race ./...
         env:
           GOTOOLCHAIN: auto
+
+  generate:
+    name: generated code drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.27.0-rc.2
+
+      - name: Module cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go
+
+      # The Makefile pins the Buf CLI, and buf.gen.yaml runs every plugin with
+      # `go run`, so the root and cmd go.mod files pin the generator versions.
+      # No separate installs are needed for the regeneration to be reproducible.
+      - name: Regenerate committed code
+        run: make generate
+        env:
+          GOTOOLCHAIN: auto
+
+      - name: Verify committed code matches the generators
+        run: |
+          git diff --exit-code
+          untracked=$(git status --porcelain)
+          if [ -n "$untracked" ]; then
+            echo "generation produced files that are not committed:"
+            echo "$untracked"
+            exit 1
+          fi
 
   forward-go:
     name: Go tip forward compatibility
@@ -163,4 +201,35 @@ jobs:
       - name: Cross-service tests
         run: |
           cd internal/e2e
-          FORGE_E2E=1 go test -count=1 -v ./...
+          FORGE_E2E=1 go test -race -count=1 -v ./...
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    # Advisory: a newly published vulnerability in a dependency must not block
+    # unrelated changes. The report is the signal; fixing it is its own change.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.27.0-rc.2
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        env:
+          GOTOOLCHAIN: auto
+
+      # govulncheck analyzes one module at a time; walk every go.mod the same
+      # way hack/tools.sh does.
+      - name: Scan all modules
+        run: |
+          status=0
+          for mod in $(find . -not \( \( -path './output' -o -path './.git' -o -path '*/vendor/*' \) -prune \) -name go.mod -print0 | xargs -0 -I {} dirname {} | sort); do
+            echo "govulncheck $mod"
+            (cd "$mod" && govulncheck ./...) || status=1
+          done
+          exit $status
+        env:
+          GOTOOLCHAIN: auto
