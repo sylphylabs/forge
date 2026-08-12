@@ -82,7 +82,7 @@ func Example_watch() {
 	}
 	defer c.Close()
 
-	err = c.Watch("server.http.timeout", func(key string, value config.Value) {
+	err = c.Watch("server.http.timeout", func(_ string, _ config.Value) {
 		// applied on every source change
 	})
 	fmt.Println(err)

@@ -3,7 +3,7 @@
 //
 // [UnaryMiddleware] wraps a [UnaryHandler], one request producing one reply.
 // [StreamMiddleware] wraps a [StreamHandler], one complete stream lifecycle —
-// not one message; per-message behaviour comes from decorating the
+// not one message; per-message behavior comes from decorating the
 // [ServerStream] the handler receives. There is no single combined
 // middleware type.
 //

@@ -347,7 +347,7 @@ func TestNewCompositeNilPanics(t *testing.T) {
 func TestWithNodeFilterAccumulates(t *testing.T) {
 	var opts selectOptions
 	first := func(_ context.Context, nodes []*Node) []*Node { return nodes }
-	second := func(_ context.Context, nodes []*Node) []*Node { return nil }
+	second := func(_ context.Context, _ []*Node) []*Node { return nil }
 	WithNodeFilter(first)(&opts)
 	WithNodeFilter(second)(&opts)
 	if len(opts.filters) != 2 {

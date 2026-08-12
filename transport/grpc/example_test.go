@@ -9,12 +9,13 @@ import (
 	"fmt"
 	"log/slog"
 
+	"google.golang.org/grpc"
+
 	pb "github.com/sylphylabs/forge/internal/testdata/helloworld"
 	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/middleware/logging"
 	"github.com/sylphylabs/forge/middleware/recovery"
 	forgegrpc "github.com/sylphylabs/forge/transport/grpc"
-	"google.golang.org/grpc"
 )
 
 type greeterServer struct {

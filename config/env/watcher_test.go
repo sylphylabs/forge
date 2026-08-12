@@ -25,7 +25,7 @@ func Test_watcher_next(t *testing.T) {
 }
 
 func Test_watcher_stop(t *testing.T) {
-	t.Run("stop multiple times should not panic", func(t *testing.T) {
+	t.Run("stop multiple times should not panic", func(_ *testing.T) {
 		w := newWatcher()
 		_ = w.Stop()
 		_ = w.Stop()

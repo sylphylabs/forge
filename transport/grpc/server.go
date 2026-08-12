@@ -97,7 +97,7 @@ func WithMiddleware(ms ...middleware.UnaryMiddleware) ServerOption {
 // once, inside NewServer, and wraps every streaming method outside (before)
 // any middleware attached through a generated service plan. At this layer the
 // initial request is not yet decoded, so the handler's request argument is
-// always nil; per-message behaviour comes from decorating the stream.
+// always nil; per-message behavior comes from decorating the stream.
 func WithStreamMiddleware(ms ...middleware.StreamMiddleware) ServerOption {
 	return func(s *Server) {
 		s.streamMiddleware = append(s.streamMiddleware, ms...)

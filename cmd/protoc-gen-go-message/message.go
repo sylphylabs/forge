@@ -82,7 +82,8 @@ func analyzeService(file *protogen.File, service *protogen.Service, declaredBy m
 		// it here keeps the contract honest instead of silently decorative.
 		if output := method.Desc.Output().FullName(); output != "google.protobuf.Empty" {
 			return nil, fmt.Errorf(
-				"proto %q RPC %s: (sylphy.message.v1.subscribe) requires the response type google.protobuf.Empty, not %s: a delivered message has no reply channel to carry a response",
+				"proto %q RPC %s: (sylphy.message.v1.subscribe) requires the response type google.protobuf.Empty, "+
+					"not %s: a delivered message has no reply channel to carry a response",
 				file.Desc.Path(), method.Desc.FullName(), output,
 			)
 		}

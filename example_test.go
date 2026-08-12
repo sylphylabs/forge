@@ -50,7 +50,7 @@ func (pool) Close() error               { return nil }
 func Example_lifecycle() {
 	httpSrv := forgehttp.NewServer(forgehttp.WithAddress("127.0.0.1:0"))
 	var reg noopRegistrar
-	var pool pool
+	var dbPool pool
 
 	app := forge.New(
 		forge.WithName("helloworld"),
@@ -59,8 +59,8 @@ func Example_lifecycle() {
 		forge.WithRegistrarTimeout(5*time.Second),
 		forge.WithStopTimeout(15*time.Second),
 		forge.WithAfterStopTimeout(5*time.Second),
-		forge.WithBeforeStart(func(ctx context.Context) error { return pool.Ping(ctx) }),
-		forge.WithAfterStop(func(ctx context.Context) error { return pool.Close() }),
+		forge.WithBeforeStart(func(ctx context.Context) error { return dbPool.Ping(ctx) }),
+		forge.WithAfterStop(func(_ context.Context) error { return dbPool.Close() }),
 	)
 
 	_ = app
@@ -89,7 +89,7 @@ type closingSuite struct{ closer interface{ Close() error } }
 
 func (s closingSuite) Options() []forge.Option {
 	return []forge.Option{
-		forge.WithAfterStop(func(ctx context.Context) error {
+		forge.WithAfterStop(func(_ context.Context) error {
 			return s.closer.Close()
 		}),
 	}

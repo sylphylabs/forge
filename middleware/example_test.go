@@ -37,7 +37,7 @@ func callInfo(ctx context.Context) {
 }
 
 func Example_unaryMiddleware() {
-	handler := func(ctx context.Context, req any) (any, error) {
+	handler := func(ctx context.Context, _ any) (any, error) {
 		callInfo(ctx)
 		return ctx.Value(tagKey{}), nil
 	}
@@ -48,7 +48,7 @@ func Example_unaryMiddleware() {
 	// Output: tagged <nil>
 }
 
-// countingStream mirrors "Writing stream middleware": per-message behaviour
+// countingStream mirrors "Writing stream middleware": per-message behavior
 // comes from decorating ServerStream, not from a per-message hook.
 type countingStream struct {
 	middleware.ServerStream
@@ -80,7 +80,7 @@ func (nopStream) RecvMsg(any) error        { return nil }
 func Example_streamMiddleware() {
 	var received atomic.Int64
 
-	handler := func(request any, stream middleware.ServerStream) error {
+	handler := func(_ any, stream middleware.ServerStream) error {
 		var msg any
 		return stream.RecvMsg(&msg)
 	}
@@ -99,7 +99,7 @@ func Example_composingByHand() {
 	a := Tagging("a")
 	b := Tagging("b")
 	c := Tagging("c")
-	next := func(ctx context.Context, req any) (any, error) { return req, nil }
+	next := func(_ context.Context, req any) (any, error) { return req, nil }
 
 	chained := middleware.ChainUnary(a, b, c)           // no validation
 	handler, err := middleware.ComposeUnary(next, a, b) // validates, returns error
@@ -113,7 +113,7 @@ func Example_composingByHand() {
 	// ChainStream and ComposeStream are the stream equivalents.
 	_ = middleware.ChainStream(Counting(new(atomic.Int64)))
 	streamHandler, err := middleware.ComposeStream(
-		func(request any, stream middleware.ServerStream) error { return nil },
+		func(_ any, _ middleware.ServerStream) error { return nil },
 		Counting(new(atomic.Int64)),
 	)
 	if err != nil {

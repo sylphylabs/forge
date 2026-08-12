@@ -194,7 +194,7 @@ func (nopHub) RecoverWithContext(context.Context, any) {}
 
 func Example_errorReporter() {
 	mw := errorReporter(nopHub{})
-	handler := mw(func(ctx context.Context, req any) (any, error) { return "ok", nil })
+	handler := mw(func(_ context.Context, _ any) (any, error) { return "ok", nil })
 
 	reply, err := handler(context.Background(), nil)
 	fmt.Println(reply, err)
