@@ -92,7 +92,7 @@ It fails on the same grounds as go-micro's `DefaultRegistry`, and it would
 contradict `Suite`'s documented property that integrations carry no global
 state.
 
-An `App` option (`forge.Diagnosis(reg)`) was rejected because it buys
+An `App` option (`forge.WithDiagnosis(reg)`) was rejected because it buys
 nothing the plain value does not already provide, and it would obligate
 `App` to define what it does with the registry — mount it? expose it? —
 decisions this design deliberately leaves with the application. `App`

@@ -16,13 +16,13 @@ import (
 )
 
 func main() {
-	httpSrv := forgehttp.NewServer(forgehttp.Address(":8000"))
-	grpcSrv := forgegrpc.NewServer(forgegrpc.Address(":9000"))
+	httpSrv := forgehttp.NewServer(forgehttp.WithAddress(":8000"))
+	grpcSrv := forgegrpc.NewServer(forgegrpc.WithAddress(":9000"))
 
 	app := forge.New(
-		forge.Name("helloworld"),
-		forge.Version("v1.0.0"),
-		forge.Server(httpSrv, grpcSrv),
+		forge.WithName("helloworld"),
+		forge.WithVersion("v1.0.0"),
+		forge.WithServer(httpSrv, grpcSrv),
 	)
 	if err := app.Run(); err != nil {
 		panic(err)
@@ -30,8 +30,9 @@ func main() {
 }
 ```
 
-`forge.New` generates a UUID `ID` unless you set one, and defaults `Signal` to
-`SIGTERM`, `SIGQUIT`, `SIGINT`. `forge.Logger(logger)` also installs the logger
+`forge.New` generates a UUID service id unless `forge.WithID` sets one, and
+defaults the stop signals to `SIGTERM`, `SIGQUIT`, `SIGINT` unless
+`forge.WithSignal` overrides them. `forge.WithLogger(logger)` also installs the logger
 as the `log` package default.
 
 Register generated services on the transport servers before `Run` — wrapping
@@ -49,16 +50,16 @@ v1.RegisterGreeterHTTPServer(httpSrv, service)
 
 `Run` executes in this order, and returns only after everything below settles:
 
-1. build the registry instance from `Endpoint`, or from each server's
+1. build the registry instance from `WithEndpoint`, or from each server's
    `Endpointer` when no endpoint was configured,
 2. `BeforeStart` hooks, in registration order,
 3. every server's `Start`, concurrently,
-4. `Registrar.Register`, bounded by `RegistrarTimeout` (default 10s),
+4. `Registrar.Register`, bounded by `WithRegistrarTimeout` (default 10s),
 5. `AfterStart` hooks,
 6. wait for a signal or context cancellation,
-7. deregister, then every server's `Stop`, each bounded by `StopTimeout`
-   (default 10s),
-8. `AfterStop` hooks, bounded in total by `AfterStopTimeout` (default 10s).
+7. `BeforeStop` hooks, then deregister, then every server's `Stop`, each
+   bounded by `WithStopTimeout` (default 10s),
+8. `AfterStop` hooks, bounded in total by `WithAfterStopTimeout` (default 10s).
 
 A hook returning an error aborts startup and unwinds through the remaining
 stop path. `Run` joins every error it collected rather than reporting only the
@@ -66,27 +67,27 @@ first.
 
 ```go
 app := forge.New(
-	forge.Name("helloworld"),
-	forge.Server(httpSrv),
-	forge.Registrar(reg),
-	forge.RegistrarTimeout(5*time.Second),
-	forge.StopTimeout(15*time.Second),
-	forge.AfterStopTimeout(5*time.Second),
-	forge.BeforeStart(func(ctx context.Context) error { return pool.Ping(ctx) }),
-	forge.AfterStop(func(ctx context.Context) error { return pool.Close() }),
+	forge.WithName("helloworld"),
+	forge.WithServer(httpSrv),
+	forge.WithRegistrar(reg),
+	forge.WithRegistrarTimeout(5*time.Second),
+	forge.WithStopTimeout(15*time.Second),
+	forge.WithAfterStopTimeout(5*time.Second),
+	forge.WithBeforeStart(func(ctx context.Context) error { return pool.Ping(ctx) }),
+	forge.WithAfterStop(func(ctx context.Context) error { return pool.Close() }),
 )
 ```
 
-The three timeouts are independent: `StopTimeout` bounds each server's shutdown,
-`AfterStopTimeout` bounds all `AfterStop` hooks together. A non-positive
-`AfterStopTimeout` disables that deadline.
+The three timeouts are independent: `WithStopTimeout` bounds each server's
+shutdown, `WithAfterStopTimeout` bounds all `AfterStop` hooks together. A
+non-positive `WithAfterStopTimeout` disables that deadline.
 
 Inside a handler or hook, recover application identity from the context:
 
 ```go
 if info, ok := forge.FromContext(ctx); ok {
 	_ = info.Name()
-	_ = info.Endpoint()
+	_ = info.Endpoints()
 }
 ```
 
@@ -100,14 +101,14 @@ type tracingSuite struct{ provider trace.TracerProvider }
 
 func (s tracingSuite) Options() []forge.Option {
 	return []forge.Option{
-		forge.AfterStop(func(ctx context.Context) error {
+		forge.WithAfterStop(func(ctx context.Context) error {
 			return s.provider.(*sdktrace.TracerProvider).Shutdown(ctx)
 		}),
 	}
 }
 
 app := forge.New(
-	forge.Name("helloworld"),
+	forge.WithName("helloworld"),
 	forge.WithSuite(tracingSuite{provider: tp}),
 )
 ```
@@ -147,12 +148,11 @@ open type: a transport outside this module may declare its own.
 ## Config
 
 ```go
-c := config.New(config.WithSource(file.NewSource("./configs")))
-defer c.Close()
-
-if err := c.Load(); err != nil {
+c, err := config.New(ctx, config.WithSource(file.NewSource("./configs")))
+if err != nil {
 	return err
 }
+defer c.Close()
 
 var bc conf.Bootstrap
 if err := c.Scan(&bc); err != nil {
@@ -162,8 +162,12 @@ if err := c.Scan(&bc); err != nil {
 port, err := config.Get[int](c, "server.http.port")
 ```
 
-`Load` must be called before reading. `Value(key)` returns a typed accessor;
-`config.Get[T]` is the generic shorthand. Watch a key for dynamic reconfiguration:
+`config.New` loads every source before returning: when it returns without
+error the snapshot is complete and being kept current by one watch loop per
+source, so there is no separate load step and no half-initialized Config. The
+context bounds construction only; the watch loops run until `Close`.
+`Value(key)` returns a typed accessor; `config.Get[T]` is the generic
+shorthand. Watch a key for dynamic reconfiguration:
 
 ```go
 err := c.Watch("server.http.timeout", func(key string, value config.Value) {
@@ -180,9 +184,9 @@ Each contrib source is a separate module.
 | Wrong | Right |
 | --- | --- |
 | `forge new myproject` / a scaffolding CLI | Forge ships none; use the Go toolchain and `buf generate` |
-| Reading config before `Load()` | `Load()` first, then `Scan` / `Value` / `Get` |
+| `c := config.New(...)` then `c.Load()` | `config.New(ctx, ...)` returns `(*Config, error)` and loads on construction; there is no `Load` |
 | Assuming `Healthz()` reports liveness | It reports readiness; liveness is the process |
 | Calling `srv.Stop` directly for a drain | Implement/prefer `GracefulStopper`; the lifecycle uses it |
 | Parsing `Transporter.Operation()` | Opaque — dispatch on `Kind()` |
-| Expecting `StopTimeout` to bound `AfterStop` | Separate knob: `AfterStopTimeout` |
+| Expecting `WithStopTimeout` to bound `AfterStop` | Separate knob: `WithAfterStopTimeout` |
 | Mutating a `Suite` after `WithSuite` | `Options` is read immediately |

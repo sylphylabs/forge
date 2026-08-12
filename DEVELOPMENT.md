@@ -16,7 +16,7 @@ go1.27rc2 version
 
 ## Modules
 
-Forge contains 27 Go modules. The root `go test ./...` command does not cover nested modules. Use the repository helpers for complete checks:
+Forge contains 31 Go modules. The root `go test ./...` command does not cover nested modules. Use the repository helpers for complete checks:
 
 ```shell
 ./hack/tools.sh tidy
@@ -99,7 +99,7 @@ Do not push upstream Kratos tags to `origin`.
 
 ## Documentation Contract
 
-`COMPATIBILITY.md` is the source of truth for accepted differences from Forge;
+`COMPATIBILITY.md` is the source of truth for accepted differences from Kratos;
 `COMPATIBILITY_zh.md` is its maintained translation. Update both in the same
 change whenever a public API, default behavior, wire format, module, tool, or
 minimum Go version changes. A breaking change also requires an executable

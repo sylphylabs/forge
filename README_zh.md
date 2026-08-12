@@ -22,7 +22,7 @@ Forge 是 [go-kratos/kratos](https://github.com/go-kratos/kratos) 的独立预�
 
 ### 环境要求
 
-- [Go](https://go.dev/dl/) 1.26 或更高版本；同时使用 Go 1.27 RC 做前向验证
+- [Go](https://go.dev/dl/) 1.27 RC（当前为 1.27rc2；`go.mod` 已要求该版本，Go 1.26 无法构建 Forge）
 - [protoc](https://github.com/protocolbuffers/protobuf)
 - [protoc-gen-go](https://github.com/protocolbuffers/protobuf-go)
 - [Buf](https://buf.build/) 或等效的 `protoc` 工作流
@@ -67,13 +67,13 @@ import (
 )
 
 func main() {
-	httpSrv := http.NewServer(http.Address(":8000"))
-	grpcSrv := grpc.NewServer(grpc.Address(":9000"))
+	httpSrv := http.NewServer(http.WithAddress(":8000"))
+	grpcSrv := grpc.NewServer(grpc.WithAddress(":9000"))
 
 	app := forge.New(
-		forge.Name("helloworld"),
-		forge.Version("v1.0.0"),
-		forge.Server(httpSrv, grpcSrv),
+		forge.WithName("helloworld"),
+		forge.WithVersion("v1.0.0"),
+		forge.WithServer(httpSrv, grpcSrv),
 	)
 	if err := app.Run(); err != nil {
 		panic(err)
@@ -83,7 +83,7 @@ func main() {
 
 ## 上游基线
 
-Forge 以 Kratos v3 为起点。现有 Forge 用户应将 module path 变化及后续 Forge 版本视为显式迁移，而不是 Forge 的原地升级。
+Forge 以 Kratos v3 为起点。现有 Kratos 用户应将 module path 变化及后续 Forge 版本视为显式迁移，而不是 Kratos 的原地升级。
 
 ## 扩展阅读
 

@@ -202,7 +202,7 @@ mux registration order. Review every hand-written route and add tests for:
 - expected 404 and 405 responses.
 
 Replace multi-segment Gorilla regular expressions with Google AIP templates.
-Remove `http.StrictSlash(...)` from server construction; Forge uses
+Remove `http.WithStrictSlash(...)` from server construction; Forge uses
 `http.ServeMux` path cleaning and trailing-slash behavior. If the service
 intentionally used `http.DefaultServeMux` as a fallback, pass it explicitly
 through `NotFoundHandler`.
@@ -259,9 +259,10 @@ constructed a handler chain without invoking it, so migrated lifecycle
 middleware now actually runs. Treat that as a correctness fix when comparing
 behavior.
 
-Raw HTTP request/response behavior belongs in `http.Filter`. Native gRPC
+Raw HTTP request/response behavior belongs in `http.WithFilter`. Native gRPC
 metadata, peer, status, compression, header, or trailer behavior belongs in
-`grpc.UnaryInterceptor`, `grpc.StreamInterceptor`, or `grpc.Options`. These
+`grpc.WithUnaryInterceptor`, `grpc.WithStreamInterceptor`, or
+`grpc.WithOptions`. These
 transport-native layers run outside generated service middleware.
 
 `middleware/selector.Server` is removed with the server selector path.
@@ -350,7 +351,7 @@ contract; this section covers the mechanical changes.
 
 ### 9.1 Replace constructors
 
-Each HTTP-named constructor becomes `New` with a kind. The reason is no longer
+Each HTTP-named constructor becomes `Of` with a kind. The reason is no longer
 a positional argument, because a contract error should carry one from its
 Protobuf declaration:
 
@@ -361,11 +362,11 @@ return errors.NotFound("USER", "no such user")
 return errors.InternalServer("DB", err.Error())
 
 // Forge
-return errors.New(errors.KindInvalidArgument).
+return errors.Of(errors.KindInvalidArgument).
     WithReason("VALIDATION").Msg("email is malformed")
-return errors.New(errors.KindNotFound).
+return errors.Of(errors.KindNotFound).
     WithReason("USER").Msg("no such user")
-return errors.New(errors.KindInternal).
+return errors.Of(errors.KindInternal).
     WithReason("DB").Wrap(err)
 ```
 
@@ -456,14 +457,15 @@ The cause chain no longer crosses a process boundary. `errors.Unwrap` returns
 nil on a received error and `errors.As` will not reach a remote type. A client
 that inspected a wrapped cause after an RPC must correlate by trace ID instead.
 
-Outgoing errors pass through an `errors.Policy`, defaulting to withholding the
-message of an internal failure. A client that displayed the server's message for
-a 500 now sees a generic one; the original remains in the service's logs, keyed
-by trace ID. Services on a trusted internal network can opt out:
-
-```go
-http.NewErrorEncoder(errors.PolicyVerbose)
-```
+Outgoing errors disclose only `errors.Public` — the kind, the domain/reason
+identity, and the message, metadata, and violations the caller explicitly set
+with `Msg`, `Meta`, `WithMetadata`, or `Violations`. A non-Forge error
+discloses only `KindUnknown` and a generic transport message. A client that
+displayed the raw text of a bare wrapped error for a 500 now sees a generic
+one; the original remains in the service's logs, keyed by trace ID. There is
+no verbose mode to opt out: a field crosses the boundary because the caller
+declared it, and a service that must expose more sets it explicitly on the
+error or supplies a custom transport encoder.
 
 Finally, `errors.Join` is not an aggregate error in this contract — it drops all
 but the first error at the boundary. Validation that reported multiple failures
@@ -490,7 +492,7 @@ serverMetrics, err := metrics.NewHTTPServerFilter(provider)
 if err != nil {
 	return err
 }
-server := forgehttp.NewServer(forgehttp.Filter(serverMetrics))
+server := forgehttp.NewServer(forgehttp.WithFilter(serverMetrics))
 
 clientMetrics, err := metrics.NewHTTPClientWrapper(provider)
 if err != nil {
@@ -498,7 +500,7 @@ if err != nil {
 }
 client, err := forgehttp.NewClient(
 	ctx,
-	forgehttp.WithEndpoint(endpoint),
+	forgehttp.WithTarget(endpoint),
 	forgehttp.WithRoundTripperWrapper(clientMetrics),
 )
 ```
@@ -523,11 +525,11 @@ otelOptions := grpcotel.Options{
 }
 
 server := forgegrpc.NewServer(
-	forgegrpc.Options(grpcotel.ServerOption(otelOptions)),
+	forgegrpc.WithOptions(grpcotel.ServerOption(otelOptions)),
 )
 conn, err := forgegrpc.NewClient(
 	ctx,
-	forgegrpc.WithOptions(grpcotel.DialOption(otelOptions)),
+	forgegrpc.WithDialOptions(grpcotel.DialOption(otelOptions)),
 )
 ```
 
@@ -631,11 +633,11 @@ graceful shutdown in integration tests used by the service.
 - [ ] Keep `BuildPath` for dynamic templates; compile repeated fixed templates once.
 - [ ] Review body/query classification, ProtoJSON wire values, and `%2F` paths.
 - [ ] Define explicit HTTP stream lifetime policies.
-- [ ] Replace HTTP-named error constructors with `errors.New(Kind)`, and `WithCause` with `Wrap`.
+- [ ] Replace HTTP-named error constructors with `errors.Of(Kind)`, and `WithCause` with `Wrap`.
 - [ ] Replace `IsXxx` and `errors.Code` with `errors.Is` and `errors.KindOf`.
 - [ ] Rewrite `default_code`/`code` annotations as `default_kind`/`kind` and regenerate.
 - [ ] Update call sites to the generated sentinel values.
-- [ ] Choose an `errors.Policy` per boundary; confirm the default redaction suits public callers.
+- [ ] Review every `Msg`, `Meta`, and `Violations` call: only explicitly declared fields cross the boundary, and they cross verbatim.
 - [ ] Replace `errors.Join` in validation paths with `errors.Violations`.
 - [ ] Confirm no client depends on reaching a cause through `errors.As` after an RPC.
 - [ ] Replace generic metrics middleware with the HTTP filter/wrapper and explicit gRPC A66 metric set.

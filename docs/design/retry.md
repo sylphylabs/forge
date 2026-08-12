@@ -276,7 +276,7 @@ The context is consulted twice per retry: a done context stops immediately,
 and a context whose remaining deadline cannot fit the drawn wait makes the
 middleware give up without sleeping — sleeping into a deadline would burn
 the caller's remaining budget to deliver a guaranteed failure. Note that the
-transport clients' own timeout (`WithTimeout` on either client) spans all
+transport clients' own timeout (`WithRequestTimeout` on either client) spans all
 attempts collectively, since the middleware runs inside it; a per-attempt
 budget, if wanted, is the timeout middleware composed inside retry.
 

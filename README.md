@@ -22,7 +22,7 @@ The project currently tracks `v0` development and does not provide a stable API 
 
 ### Requirements
 
-- [Go](https://go.dev/dl/) 1.26 or later; Go 1.27 RC is used for forward validation
+- [Go](https://go.dev/dl/) 1.27 RC (currently 1.27rc2; `go.mod` requires it, so Go 1.26 cannot build Forge)
 - [protoc](https://github.com/protocolbuffers/protobuf)
 - [protoc-gen-go](https://github.com/protocolbuffers/protobuf-go)
 - [Buf](https://buf.build/) or an equivalent `protoc` workflow
@@ -68,13 +68,13 @@ import (
 )
 
 func main() {
-	httpSrv := http.NewServer(http.Address(":8000"))
-	grpcSrv := grpc.NewServer(grpc.Address(":9000"))
+	httpSrv := http.NewServer(http.WithAddress(":8000"))
+	grpcSrv := grpc.NewServer(grpc.WithAddress(":9000"))
 
 	app := forge.New(
-		forge.Name("helloworld"),
-		forge.Version("v1.0.0"),
-		forge.Server(httpSrv, grpcSrv),
+		forge.WithName("helloworld"),
+		forge.WithVersion("v1.0.0"),
+		forge.WithServer(httpSrv, grpcSrv),
 	)
 	if err := app.Run(); err != nil {
 		panic(err)

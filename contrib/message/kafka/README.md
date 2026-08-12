@@ -26,7 +26,7 @@ Example:
         return err
     }
 
-    app := forge.New(forge.Server(server))
+    app := forge.New(forge.WithServer(server))
     return app.Run()
 
 The adapter implements `message.Publisher` and `message.Subscriber`. It does not

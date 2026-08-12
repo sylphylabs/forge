@@ -10,7 +10,7 @@ Forge keeps every module on the latest compatible release within its
 selected module path. Stable major-version migrations are evaluated separately;
 pre-release majors are not adopted as routine dependency maintenance.
 
-The repository contains 27 Go modules. Dependency updates therefore require a
+The repository contains 31 Go modules. Dependency updates therefore require a
 module-aware pass rather than only running commands at the repository root:
 
 ```shell

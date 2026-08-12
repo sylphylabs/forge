@@ -43,7 +43,7 @@ enum FailureReason {
 }
 ```
 ```go
-var ErrNotFound = errors.Define(errors.KindNotFound, "sylphy.test.v1", ...)
+var ErrNotFound = errors.MustDefine(errors.KindNotFound, "sylphy.test.v1", ...)
 
 if errors.Is(err, v1.ErrNotFound) { ... }   // 只有 stdlib 语义
 ```

@@ -64,7 +64,7 @@ accident. [ADR-0001](adr/0001-adr-triggers.md) states when one is required.
 
 ## Archive
 
-- [Kratos v2 design archive](design/forge-v2.md)
+- [Kratos v2 design archive](design/kratos-v2.md)
 
 Archive documents preserve upstream design history. They do not define current
 Forge behavior.

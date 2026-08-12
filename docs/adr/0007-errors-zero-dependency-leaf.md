@@ -59,8 +59,8 @@ ADR-0006 确立了三层分离：领域语义（`Kind`）、传输编码、诊�
 errors                       Kind · Error · Public · Violations      无 wire 实现
 transport/http               Problem Details · JSON · SSE/WS
 transport/http/transcoding   ProtoJSON · path/query · HttpBody · stream field
-transport/grpc               code/status · ErrorInfo · BadRequest · TraceInfo
-api/errors/v1                Kind annotations · TraceInfo；无 Status envelope
+transport/grpc               code/status · ErrorInfo · BadRequest · RequestInfo(trace)
+api/errors/v1                Kind annotations；无 Status envelope
 ```
 
 HTTP 投影同样外移，尽管它省不了一个字节。**判据是归属，不是成本** —— 这是对 ADR-0006 原则的贯彻，也修正了先前那条不成立的理由。
@@ -165,7 +165,7 @@ HTTP 侧还额外获得表达空间：`KindAlreadyExists` 与 `KindConflict` 当
 
 Kind 是**可变的分类**（HTTP 409 vs 422 之争即例），domain+reason 是**稳定的身份**。把可变量纳入匹配，等于让每次分类调整都成为破坏性变更 —— 这与 ADR-0006 排除 message 的理由同构：会变的东西不参与身份判定。
 
-提议的动机是「HTTP/gRPC 状态与 identity 冲突时误匹配 sentinel」。该场景实测不存在：仅凭状态码分类的远端错误 identity 为空，与任何 sentinel 的 `Is` 已经返回 false。匿名错误之间按 Kind 相等（`Is(New(KindNotFound), New(KindNotFound)) = true`），这是刻意的 —— 它们本就没有身份可比。
+提议的动机是「HTTP/gRPC 状态与 identity 冲突时误匹配 sentinel」。该场景实测不存在：仅凭状态码分类的远端错误 identity 为空，与任何 sentinel 的 `Is` 已经返回 false。匿名错误之间按 Kind 相等（`Is(Of(KindNotFound), Of(KindNotFound)) = true`），这是刻意的 —— 它们本就没有身份可比。
 
 **重试性的归属待定，当前保留 `Kind.Retryable`。** 复审期提议删除，理由是只有传输能证明「请求未发送」。该理由对**自动重试**成立，但 `Kind.Retryable` 描述的是「这类失败是否值得重试」，是分类属性而非执行判断 —— `middleware/retry` 的 `DefaultRetryable` 已经刻意窄于它（排除限流与冲突，并要求幂等声明），两者是不同层次的问题。
 

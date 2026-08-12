@@ -35,8 +35,8 @@ transport-level `http.ServerOption` and `grpc.ServerOption` in their own
 packages. Suite lives only at the application level.
 
 The application level is where the integration problem exists. A complete
-integration is cross-cutting by nature: discovery is a `Registrar` plus a
-`RegistrarTimeout`; observability is a `Logger` plus `Metadata` plus perhaps
+integration is cross-cutting by nature: discovery is a `WithRegistrar` plus a
+`WithRegistrarTimeout`; observability is a `WithLogger` plus `WithMetadata` plus perhaps
 lifecycle hooks. Transport options, by contrast, configure a single server —
 address, TLS, codecs — and their consumers are the application authors
 themselves, not third-party integrators shipping bundles.
@@ -60,7 +60,7 @@ applies. No flattening pass, no reordering, no deduplication.
 Duplicate settings keep the semantics options already have: the option applied
 last wins, whether it came from a suite or was written directly. This makes
 override behavior predictable from the option list alone — a user who writes
-`forge.New(WithSuite(s), forge.Name("mine"))` overrides the suite, and one who
+`forge.New(WithSuite(s), forge.WithName("mine"))` overrides the suite, and one who
 writes the suite last accepts its values. A deduplication or conflict-error
 scheme was rejected because it would give suite-provided options different
 semantics from hand-written ones, and "last wins" is precisely how a user

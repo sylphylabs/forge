@@ -196,7 +196,7 @@ Forge 使用标准库 `http.ServeMux` 的优先级规则，不再依赖 Gorilla 
 - 预期的 404 与 405 响应。
 
 跨多段路径的 Gorilla 正则应改写为 Google AIP 模板。从 server 构造中删除
-`http.StrictSlash(...)`；Forge 遵循 `http.ServeMux` 的路径清理和尾部斜杠
+`http.WithStrictSlash(...)`；Forge 遵循 `http.ServeMux` 的路径清理和尾部斜杠
 行为。如果服务有意使用 `http.DefaultServeMux` 兜底，需要通过 `NotFoundHandler`
 显式传入。
 
@@ -250,9 +250,9 @@ stream 只执行一次；需要观察每次 `SendMsg` 或 `RecvMsg` 时，应装
 却没有调用它，因此迁移后的生命周期 middleware 会真正执行；对比行为时应将其
 视为正确性修复。
 
-原始 HTTP request/response 行为应放入 `http.Filter`。gRPC 原生 metadata、peer、
-status、compression、header 或 trailer 行为应放入 `grpc.UnaryInterceptor`、
-`grpc.StreamInterceptor` 或 `grpc.Options`。这些 transport 原生层位于生成式
+原始 HTTP request/response 行为应放入 `http.WithFilter`。gRPC 原生 metadata、peer、
+status、compression、header 或 trailer 行为应放入 `grpc.WithUnaryInterceptor`、
+`grpc.WithStreamInterceptor` 或 `grpc.WithOptions`。这些 transport 原生层位于生成式
 service middleware 外层。
 
 `middleware/selector.Server` 随 server selector 路径一并移除；client 侧仍可用
@@ -337,9 +337,9 @@ return errors.BadRequest("VALIDATION", "email is malformed")
 return errors.InternalServer("DB", err.Error())
 
 // Forge
-return errors.New(errors.KindInvalidArgument).
+return errors.Of(errors.KindInvalidArgument).
     WithReason("VALIDATION").Msg("email is malformed")
-return errors.New(errors.KindInternal).
+return errors.Of(errors.KindInternal).
     WithReason("DB").Wrap(err)
 ```
 
@@ -407,13 +407,12 @@ if errors.Is(err, v1.ErrUserNotFound) { ... }
 **cause 链不再跨进程。** 收到的错误 `errors.Unwrap` 返回 nil，`errors.As` 也取
 不到远端类型。此前依赖 RPC 后检查 cause 的客户端，改用 trace ID 关联。
 
-**出网错误经过 `errors.Policy`**，默认会隐藏内部错误的 message。此前展示服务端
-500 message 的客户端，现在会看到通用文案；原文仍在服务端日志中，按 trace ID 可
-查。内网可信链路可以关闭：
-
-```go
-http.NewErrorEncoder(errors.PolicyVerbose)
-```
+**出网错误只披露 `errors.Public`** —— kind、domain/reason 身份，以及调用方通过
+`Msg` / `Meta` / `WithMetadata` / `Violations` 显式声明的内容。非 Forge 错误只披露
+`KindUnknown` 和 transport 的通用文案。此前展示裸包装错误原始文本的客户端，现在
+对 500 会看到通用文案；原文仍在服务端日志中，按 trace ID 可查。没有 verbose 开关
+可以关闭：字段过线的唯一原因是调用方声明了它，需要披露更多的服务应在错误上显式
+设置这些字段，或提供自定义 transport encoder。
 
 最后，`errors.Join` 在本契约中**不是**聚合错误 —— 过线时只保留第一个。需要报告
 多个失败的校验逻辑改用 `errors.Violations`，它映射到 `errdetails.BadRequest`
@@ -437,7 +436,7 @@ serverMetrics, err := metrics.NewHTTPServerFilter(provider)
 if err != nil {
 	return err
 }
-server := forgehttp.NewServer(forgehttp.Filter(serverMetrics))
+server := forgehttp.NewServer(forgehttp.WithFilter(serverMetrics))
 
 clientMetrics, err := metrics.NewHTTPClientWrapper(provider)
 if err != nil {
@@ -445,7 +444,7 @@ if err != nil {
 }
 client, err := forgehttp.NewClient(
 	ctx,
-	forgehttp.WithEndpoint(endpoint),
+	forgehttp.WithTarget(endpoint),
 	forgehttp.WithRoundTripperWrapper(clientMetrics),
 )
 ```
@@ -470,11 +469,11 @@ otelOptions := grpcotel.Options{
 }
 
 server := forgegrpc.NewServer(
-	forgegrpc.Options(grpcotel.ServerOption(otelOptions)),
+	forgegrpc.WithOptions(grpcotel.ServerOption(otelOptions)),
 )
 conn, err := forgegrpc.NewClient(
 	ctx,
-	forgegrpc.WithOptions(grpcotel.DialOption(otelOptions)),
+	forgegrpc.WithDialOptions(grpcotel.DialOption(otelOptions)),
 )
 ```
 
@@ -570,11 +569,11 @@ go vet ./...
 - [ ] 动态模板继续使用 `BuildPath`；重复使用的固定模板只编译一次。
 - [ ] 检查 body/query 分类、ProtoJSON wire value 和 `%2F` 路径。
 - [ ] 为 HTTP stream 定义显式生命周期策略。
-- [ ] 用 `errors.New(Kind)` 替换 HTTP 命名的错误构造函数，`WithCause` 改为 `Wrap`。
+- [ ] 用 `errors.Of(Kind)` 替换 HTTP 命名的错误构造函数，`WithCause` 改为 `Wrap`。
 - [ ] 用 `errors.Is`、`errors.KindOf` 替换 `IsXxx` 与 `errors.Code`。
 - [ ] 将 `default_code`/`code` annotation 改写为 `default_kind`/`kind` 并重新生成。
 - [ ] 将调用点更新为生成的 sentinel 值。
-- [ ] 为每个边界选择 `errors.Policy`；确认默认脱敏行为适用于公网调用方。
+- [ ] 检查每一处 `Msg`、`Meta` 与 `Violations` 调用：只有显式声明的字段过线，且原样过线。
 - [ ] 校验路径中的 `errors.Join` 改用 `errors.Violations`。
 - [ ] 确认没有客户端依赖 RPC 后通过 `errors.As` 取到 cause。
 - [ ] 用 HTTP filter/wrapper 与显式 gRPC A66 metric set 替换通用 metrics middleware。

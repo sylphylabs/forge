@@ -35,8 +35,8 @@ func main() {
 
 	// server
 	app := forge.New(
-		forge.Name("helloworld"),
-		forge.Registrar(r),
+		forge.WithName("helloworld"),
+		forge.WithRegistrar(r),
 	)
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
@@ -80,7 +80,7 @@ func main() {
 	// client
 	conn, err := grpc.NewClient(
 		context.Background(),
-		grpc.WithEndpoint("discovery:///helloworld"),
+		grpc.WithTarget("discovery:///helloworld"),
 		grpc.WithDiscovery(r),
 	)
 	defer conn.Close()

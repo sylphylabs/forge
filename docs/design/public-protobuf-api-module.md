@@ -1,8 +1,9 @@
 # Forge Public Protobuf API Module
 
-Status: accepted; error schema alignment in progress
+Status: accepted; the error schema is implemented locally in `api/`; public
+repository and Buf publication pending
 
-Last reviewed: August 9, 2026
+Last reviewed: August 12, 2026
 
 ## Purpose
 
@@ -179,15 +180,15 @@ The public error schema is deliberately smaller than the runtime error model.
 It contains only declarations that genuinely require a Protobuf descriptor:
 
 1. the closed `Kind` enum used by error annotations;
-2. enum-level `default_kind` and enum-value `kind` extensions;
-3. the Forge-specific `TraceInfo` gRPC detail.
+2. enum-level `default_kind` and enum-value `kind` extensions.
 
-It does not define a canonical `Status` envelope or a `Violation` message.
-HTTP owns RFC 9457 Problem Details. gRPC owns `google.rpc.Status`,
-`google.rpc.ErrorInfo`, and `google.rpc.BadRequest`. The local Go error owns a
-transport-neutral public snapshot. Routing all three through another generated
-envelope would make the API module an unnecessary runtime dependency and would
-give the same failure two competing Protobuf status models.
+It does not define a canonical `Status` envelope, a `Violation` message, or
+any custom gRPC detail. HTTP owns RFC 9457 Problem Details. gRPC owns
+`google.rpc.Status`, `google.rpc.ErrorInfo`, `google.rpc.BadRequest`, and
+`google.rpc.RequestInfo`. The local Go error owns a transport-neutral public
+snapshot. Routing all three through another generated envelope would make the
+API module an unnecessary runtime dependency and would give the same failure
+two competing Protobuf status models.
 
 The source shape is:
 
@@ -202,11 +203,6 @@ import "google/protobuf/descriptor.proto";
 
 enum Kind { /* 16 transport-neutral classifications */ }
 
-message TraceInfo {
-  string trace_id = 1;
-  bool details_truncated = 2;
-}
-
 extend google.protobuf.EnumOptions {
   Kind default_kind = 500101;
 }
@@ -217,11 +213,10 @@ extend google.protobuf.EnumValueOptions {
 ```
 
 For v1, annotation `kind` classifies a generated sentinel independently of any
-transport and each transport projects it one way. `TraceInfo.trace_id`
-correlates a failure with the producing trace;
-`details_truncated` reports deterministic gRPC budget fallback. A trace ID is
-not a request ID, so this detail replaces the prior misuse of
-`google.rpc.RequestInfo.request_id`.
+transport and each transport projects it one way. Trace correlation over gRPC
+travels as `google.rpc.RequestInfo.request_id` — specified as an opaque
+string interpreted only by the service generating it, which is exactly what a
+trace ID is — so no Forge-specific detail message is needed.
 
 Domain, reason, message, metadata, and violations remain public contract data,
 but they are carried by the transport-native representations defined in
@@ -278,8 +273,8 @@ Go error behavior:
 
 It neither wraps nor embeds a generated Protobuf message and it has no JSON or
 Protobuf marshal implementation. `transport/http` owns Problem Details;
-`transport/grpc` imports `errorapi.TraceInfo` and the Google RPC details it
-needs. The API module is not imported by the core `errors` package.
+`transport/grpc` imports the Google RPC details it needs. The API module is
+not imported by the core `errors` package.
 
 The public API module must remain usable without the runtime module. The
 dependency direction is always:
@@ -410,10 +405,10 @@ available. Do not publish under a temporary owner.
 
 ### Phase 1: Error API v1
 
-- Add the versioned Kind annotations and `TraceInfo` source plus generated Go
-  package. Do not add a Forge `Status` envelope.
+- Add the versioned Kind annotations source plus generated Go package. Do
+  not add a Forge `Status` envelope or a custom error detail message.
 - Perform and record extension-number collision analysis.
-- Add descriptor, generated-code, TraceInfo wire, and option-reading tests.
+- Add descriptor, generated-code, and option-reading tests.
 - Publish a release candidate and exercise it from an external consumer.
 
 Stop if source and generated descriptors differ or if a clean consumer needs
@@ -423,8 +418,8 @@ local repository state.
 
 - Keep runtime error values as plain Go values and make `errors.Public` the
   cause-free transport input.
-- Use `errorapi.TraceInfo` only in `transport/grpc`; the core `errors` package
-  must not import the API module.
+- The core `errors` package must not import the API module; only generators
+  and transports read the annotations.
 - Project HTTP errors as Problem Details and gRPC errors as native status plus
   standard details.
 - Remove the root generated error schema and update focused tests.
@@ -523,11 +518,11 @@ This work is complete only when:
 - `buf.build/forge/api` is independently consumable;
 - both artifacts are reproducible from the same reviewed Git commit;
 - error contracts use the versioned Forge namespace;
-- the public error schema contains Kind annotations and `TraceInfo`, but no
-  Forge `Status` envelope;
+- the public error schema contains Kind annotations, but no Forge `Status`
+  envelope;
 - exactly one hand-maintained Forge error schema exists;
-- the gRPC transport and `go-errors` plugin consume the same generated API
-  package while core `errors` remains independent of it;
+- the `go-errors` plugin consumes the generated API package while core
+  `errors` and the transports remain independent of it;
 - the three inherited local schemas and two inherited Buf module names are gone
   from active configuration;
 - external generation and runtime tests pass without local replacements;

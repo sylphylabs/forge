@@ -23,8 +23,8 @@ func main() {
 	}
 	r := servicecomb.NewRegistry(c)
 	app := forge.New(
-		forge.Name("helloServicecomb"),
-		forge.Registrar(r),
+		forge.WithName("helloServicecomb"),
+		forge.WithRegistrar(r),
 	)
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
@@ -56,7 +56,7 @@ func main() {
 	ctx := context.Background()
 	conn, err := grpc.NewClient(
 		ctx,
-		grpc.WithEndpoint("discovery:///helloServicecomb"),
+		grpc.WithTarget("discovery:///helloServicecomb"),
 		grpc.WithDiscovery(r),
 	)
 	if err != nil {

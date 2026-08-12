@@ -15,8 +15,8 @@ need Protobuf tooling.
 
 ## Contracts
 
-- `sylphy/errors/v1/errors.proto` defines the portable error status and
-  enum annotations.
+- `sylphy/errors/v1/errors.proto` defines the error Kind vocabulary and the
+  enum annotations for declaring contract errors.
 - `sylphy/message/v1/message.proto` defines the asynchronous subscription
   annotation. `subscribe` binds one method to a `Subscription`, whose
   `destination` is the contract default that a deployment overrides at
@@ -25,10 +25,10 @@ need Protobuf tooling.
 Middleware wiring belongs in generated Go service plans rather than Protobuf.
 The API module publishes no operation-policy or middleware-naming schema.
 
-`sylphy.errors.v1.Status` deliberately preserves the Forge error
-envelope `{code, reason, message, metadata}`. It is not replaced by
-`google.rpc.Status`, which cannot represent the stable `reason` and string
-metadata map as the same contract.
+There is no Protobuf error envelope: HTTP carries errors as RFC 9457 Problem
+Details and gRPC as a `google.rpc.Status` with standard details, so a third
+canonical representation would only force both transports through an
+unrelated one.
 
 Runtime middleware, credentials, provider configuration, concrete limits, and
 deployment secrets do not belong in this module.

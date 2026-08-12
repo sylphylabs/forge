@@ -1,8 +1,8 @@
 # Errors
 
-Status: accepted; implementation alignment in progress
+Status: implemented
 
-Last reviewed: August 10, 2026
+Last reviewed: August 12, 2026
 
 > **Implementation status.** This document describes what the code does.
 > `docs/agent/errors.md` covers the same API for a reader who only wants to use
@@ -52,10 +52,10 @@ transport/http/transcoding
   Google HTTP path/query binding, response-body projection, stream fields
 
 transport/grpc
-  canonical code mapping, status projection, ErrorInfo, BadRequest, TraceInfo
+  canonical code mapping, status projection, ErrorInfo, BadRequest, RequestInfo
 
 api/errors/v1
-  Kind annotations and the small TraceInfo gRPC detail; no Status envelope
+  the Kind enum and its Protobuf annotations; no Status envelope
 ```
 
 `errors/protobuf` does not exist in the target design. A transport-neutral
@@ -175,60 +175,50 @@ present; a partial identity is treated as anonymous.
 Contract errors are immutable sentinels:
 
 ```go
-var ErrFailureReasonNotFound = errors.MustDefine(
+var ErrNotFound = errors.MustDefine(
     errors.KindNotFound,
     "sylphy.document.v1",
     "FAILURE_REASON_NOT_FOUND",
 )
 
-return ErrFailureReasonNotFound.
+return ErrNotFound.
     Msgf("document %q not found", id).
     Meta("tenant", tenantID).
     Wrap(cause)
 ```
 
 Every deriving method returns a copy with independently owned maps and slices.
-`Wrap(nil)` is a no-op. `Define` is for declaration-time constants and rejects
-an empty or malformed identity. Anonymous local failures use `New(kind)`; there
-are no setters that turn an anonymous error into a partially identified one.
+`Wrap(nil)` is a no-op. `MustDefine` is for declaration-time constants and
+panics on an empty or malformed identity. Anonymous local failures use
+`Of(kind)`; `WithReason` and `WithDomain` exist for process-internal errors,
+while contract errors carry their identity from the Protobuf declaration.
 
 `Error()` may include the local cause because it is for local Go diagnostics.
 No transport serializes `Error()`.
 
-Contract identity and trace fields are bounded so every transport can preserve
-the mandatory set:
-
-| Field | Contract |
-| --- | --- |
-| domain | 1-255 ASCII bytes; dot-separated identifier segments matching Protobuf package syntax |
-| reason | 1-128 ASCII bytes matching `[A-Z][A-Z0-9_]*` |
-| trace ID | empty or exactly 32 lowercase hexadecimal characters |
-
-`Define` rejects an invalid domain/reason at declaration time, and the error
-generator reports it with file and enum context. `WithTraceID` ignores an
-invalid trace ID. Transport readers discard an invalid identity or trace rather
-than creating a value that cannot be forwarded safely. Public messages,
-metadata, and violations must be valid UTF-8; transports apply their own total
-payload budget to those optional fields.
+`MustDefine` rejects an empty domain, an empty reason, and a reason outside
+`SCREAMING_SNAKE_CASE` at declaration time — a reason is matched as a literal
+by other services, so an inconsistent one is a wire-format defect, and the
+rule is enforced in the constructor as well as in the generator because a
+hand-written sentinel bypasses the generator entirely. Transport readers
+accept an identity only as a complete domain/reason pair; a partial identity
+is treated as anonymous rather than becoming a value that half-matches
+sentinels.
 
 ### Trace attachment
 
-Tracing must work for every error, including a plain error that has not yet
-been classified by a transport. It also must not replace the wrapper chain.
+The trace ID is a field of the error, set by deriving:
 
 ```go
-func WithTraceID(err error, traceID string) error
-func TraceIDOf(err error) string
+func (e *Error) WithTraceID(id string) *Error
+func (e *Error) TraceID() string
 ```
 
-`WithTraceID` returns a transparent wrapper whose `Unwrap` is the exact input
-error. `errors.Is` and `errors.As` therefore retain the complete chain. It is a
-no-op for nil, an empty ID, or an error that already carries a trace. A remote
-trace is never overwritten by the receiving service's trace.
-
-`PublicOf` overlays the attached trace onto the public snapshot. This lets the
-OpenTelemetry middleware attach a trace before the transport converts a plain
-error to `KindUnknown`.
+The tracing middleware (contrib/otel/tracing) stamps the ambient trace onto
+an outgoing Forge error. An error that already names a trace keeps it, and a
+remote error is never re-stamped: the value closest to the failure points an
+operator at the right service. `PublicOf` carries the trace into the public
+snapshot, so it survives both projections.
 
 ### Violations
 
@@ -267,21 +257,27 @@ declares `kind`. Once it participates, every non-zero sibling generates a
 sentinel; unannotated values inherit `default_kind`, or `KIND_INTERNAL` when no
 enum default is present. An unannotated enum remains an ordinary enum.
 
-Generated Go names always include the enum name:
+Generated Go names drop the enum-name prefix that Protobuf scoping rules
+require on every value — the generator enforces that prefix on the reason and
+then trims it from the identifier:
 
 ```go
-var ErrFailureReasonNotFound = errors.MustDefine(...)
-var ErrFailureReasonBackendDown = errors.MustDefine(...)
+var ErrNotFound = errors.MustDefine(...)    // from FAILURE_REASON_NOT_FOUND
+var ErrBackendDown = errors.MustDefine(...) // from FAILURE_REASON_BACKEND_DOWN
 ```
 
-Keeping the enum namespace prevents two enums in one Go package from both
-emitting `ErrNotFound`. Names never change depending on whether a collision
-happens to exist today.
+The wire reason keeps the full enum-qualified value name
+(`FAILURE_REASON_NOT_FOUND`), so cross-process identity is unambiguous even
+though the Go identifier is short. Two error enums in one Go package whose
+values trim to the same identifier produce two declarations of one variable,
+which fails to compile the generated file — a build-time failure at the point
+of declaration.
 
-The generator rejects a kind on the zero value, `KIND_UNSPECIFIED` on an error,
-a reason outside `SCREAMING_SNAKE_CASE`, a reason without its enum prefix, and
-any duplicate generated Go identifier. Generation is all-or-nothing for each
-file; it never silently skips an error value from a participating enum.
+The generator rejects a kind on the zero value, `KIND_UNSPECIFIED` on an
+error, a reason outside `SCREAMING_SNAKE_CASE`, a reason without its enum
+prefix, and a reason that is only the prefix. Generation is all-or-nothing
+for each file; it never silently skips an error value from a participating
+enum.
 
 ## Service layering
 
@@ -332,10 +328,10 @@ adding them would mean two overlapping vocabularies for one value, and readers
 would have to guess which is authoritative. `type` would be the constant
 `about:blank` and carries no information.
 
-`status` is omitted for a stronger reason: repeating the status line inside the
-body creates the very contradiction rule 4 exists to reject. The status line is
-authoritative, so a second copy can only ever agree redundantly or disagree
-harmfully.
+`status` is omitted for a stronger reason: repeating the status line inside
+the body creates the very contradiction rule 4 exists to resolve. The status
+line is authoritative, so a second copy can only ever agree redundantly or
+disagree harmfully.
 
 ### HTTP reader rules
 
@@ -347,21 +343,30 @@ order:
 3. A body is decoded only when its media type is
    `application/problem+json` (parameters are allowed), it is non-empty, it is
    at most 64 KiB, and it contains exactly one JSON object.
-4. A present Problem `status` must equal the actual status. A recognized
-   `kind` must project to that status. Either conflict invalidates the semantic
-   body and returns the status-only fallback, so a stale proxy body cannot make
-   a 503 match a NotFound sentinel.
-5. A missing or future unknown `kind` uses the status-derived Kind while
-   retaining otherwise valid public fields. Unknown JSON members are ignored.
+4. The status line is authoritative for classification and the body for
+   identity. A recognized `kind` is believed only when it projects onto the
+   actual status. When the two disagree — a stale intermediary served an old
+   body under a new status, or a proxy rewrote the status under a fresh body —
+   the Kind is reclassified from the status line while the document's domain,
+   reason, message, metadata, trace ID, and violations are kept: the
+   contradiction discredits the classification, not the identity, and
+   discarding the document would lose the only diagnostics the peer sent. So
+   a stale NotFound body under a 503 keeps its reason and trace but
+   classifies as Unavailable, and the caller keeps retrying.
+5. A missing or future unknown `kind` degrades the same way: the Kind comes
+   from the status while otherwise valid public fields are retained. Unknown
+   JSON members are ignored.
 6. Domain and reason are retained only as a complete pair. Empty, malformed,
    oversized, or partial identities do not match sentinels.
 7. An empty body, malformed JSON, an unsupported content type, or an oversized
    body returns the status-only fallback. A zero-value decoded object is never
    accepted as a successful Forge error.
 
-These rules are both tolerant and conservative: additive fields and future Kind
-names do not destroy useful detail, while contradictory evidence cannot create
-a false stable identity.
+These rules are both tolerant and conservative: additive fields and future
+Kind names do not destroy useful detail, while a contradicted body cannot
+steer classification — the status line always decides what class of failure
+the caller handles, and the retained identity only says which failure the
+peer reported.
 
 Each rule closes a defect that was measured before it existed `[一手数据]`,
 2026-08-10:
@@ -388,31 +393,21 @@ must be applied by unary middleware; stream code never uses
 ## gRPC projection
 
 The gRPC status code is the Kind projection and its message is the public
-message. Details are protocol-native:
+message. Details are protocol-native, all of them standard `google.rpc`
+types, so a receiver that does not know Forge still reads them:
 
 | Detail | Carries |
 | --- | --- |
 | `google.rpc.ErrorInfo` | complete domain/reason identity and public metadata |
 | `google.rpc.BadRequest` | public field violations |
-| `sylphy.errors.v1.TraceInfo` | trace ID and whether optional details were truncated |
+| `google.rpc.RequestInfo` | the trace ID, as `request_id` |
 
-Trace IDs are not request IDs and are never encoded as
-`google.rpc.RequestInfo.request_id`.
-
-The serialized `google.rpc.Status` has a hard 4096-byte budget. Projection is
-deterministic:
-
-1. Reserve the code/Kind, a complete identity without metadata, and TraceInfo.
-2. Retain the public message, truncating it at a UTF-8 boundary only when the
-   essential status would otherwise exceed the budget.
-3. Add violations in declaration order while they fit.
-4. Add metadata in sorted-key order while it fits.
-5. Set `TraceInfo.details_truncated` when any public message bytes, violation,
-   or metadata entry are omitted.
-
-Identity and trace have bounded core representations, so the mandatory set
-always fits. Optional diagnostics never turn a classified application failure
-into a transport failure at the default 8 KiB gRPC header/trailer boundary.
+`RequestInfo.request_id` is specified as "an opaque string that should only
+be interpreted by the service generating it... used to identify requests in
+the service's logs", which is exactly what the trace ID is for here: the
+handle a caller quotes so an operator can find the unredacted failure. It
+travels beside `ErrorInfo` rather than inside its metadata so an
+application's own `trace_id` metadata entry is never shadowed.
 
 On receipt, the gRPC code is authoritative for Kind. Known details restore the
 public snapshot; unknown details are ignored. The converted error continues to
@@ -504,11 +499,11 @@ contract does have one: `kind` classifies, `reason` identifies, `message`
 explains. Adding `title` and `detail` beside them creates two vocabularies for
 one value and makes every reader choose which to trust.
 
-`status` is worse than redundant. Rule 4 rejects a body whose classification
-contradicts the status line, because a stale intermediary can serve an old body
-under a new status. A `status` member inside that body is a second copy of the
-same fact, subject to the same staleness, and adding it would mean the document
-can contradict itself as well as its response.
+`status` is worse than redundant. Rule 4 reclassifies a body whose `kind`
+contradicts the status line, because a stale intermediary can serve an old
+body under a new status. A `status` member inside that body is a second copy
+of the same fact, subject to the same staleness, and adding it would mean the
+document can contradict itself as well as its response.
 
 ### No Kind-based disclosure policy
 
@@ -517,12 +512,16 @@ can contradict itself as well as its response.
 The former policy model guessed provenance it could not observe. Public fields
 plus a structurally excluded cause form a real information boundary.
 
-### Enum-qualified generated names
+### Trimmed generated names with enum-qualified reasons
 
-Dropping the enum prefix made generated names pleasant only while a package had
-one error enum. Adding another enum could make the package stop compiling or
-force an existing identifier to change. Always including the enum name is less
-magical and permanently collision-free.
+The Go identifier trims the enum-name prefix (`ErrNotFound`), while the wire
+reason keeps it (`FAILURE_REASON_NOT_FOUND`). The prefix is mandatory on the
+value — Protobuf scoping requires it and the generator enforces it — so
+repeating it in the Go name adds length without information; the wire
+identity, which other services match as a literal, stays fully qualified. A
+collision between two enums' trimmed names in one package fails to compile
+the generated file, which surfaces the conflict at the declaration rather
+than at a caller.
 
 ### No global codec registry
 

@@ -1,4 +1,4 @@
-# Forge Compatibility with Forge
+# Forge Compatibility with Kratos
 
 Status: pre-release
 
@@ -6,9 +6,9 @@ Last verified: August 9, 2026
 
 Forge is an independent fork of `go-kratos/kratos`. It is not a drop-in
 replacement for Kratos v3 and does not promise source, behavior, or release
-compatibility with future Forge versions.
+compatibility with future Kratos versions.
 
-Forge also does not retain a Forge API solely for compatibility. An API
+Forge also does not retain a Kratos API solely for compatibility. An API
 may be removed when a clearer or more efficient replacement is available and
 the change is technically justified. Such removals are intentional breaking
 changes and must ship with executable migration guidance.
@@ -36,10 +36,10 @@ upstream revision explicitly.
 | Root module | `github.com/go-kratos/kratos/v3` | `github.com/sylphylabs/forge` | Source breaking |
 | Release line | v3 | v0 pre-release | Release breaking |
 | Minimum Go version | Go 1.25 | Go 1.27 | Build requirement |
-| Module count | 28, including `cmd/forge` | 27 | Release and tooling change |
+| Module count | 28, including `cmd/forge` | 31 | Release and tooling change |
 | Asynchronous message transport | No protocol-neutral async contract | Root module exposes `transport/message`; broker SDK adapters remain optional nested modules | New API; no broker wire compatibility claim |
 | Project CLI | `cmd/forge` | Removed | Workflow breaking |
-| Protobuf generators | Forge module paths | Forge module paths | Install path change |
+| Protobuf generators | Kratos module paths | Forge module paths | Install path change |
 | Contrib provider SDKs | Older provider majors and archived direct dependencies | Current stable majors and standard maintained replacements | Source and dependency graph change |
 | UUID generation | `google/uuid` and `gofrs/uuid` | Standard-library `uuid` | Source and generated-ID behavior change |
 | HTTP protobuf generation | Open API field access | Editions 2023 Open and Opaque API accessors | New generated-code capability |
@@ -57,7 +57,7 @@ upstream revision explicitly.
 | OTel attributes | Legacy semconv and mixed transport attributes | semconv v1.41 transport-specific attributes | Telemetry schema change |
 | OTel metrics | Generic unary middleware with custom names, `code`, and `reason` | HTTP semconv v1.41 duration histograms and grpc-go A66 duration metrics | Source and telemetry schema breaking |
 | Error classification | HTTP status code stored on the error and mapped to gRPC | Transport-neutral `Kind` projected one way onto each transport | Source, wire, and behavior breaking |
-| Error construction | `errors.BadRequest(reason, msg)` and generated `ErrorXxx(format, args...)` | `errors.New(Kind)` and generated sentinel values | Source and generated-code breaking |
+| Error construction | `errors.BadRequest(reason, msg)` and generated `ErrorXxx(format, args...)` | `errors.Of(Kind)` and generated sentinel values | Source and generated-code breaking |
 | Error matching | Generated `IsXxx(err)` comparing struct fields | `errors.Is` against a generated sentinel, plus `errors.KindOf` | Source breaking |
 | Error annotations | `default_code` and `code` carrying HTTP status | `default_kind` and `kind` carrying a `Kind` | Protobuf contract breaking |
 | Retry judgment | `errors.IsRetryable` and `Kind.Retryable` classified a Kind in isolation | Removed; the decision needs delivery evidence or an idempotence declaration | Source breaking |
@@ -100,7 +100,7 @@ and CI use Go 1.27 RC2. The upstream baseline requires Go 1.25. Projects that
 must remain on Go 1.25 or Go 1.26 cannot migrate to Forge without upgrading
 their toolchain.
 
-The repository currently contains 27 Go modules. Running `go test ./...` at the
+The repository currently contains 31 Go modules. Running `go test ./...` at the
 root does not test nested modules; use the repository commands documented in
 [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
@@ -276,7 +276,7 @@ The public differences are:
 - `HandlePrefix` uses path-segment prefix semantics, not arbitrary string-prefix
   matching.
 - Unknown routes do not fall through to the process-wide
-  `http.DefaultServeMux`. Pass it explicitly to `NotFoundHandler` if that
+  `http.DefaultServeMux`. Pass it explicitly to `WithNotFoundHandler` if that
   behavior is required.
 - A method mismatch uses the configured method-not-allowed handler rather than
   relying on Gorilla's matcher order.
@@ -321,13 +321,13 @@ results are recorded in
 `App.Stop` is idempotent. Before-stop, deregistration, server-stop, and
 after-stop stages continue independently where safe, and multiple failures are
 returned through `errors.Join` instead of later failures hiding earlier ones.
-`AfterStopTimeout` configures the bounded after-stop stage; its default is ten
+`WithAfterStopTimeout` configures the bounded after-stop stage; its default is ten
 seconds. After-stop callbacks preserve application-context values without
 inheriting its cancellation.
 
 `transport.Healthzer` and `transport.GracefulStopper` are optional capability
 interfaces alongside `transport.Server`. During shutdown, `App` drains a
-server that implements `GracefulStopper` within `StopTimeout` and falls back
+server that implements `GracefulStopper` within `WithStopTimeout` and falls back
 to `Stop` when the drain is abandoned or fails; a server implementing only
 `Start` and `Stop` receives the same single `Stop` call as before.
 `App.Healthz` reports whether every server that implements `Healthzer` accepts
@@ -598,7 +598,7 @@ the v3 design rather than providing a direct v2 compatibility layer.
 Every change that alters a public API, default behavior, wire format, module,
 tool, or supported Go version must update this document in the same change.
 
-Forge compatibility is not a reason by itself to retain an inferior public
+Kratos compatibility is not a reason by itself to retain an inferior public
 API. A breaking replacement is acceptable only when its rationale, replacement
 API, old and new code examples, regeneration requirements, and validation steps
 are documented in the migration guide before the implementation is merged.

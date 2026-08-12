@@ -1,139 +1,127 @@
 # Config Lifecycle
 
-Status: proposed implementation contract
+Status: implemented
 
-Last reviewed: July 28, 2026
+Last reviewed: August 12, 2026
 
 ## Purpose
 
-This document narrows the config portion of
-[`runtime-modernization.md`](runtime-modernization.md) into two independently
-reviewable phases. Phase 0 fixes coordinator ownership without changing the
-existing `Config`, `Source`, or `Watcher` method signatures. Phase 1 introduces
-context-aware provider APIs after a migration contract is approved.
+This document defines the ownership and lifecycle contract for the config
+coordinator (`config.Config`) and its providers (`config.Source`,
+`config.Watcher`). It is the design authority for who owns which goroutine,
+what a caller may observe during construction and shutdown, and what a
+provider must and must not do. The usage contract is in
+`docs/agent/application.md`.
 
-The current coordinator starts each watch goroutine immediately after its
-watcher is created. A later `Source.Watch` failure therefore leaves earlier
-watchers running. `Close` returns after the first stop error, does not join watch
-loops, and cannot interrupt the fixed retry sleep. These are lifecycle defects,
-not provider-specific policy.
+The contract exists because the inherited coordinator had lifecycle defects,
+not provider-specific policy problems: it started each watch goroutine
+immediately after its watcher was created, so a later `Source.Watch` failure
+left earlier watchers running; `Close` returned after the first stop error,
+did not join watch loops, and could not interrupt retry sleeps; and the
+provider interfaces took no contexts, so nothing could interrupt a provider
+stuck in I/O.
 
 ## Invariants
 
 - The coordinator owns every watcher and goroutine it creates.
-- `Load` publishes one resolved snapshot only after all required startup work
-  succeeds.
-- Partial watcher construction rolls back every constructed watcher in reverse
-  order and preserves all independent errors with `errors.Join`.
+- Construction publishes one resolved snapshot only after all required
+  startup work succeeds; no half-initialized `Config` is ever observable.
+- Partial watcher construction rolls back every constructed watcher in
+  reverse order and preserves all independent errors with `errors.Join`.
 - `Close` is concurrent-safe and idempotent. Every caller observes the same
   terminal error.
 - Shutdown attempts every watcher stop and joins every coordinator goroutine.
 - Coordinator cancellation interrupts retry waiting immediately.
 - A watcher notification never publishes a partially loaded or unresolved
   snapshot.
-- Providers do not own coordinator retry, logging, or process-lifetime policy.
+- Providers do not own coordinator retry, logging, or process-lifetime
+  policy.
 
-## Phase 0: Coordinator Ownership
+## The contract
 
-Phase 0 retains these public signatures:
+Construction is loading. There is no separate `Load` step and therefore no
+"constructed but unloaded" state to misuse:
 
 ```go
-type Config interface {
-    Load() error
-    Scan(any) error
-    Value(string) Value
-    Watch(string, Observer) error
-    Close() error
-}
+func New(ctx context.Context, opts ...Option) (*Config, error)
 
 type Source interface {
-    Load() ([]*KeyValue, error)
-    Watch() (Watcher, error)
+    Load(ctx context.Context) ([]*KeyValue, error)
+    Watch(ctx context.Context) (Watcher, error)
 }
 
 type Watcher interface {
-    Next() ([]*KeyValue, error)
+    Next(ctx context.Context) ([]*KeyValue, error)
     Stop() error
 }
 ```
 
-The implementation adds a private lifecycle with `new`, `loading`, `loaded`,
-`closing`, and `closed` states, an owned cancellation function, a join group,
-and one stable close result.
+`New` performs these steps:
 
-`Load` performs these steps:
+1. Load every source and build the complete resolved reader without
+   publishing it.
+2. Construct every source watcher without starting a watch loop.
+3. If construction fails, stop constructed watchers in reverse order, join
+   rollback errors with the initiating error, and return the joined error.
+4. Publish the reader, then start one owned watch loop per watcher. The
+   loops detach from the construction context (`context.WithoutCancel`) and
+   run until `Close`, because they serve the Config's lifetime, not the
+   constructor call.
 
-1. Reserve the `new -> loading` transition. Concurrent or repeated successful
-   loads return `ErrAlreadyLoaded`; loading after close returns `ErrClosed`.
-2. Build the complete resolved reader without publishing it.
-3. Construct every source watcher without starting a watch loop.
-4. If construction fails, stop constructed watchers in reverse order, join
-   rollback errors with the initiating error, and return to `new` so callers may
-   retry.
-5. Commit the reader and watcher set atomically, transition to `loaded`, then
-   start the owned watch loops.
+The context passed to `New` bounds construction only: initial loads and
+watcher setup. Providers must honor its cancellation, which is what makes a
+provider stuck in initial I/O interruptible.
 
-`Close` performs these steps once:
+`Close` performs these steps once; later calls return the stored result:
 
-1. Transition to `closing` and cancel coordinator retry waits.
+1. Cancel the watch-loop context, which interrupts blocked `Next` calls and
+   retry waits.
 2. Call `Stop` for every constructed watcher in reverse order, even after an
    earlier stop error.
 3. Wait for every watch loop to return.
-4. Join all stop errors, store the stable result, and transition to `closed`.
+4. Join all stop errors and store the stable result.
 
 Each watch loop checks coordinator cancellation before and after `Next`. A
-legacy watcher may return `(nil, nil)` when `Stop` unblocks it; after cancellation
-that result exits without reload. Non-terminal errors use a cancelable timer
-instead of `time.Sleep`. Phase 0 retains the current retry duration and does not
-yet add jitter or provider error classification.
+non-terminal watcher error waits on a cancelable timer — never an
+uninterruptible sleep — before retrying, so a persistently failing source
+cannot spin the loop and cannot delay shutdown. A watcher may return
+`(nil, nil)` when it cannot enumerate what changed; the coordinator reloads
+every source after any notification, because cross-source placeholder
+references make a full rebuild necessary either way.
 
-Because the legacy interfaces have no context, Phase 0 cannot interrupt a
-provider stuck inside initial `Load` or `Watch`. The `Watcher` contract is
-clarified: `Stop` must cause an in-flight `Next` to return promptly.
+## Provider requirements
 
-## Phase 1: Context-Aware Providers
+- `Load` and `Watch` must honor context cancellation; both may block on I/O.
+- `Watcher.Stop` must unblock an in-flight `Next` promptly and be safe to
+  call more than once.
+- A provider must not recreate watches with `context.Background` after its
+  owner has canceled them, must not log through process globals, and must
+  not start goroutines the coordinator cannot join.
 
-Phase 1 replaces implicit lifetime with caller-owned contexts. The focused API
-proposal must decide whether context is added to the existing methods or exposed
-through new interfaces and adapters. It must cover:
+Retry pacing, error logging, and reload policy live in the coordinator, so
+every provider gets identical lifecycle behavior and a provider defect
+cannot change process-wide policy.
 
-- cancellation during initial source load and watcher construction;
-- centralized exponential backoff, jitter, and terminal-error classification;
-- immutable event snapshots and an explicit stale-data policy;
-- observer ordering, reentry, panic, and slow-consumer behavior; and
-- provider conformance tests for file and supported remote providers.
+## Acceptance tests
 
-Remote providers must not recreate watches with `context.Background` after
-their owner has canceled them. Phase 1 includes a provider-by-provider migration
-ledger; changing only the root coordinator is not sufficient evidence.
+The load-bearing behavior is pinned by tests in `config`
+(`config/config_test.go`):
 
-## Compatibility
+- When a later source fails to create a watcher, earlier watchers are
+  stopped and no watch loop is left consuming their signals
+  (`TestNewRollsBackWatchersOnFailure`).
+- A change in one source republishes values that textually live in another,
+  because reload rebuilds the full snapshot
+  (`TestConfigWatchReloadsCrossSourceReferences`).
+- Observer registration validates its key and observer up front
+  (`TestConfigWatchMissingKey`, `TestConfigWatchNilObserverPanics`), and
+  multiple observers of one key all fire
+  (`TestConfigWatchMultipleObservers`).
+- `go test -race ./config ./config/file ./config/env` and `go vet` pass for
+  those packages.
 
-Phase 0 adds `ErrAlreadyLoaded` and `ErrClosed` as diagnosable sentinel errors.
-This tightens previously unspecified repeated-load behavior without changing
-method signatures. `Close` before `Load` remains valid and transitions directly
-to `closed`. A failed first `Load` remains retryable after rollback.
-
-The new behavior must be recorded in the compatibility and migration documents
-when implementation lands. Until then this document is a proposal, not current
-runtime behavior.
-
-## Acceptance Tests
-
-- When the second source fails to create a watcher, the first watcher is stopped
-  and no watch loop was started. Startup and rollback errors remain discoverable
-  with `errors.Is`.
-- Every watcher is stopped even when more than one `Stop` returns an error, and
-  the returned error contains all failures.
-- `Close` waits until a blocked `Next` and its watch loop have returned.
-- Coordinator cancellation interrupts retry waiting without a test sleep.
-- A watcher returning `(nil, nil)` after stop does not reload or loop again.
-- Concurrent and repeated `Close` calls stop each watcher once and return the
-  same result.
-- Repeated `Load`, `Close` before `Load`, failed-load retry, and `Load` after
-  close follow the documented state transitions.
-- `go test -race ./config ./config/file ./config/env`, `go vet` for the same
-  packages, and `git diff --check` pass.
-
-Nested provider modules and complete repository validation remain separate
-gates. Focused root-module tests do not prove every provider migration.
+Nested provider modules under `contrib/config/` are separate modules with
+their own gates; focused root-module tests do not prove a provider's
+conformance. In particular, several contrib providers still construct their
+own `context.Background` watch contexts — bringing each of them under the
+caller-owned-context rule is per-provider work, tracked per module.

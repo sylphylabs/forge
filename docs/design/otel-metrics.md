@@ -107,7 +107,7 @@ serverFilter, err := metrics.NewHTTPServerFilter(provider)
 if err != nil {
 	return err
 }
-server := forgehttp.NewServer(forgehttp.Filter(serverFilter))
+server := forgehttp.NewServer(forgehttp.WithFilter(serverFilter))
 
 clientMetrics, err := metrics.NewHTTPClientWrapper(provider)
 if err != nil {
@@ -115,7 +115,7 @@ if err != nil {
 }
 client, err := forgehttp.NewClient(
 	ctx,
-	forgehttp.WithEndpoint(endpoint),
+	forgehttp.WithTarget(endpoint),
 	forgehttp.WithRoundTripperWrapper(clientMetrics),
 )
 ```
@@ -245,11 +245,11 @@ otelOptions := grpcotel.Options{
 }
 
 server := forgegrpc.NewServer(
-	forgegrpc.Options(grpcotel.ServerOption(otelOptions)),
+	forgegrpc.WithOptions(grpcotel.ServerOption(otelOptions)),
 )
 conn, err := forgegrpc.NewClient(
 	ctx,
-	forgegrpc.WithOptions(grpcotel.DialOption(otelOptions)),
+	forgegrpc.WithDialOptions(grpcotel.DialOption(otelOptions)),
 )
 ```
 

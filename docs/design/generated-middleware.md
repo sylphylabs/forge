@@ -116,9 +116,10 @@ but it must retain the generated request type. Generated terminal adapters
 validate the type and return a service-and-method-qualified error instead of
 panicking on an invalid replacement.
 
-The existing `middleware.Handler` and `middleware.Middleware` names migrate to
-`UnaryHandler` and `UnaryMiddleware`. Forge is pre-v1 and does not retain
-ambiguous aliases in the final core API solely for source compatibility.
+The names are `UnaryHandler` and `UnaryMiddleware`; there is no combined
+`middleware.Middleware` or `middleware.Handler`. Forge is pre-v1 and does not
+retain ambiguous aliases in the final core API solely for source
+compatibility.
 
 ## Generated Service Plan
 
@@ -317,11 +318,16 @@ the common middleware ordering.
 The complete server order is:
 
 ```text
-transport-native middleware or interceptor
-  -> generated service-default middleware
-    -> generated method middleware
-      -> business handler
+transport panic backstop (built in, not removable)
+  -> server-wide middleware (server construction option)
+    -> generated service-default middleware
+      -> generated method middleware
+        -> business handler
 ```
+
+Transport-native layers keep their native position: HTTP `Filter` functions
+wrap the router and therefore run outside the server-wide middleware, while
+additional gRPC interceptors are chained after Forge's own and run inside it.
 
 Examples of transport-native behavior include:
 
@@ -334,9 +340,51 @@ These layers use `net/http` middleware, HTTP filters, or gRPC interceptors. They
 are not forced through `UnaryMiddleware` or `StreamMiddleware` and are not
 claimed to be portable.
 
-Common Forge server middleware is configured only through the generated
-service plan. Selector-based server middleware and an additional server-wide
-common middleware layer do not remain in the core runtime.
+### Server-Wide Middleware
+
+Each transport server accepts common middleware as a construction option:
+`WithMiddleware` and `WithStreamMiddleware` on the gRPC server, and
+`WithMiddleware` on the HTTP server (an HTTP stream is created by the handler
+itself, after this layer has run, so there is no server-wide stream lifecycle
+to wrap) and on the message server. It exists for concerns that are
+genuinely server-global — tracing, logging, metadata — where repeating one
+slice in every service plan invites drift between services that must not
+drift apart.
+
+This does not reintroduce the Kratos server option it superficially resembles.
+The Kratos layer was mutable while serving: middleware lived in a slice the
+server re-read and re-chained on the request path, and `Use`-style
+registration could interleave with in-flight requests — a data race, and a
+request-time composition cost. Forge's server-wide layer has neither property:
+
+- The option only appends during `NewServer`; the chain is composed exactly
+  once, before the server can accept a request, into an immutable closed
+  handler. No server exposes a post-construction registration surface — not
+  even a guarded one, because a method that usually errors is an API that
+  teaches the wrong model.
+- What travels per request is only the continuation of that request, passed
+  through the request context into the pre-composed chain's terminal handler.
+  No slice is read, merged, or re-chained on the request path.
+- Nil middleware and nil-returning middleware fail composition at
+  construction; the failure is reported by `Start`/`Endpoint`, the same
+  surface that reports a bad listener, so a misconfigured server never serves.
+
+Selector-based server middleware remains out of the core runtime: the
+server-wide layer is deliberately method-blind, and anything method-aware
+belongs in the generated plan, where selection is a compile-time field.
+
+### Panic Backstop
+
+Outside even the server-wide layer, each transport carries a built-in recover
+at its outermost boundary — the gRPC unary and stream interceptors, the HTTP
+server's root handler, the message server's binding wrapper. A panic anywhere
+below is logged with its value and stack, and leaves the process as a generic
+`KindInternal` error through the transport's normal error encoding; the panic
+text never reaches the wire, per the disclosure model in `errors/public.go`.
+The backstop is not configurable and not removable: it guarantees survival and
+non-disclosure, nothing else. `middleware/recovery` remains the customization
+layer — running inside the chains, it observes the panic first and may
+classify it, so the backstop only sees panics nothing else handled.
 
 ## Registration and Failure Semantics
 

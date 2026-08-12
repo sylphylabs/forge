@@ -63,7 +63,7 @@ ordinary enum and generates nothing.
 var ErrNotFound = errors.MustDefine(
 	errors.KindNotFound,
 	"sylphy.test.v1",
-	FailureReason_FAILURE_REASON_NOT_FOUND.String(),
+	"FAILURE_REASON_NOT_FOUND",
 )
 ```
 
@@ -92,7 +92,7 @@ return v1.ErrNotFound.
 For a failure that never leaves the process, skip Protobuf:
 
 ```go
-return errors.New(errors.KindInternal).WithReason("CACHE_CORRUPT").Wrap(err)
+return errors.Of(errors.KindInternal).WithReason("CACHE_CORRUPT").Wrap(err)
 ```
 
 Do not return a bare non-Forge `err` from a business layer. It arrives at the
@@ -196,28 +196,46 @@ Over HTTP the body names the kind rather than numbering it:
 
 ## Choosing what to disclose
 
-How much an outgoing error reveals is a deployment decision. Both transports
-take a policy and default to `errors.PolicySafe`, which withholds the message of
-a `KindInternal`, `KindDataLoss`, or `KindUnknown` failure — those messages
-usually come from whatever was wrapped — and sends every other error verbatim. A
-redacted error keeps its kind, reason, and trace ID, so it stays diagnosable.
+What an outgoing error reveals is decided by construction, not by
+configuration. A transport serializes only `errors.PublicOf(err)` — the kind,
+the domain/reason identity, and the message, metadata, and violations the
+caller explicitly set. The cause chain and any wrapped Go value are excluded
+structurally; no option sends them.
 
 ```go
-httpSrv := http.NewServer(
-	http.ErrorEncoder(http.NewErrorEncoder(errors.PolicyVerbose)),
-)
-grpcSrv := grpc.NewServer(grpc.ErrorPolicy(errors.PolicyStrict))
+type Public struct {
+	Kind       Kind
+	Domain     string
+	Reason     string
+	Message    string
+	Metadata   map[string]string
+	TraceID    string
+	Violations []Violation
+}
+
+func PublicOf(err error) Public
+func FromPublic(p Public) *Error
 ```
 
-`PolicyVerbose` discloses everything; `PolicyStrict` sends kind, reason, and
-trace ID only. Implement `errors.Policy` for anything else.
+Calling `Msg`, `Meta`, `WithMetadata`, or adding a `Violation` is the
+declaration that a value is public. Secrets, queries, and raw dependency text
+belong in a wrapped cause or in logs — never in those fields, because those
+fields cross the boundary verbatim.
+
+A non-Forge error discloses only `KindUnknown`: its text was written for an
+operator, so the transport substitutes its own generic message rather than
+publishing `err.Error()`. `FromPublic` is the receiving side — it rebuilds a
+remote error, with no cause, from the same set of facts.
+
+There is no per-deployment redaction knob. An application that needs a
+different external representation supplies a custom transport encoder.
 
 ## Never write these
 
 | Wrong | Right |
 | --- | --- |
-| `errors.New(404, "NOT_FOUND", "msg")` | `errors.New(errors.KindNotFound).Msg("msg")` |
-| `errors.Newf(...)` / `errors.Errorf(...)` | `errors.New(kind).Msgf(...)` |
+| `errors.New(404, "NOT_FOUND", "msg")` | `errors.Of(errors.KindNotFound).Msg("msg")` |
+| `errors.Newf(...)` / `errors.Errorf(...)` | `errors.Of(kind).Msgf(...)` |
 | `err.WithCause(cause)` | `err.Wrap(cause)` |
 | `errors.IsNotFound(err)` | `errors.Is(err, v1.ErrSomething)` or `errors.KindOf(err)` |
 | `errors.Code(err)` / `err.Code` | `errors.KindOf(err)`; the status is a projection |

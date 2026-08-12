@@ -40,7 +40,7 @@ logger := log.NewLogger(
 	slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}),
-	log.WithFilter(log.FilterKey("password")), // redact sensitive keys
+	log.WithFilter(log.WithFilterKey("password")), // redact sensitive keys
 ).With(
 	slog.String("service.id", id),
 	slog.String("service.name", name),
@@ -84,6 +84,6 @@ import (
 
 logger := log.NewLogger(
 	otel.NewHandler("helloworld"),
-	log.WithFilter(log.FilterKey("password")),
+	log.WithFilter(log.WithFilterKey("password")),
 ).With(slog.String("service.name", "helloworld"))
 ```

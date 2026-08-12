@@ -30,7 +30,7 @@ Example:
         return err
     }
 
-    app := forge.New(forge.Server(server))
+    app := forge.New(forge.WithServer(server))
     return app.Run()
 
 ## Destination Semantics

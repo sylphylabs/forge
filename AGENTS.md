@@ -23,16 +23,20 @@ do not exist here. Each one fails to compile.
 
 | Do not write | Write instead |
 | --- | --- |
-| `grpc.NewServer(grpc.Middleware(m))` | Server middleware is generated. `WrapGreeterGRPCServer(srv, GreeterMiddleware{Unary: ...})` — see [middleware.md](docs/agent/middleware.md) |
-| `http.NewServer(http.Middleware(m))` | Same: `WrapGreeterHTTPServer(srv, GreeterMiddleware{...})` |
 | `middleware.Middleware` / `middleware.Handler` | `middleware.UnaryMiddleware` / `middleware.UnaryHandler`. Streams use `StreamMiddleware` / `StreamHandler` |
-| `errors.New(404, "REASON", "msg")` | Errors carry a `Kind`, never a status code: `errors.New(errors.KindNotFound)`. See [errors.md](docs/agent/errors.md) |
+| `errors.New(404, "REASON", "msg")` | Errors carry a `Kind`, never a status code: `errors.Of(errors.KindNotFound)`. See [errors.md](docs/agent/errors.md) |
 | `errors.Newf` / `errors.Errorf` / `err.WithCause(c)` | `.Msgf(...)` and `.Wrap(cause)` |
 | `errors.IsNotFound(err)` | `errors.Is(err, v1.ErrNotFound)` or `errors.KindOf(err) == errors.KindNotFound` |
 | A `forge` / `kratos` CLI to scaffold a project | Forge ships no scaffolding CLI. Use the Go toolchain and `buf generate` |
 
-There is no `Middleware` server option on either transport. Do not add one to
-make an example work — check [middleware.md](docs/agent/middleware.md) instead.
+Server middleware has two layers, and reaching for the Kratos-shaped one for
+everything is the most common mistake. `http.WithMiddleware(...)` /
+`grpc.WithMiddleware(...)` / `grpc.WithStreamMiddleware(...)` (and
+`message.WithMiddleware(...)`) are server-wide: composed once inside
+`NewServer`, running before everything the server serves. Anything
+method-aware — per-service or per-method — goes through the generated plan:
+`WrapGreeterGRPCServer(srv, GreeterMiddleware{Unary: ...})`. Check
+[middleware.md](docs/agent/middleware.md) before wiring either.
 
 ## Repository shape
 
@@ -48,7 +52,7 @@ under `contrib/` have their own `go.mod`, wired to each other with local
   integrations live in `contrib/otel`, which is why they are a separate module.
 - Generated Protobuf code is committed. Regenerate with `buf generate`; the
   generators are in `cmd/` (`protoc-gen-go-errors`, `protoc-gen-go-http`,
-  `protoc-gen-go-middleware`, `protoc-gen-openapi`).
+  `protoc-gen-go-message`, `protoc-gen-go-middleware`, `protoc-gen-openapi`).
 
 ## Conventions
 

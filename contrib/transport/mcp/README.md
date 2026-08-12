@@ -30,7 +30,7 @@ func Health(next http.Handler) http.Handler {
 }
 
 func main() {
-    srv := tm.NewServer("forge-mcp", "v1.0.0", tm.Address(":8000"), tm.Middleware(Health))
+    srv := tm.NewServer("forge-mcp", "v1.0.0", tm.WithAddress(":8000"), tm.WithMiddleware(Health))
     tool := mcp.NewTool("hello_world",
         mcp.WithDescription("Say hello to someone"),
         mcp.WithString("name",
@@ -42,8 +42,8 @@ func main() {
     srv.AddTool(tool, helloHandler)
     // creates a forge application
     app := forge.New(
-        forge.Name("forge-app"),
-        forge.Server(srv),
+        forge.WithName("forge-app"),
+        forge.WithServer(srv),
     )
     if err := app.Run(); err != nil {
         panic(err)

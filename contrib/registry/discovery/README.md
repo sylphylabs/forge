@@ -27,14 +27,14 @@ func main() {
 	// ...
 
 	app := forge.New(
-		forge.Name("helloworld"),
-		forge.Server(
+		forge.WithName("helloworld"),
+		forge.WithServer(
 			httpSrv,
 			grpcSrv,
 		),
-		forge.Metadata(map[string]string{"color": "gray"}),
+		forge.WithMetadata(map[string]string{"color": "gray"}),
 		// use Registrar
-		forge.Registrar(r),
+		forge.WithRegistrar(r),
 	)
 
 	if err := app.Run(); err != nil {
@@ -63,7 +63,7 @@ func main() {
 
 	conn, err := grpc.NewClient(
 		context.Background(),
-		grpc.WithEndpoint("discovery:///appid"),
+		grpc.WithTarget("discovery:///appid"),
 		// use discovery
 		grpc.WithDiscovery(r),
 	)

@@ -65,8 +65,8 @@ func newServer(
 	}
 
 	srv := forgehttp.NewServer(
-		forgehttp.Address(":8000"),
-		forgehttp.Filter(serverMetrics),
+		forgehttp.WithAddress(":8000"),
+		forgehttp.WithFilter(serverMetrics),
 	)
 
 	// Tracing: middleware, attached through the generated plan.
@@ -91,8 +91,9 @@ func newServer(
 Note the three attach points differ, and this is the thing to get right:
 
 - **tracing** is `middleware.UnaryMiddleware` → goes in the generated plan
-  (see [middleware.md](middleware.md)),
-- **HTTP metrics** is a `forgehttp.FilterFunc` → goes in `forgehttp.Filter(...)`,
+  or, when it applies to every service alike, in the server-wide
+  `forgehttp.WithMiddleware(...)` (see [middleware.md](middleware.md)),
+- **HTTP metrics** is a `forgehttp.FilterFunc` → goes in `forgehttp.WithFilter(...)`,
 - **logging** is an `slog.Handler` → goes in `log.NewLogger(...)`.
 
 ## Tracing
@@ -121,7 +122,7 @@ tracing.TraceAttrs(ctx) // []slog.Attr{trace_id, span_id}
 ```
 
 Client-side, attach `tracing.Client(...)` through
-`forgehttp.WithMiddleware(...)` or `forgegrpc.WithMiddleware(...)`.
+`forgehttp.WithClientMiddleware(...)` or `forgegrpc.WithClientMiddleware(...)`.
 
 ## HTTP metrics
 
@@ -134,14 +135,14 @@ serverMetrics, err := metrics.NewHTTPServerFilter(provider)
 if err != nil {
 	return err
 }
-srv := forgehttp.NewServer(forgehttp.Filter(serverMetrics))
+srv := forgehttp.NewServer(forgehttp.WithFilter(serverMetrics))
 
 clientMetrics, err := metrics.NewHTTPClientWrapper(provider)
 if err != nil {
 	return err
 }
 client, err := forgehttp.NewClient(ctx,
-	forgehttp.WithEndpoint(endpoint),
+	forgehttp.WithTarget(endpoint),
 	forgehttp.WithRoundTripperWrapper(clientMetrics),
 )
 ```
@@ -180,8 +181,8 @@ otelOptions := grpcotel.Options{
 	},
 }
 
-srv := forgegrpc.NewServer(forgegrpc.Options(grpcotel.ServerOption(otelOptions)))
-conn, err := forgegrpc.NewClient(ctx, forgegrpc.WithOptions(grpcotel.DialOption(otelOptions)))
+srv := forgegrpc.NewServer(forgegrpc.WithOptions(grpcotel.ServerOption(otelOptions)))
+conn, err := forgegrpc.NewClient(ctx, forgegrpc.WithDialOptions(grpcotel.DialOption(otelOptions)))
 ```
 
 ## Logs
@@ -199,11 +200,11 @@ Compose with the core log builder for fixed attributes and redaction:
 ```go
 logger := log.NewLogger(
 	otellog.NewHandler("helloworld"),
-	log.WithFilter(log.FilterKey("password")),
+	log.WithFilter(log.WithFilterKey("password")),
 ).With(slog.String("service.name", "helloworld"))
 ```
 
-Pass the result to `forge.Logger(logger)` to make it the application default.
+Pass the result to `forge.WithLogger(logger)` to make it the application default.
 
 ## Error reporting
 
@@ -314,8 +315,8 @@ copied into spans. Errors are recorded on the span and returned unchanged.
 
 | Wrong | Right |
 | --- | --- |
-| `grpc.NewServer(grpc.Middleware(tracing.Server()))` | Put `tracing.Server()` in the generated middleware plan |
-| `forgehttp.NewServer(forgehttp.Middleware(...))` | No such option; tracing goes in the plan, metrics in `Filter` |
+| Method-aware middleware in `grpc.WithMiddleware(...)` | Server-wide only; per-service and per-method go in the generated plan |
+| HTTP metrics through `forgehttp.WithMiddleware(...)` | Metrics are a `FilterFunc`; they go in `forgehttp.WithFilter(...)` |
 | Importing `contrib/otel/...` and expecting the root `go.mod` to resolve it | It is a separate module; `go get` it |
 | `metrics.NewHTTPServerFilter(nil)` | The provider is required |
 | Discarding the `error` from the metrics constructors | Both return `(_, error)` |

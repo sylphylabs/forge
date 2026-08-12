@@ -124,10 +124,10 @@ remaining inherited runtime boundaries rather than reopening validated work.
 | Application lifecycle | `App.Run` installs process signals and combines host policy with service lifecycle. | Context-first application control; signal handling is an opt-in host concern. |
 | Readiness | Server goroutine start is used as the registration barrier. It does not prove that every server is ready to accept traffic. | Explicit readiness state and registration only after all required servers are ready. |
 | HTTP protection | The constructed `http.Server` sets a handler and TLS config but no header, idle, or header-size limits. | Documented secure defaults, explicit opt-outs, and streaming-aware request budgets. |
-| Config watchers | `Config.Load` starts retrying watcher goroutines; `Close` stops watchers but does not explicitly join every loop. Source APIs do not accept contexts. | Context-aware load/watch APIs with deterministic close and retry ownership. |
+| Config watchers | Root `config` is context-aware: `New(ctx, ...)` loads on construction and `Close` joins every watch loop (see [config-lifecycle.md](config-lifecycle.md)). Several contrib providers still create their own `context.Background` watch contexts. | Bring every contrib provider under the caller-owned-context rule with a shared conformance suite. |
 | Protocol surface | Core transports are HTTP and gRPC; browser and schema consumers need separate integration work. | Optional adapters built from the same generated operation description. |
 | Telemetry configuration | Some paths still default to global OpenTelemetry providers and middleware owns parts of operation interpretation. | Injected providers and a stable, cardinality-bounded operation contract. |
-| Release topology | The repository contains 27 Go modules with temporary local replacements before the first release. | A machine-readable release inventory, support tiers, and external-consumer validation. |
+| Release topology | The repository contains 31 Go modules with temporary local replacements before the first release. | A machine-readable release inventory, support tiers, and external-consumer validation. |
 
 The presence of reflection, allocations, middleware, or telemetry does not by
 itself indicate waste. Most of those operations implement necessary behavior.
@@ -213,9 +213,10 @@ Implementation constraints:
 
 - Generated service bindings expose a typed internal entry point for each
   method.
-- Migration documentation maps existing `middleware.Middleware` values to
-  `middleware.UnaryMiddleware` and generated service plans. No runtime adapter
-  or compatibility alias remains in core code.
+- The middleware contracts are `middleware.UnaryMiddleware` and
+  `middleware.StreamMiddleware` plus generated service plans. No combined
+  `middleware.Middleware` type, runtime adapter, or compatibility alias
+  exists in core code.
 - Middleware names and execution policy do not enter Protobuf descriptors.
   Generated plans expose RPC fields and generated wrappers compose them before
   registration without runtime string dispatch.
@@ -292,7 +293,7 @@ The design must cover:
 - Clear zero-value semantics and explicit escape hatches for deployments that
   terminate or enforce limits at another layer.
 
-The existing generic `Timeout` behavior must not be silently repurposed. Its
+The existing generic `WithTimeout` behavior must not be silently repurposed. Its
 migration must state whether it maps to a unary operation budget, is deprecated,
 or is removed before v1.
 
@@ -307,8 +308,10 @@ Acceptance gates:
 
 ## Workstream 5: Config and Provider Lifecycle
 
-Config loading and watching become context-aware. The coordinator owns retry
-and backoff policy; providers only report source events and errors.
+The root `config` coordinator is context-aware: `New(ctx, ...)` loads every
+source on construction, watch loops are coordinator-owned, and `Close` joins
+them (see [config-lifecycle.md](config-lifecycle.md)). The remaining work in
+this workstream is provider conformance.
 
 Required semantics:
 

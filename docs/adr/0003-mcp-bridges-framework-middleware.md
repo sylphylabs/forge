@@ -58,13 +58,13 @@ type ToolHandlerMiddleware func(ToolHandlerFunc) ToolHandlerFunc
 
 `UnaryMiddleware(endpoint, m...)` 返回 `server.ToolHandlerMiddleware`：注入 `Transport` 到 context，把 `CallToolRequest` 作为 `req`、`*CallToolResult` 作为 `reply` 穿过 unary 链。
 
-选项形式 `ToolMiddleware(m...)` 传给 `NewServer`，在选项应用**之后**注册，以便读到可能被选项设置的 endpoint。
+选项形式 `WithToolMiddleware(m...)` 传给 `NewServer`，在选项应用**之后**注册，以便读到可能被选项设置的 endpoint。
 
 中间件若把 reply 替换成非 `*CallToolResult` 的值，返回 `ErrUnexpectedReply` —— **显式失败而非静默丢弃结果**。
 
-### 3. 顺带修正 `Middleware()` 的覆盖语义
+### 3. 顺带修正 `WithMiddleware()` 的覆盖语义
 
-原 `Middleware(m MiddlewareFunc)` 是**赋值**（`s.middleware = m`），调用两次静默丢弃第一个。改为 variadic + append + nil 过滤，与 `transport/message` 的 `WithMiddleware` 一致，并明确「首个中间件为最外层」。
+原 `WithMiddleware(m MiddlewareFunc)` 是**赋值**（`s.middleware = m`），调用两次静默丢弃第一个。改为 variadic + append + nil 过滤，与 `transport/message` 的 `WithMiddleware` 一致，并明确「首个中间件为最外层」。
 
 这是上游遗留的弱设计，非本次接入所必需，但在同一文件里留下两种相反的累积语义会持续误导使用者。
 
@@ -80,9 +80,9 @@ type ToolHandlerMiddleware func(ToolHandlerFunc) ToolHandlerFunc
 
 ### 负面与代价
 
-- **`Middleware()` 签名变更为 variadic**，属源码破坏性变更。单参数调用仍编译通过（README 示例未受影响），但显式取 `MiddlewareFunc` 类型的调用点需调整。模块未公开发布，代价为零。
+- **`WithMiddleware()` 签名变更为 variadic**，属源码破坏性变更。单参数调用仍编译通过（README 示例未受影响），但显式取 `MiddlewareFunc` 类型的调用点需调整。模块未公开发布，代价为零。
 - 桥接只覆盖 **tool 调用**。prompts、resources、tasks 各有独立的 `PromptHandlerMiddleware` / `ResourceHandlerMiddleware`（`server.go:73,83`），本次未接。**MUST NOT 宣称「MCP 全面接入框架中间件」** —— 只有 tools 接了。
-- 中间件运行在 mcp-go 的 handler 层，而非 HTTP 层。因此它看不到未被路由到 tool 的请求（协议握手、SSE 建连）。需要覆盖那一层时仍用 `Middleware()` 的 `http.Handler` 中间件 —— **两层各有职责，不是冗余。**
+- 中间件运行在 mcp-go 的 handler 层，而非 HTTP 层。因此它看不到未被路由到 tool 的请求（协议握手、SSE 建连）。需要覆盖那一层时仍用 `WithMiddleware()` 的 `http.Handler` 中间件 —— **两层各有职责，不是冗余。**
 
 ### 方法论教训
 

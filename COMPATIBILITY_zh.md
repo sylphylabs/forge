@@ -1,4 +1,4 @@
-# Forge 与 Forge 兼容性说明
+# Forge 与 Kratos 兼容性说明
 
 状态：预发布
 
@@ -8,9 +8,9 @@
 歧义，以英文规范版本为准。
 
 Forge 是 `go-kratos/kratos` 的独立 fork，不是 Kratos v3 的直接替代品，
-也不承诺与未来 Forge 版本保持源码、行为或发布兼容。
+也不承诺与未来 Kratos 版本保持源码、行为或发布兼容。
 
-Forge 也不会仅为了兼容 Forge 而保留 API。如果已有更清晰或更高效的替代
+Forge 也不会仅为了兼容 Kratos 而保留 API。如果已有更清晰或更高效的替代
 方案，并且变更有充分技术依据，就可以移除旧 API。这类移除属于有意的破坏性
 更新，必须同时提供可执行的迁移说明。
 
@@ -34,10 +34,10 @@ Forge 也不会仅为了兼容 Forge 而保留 API。如果已有更清晰或更
 | 根 module | `github.com/go-kratos/kratos/v3` | `github.com/sylphylabs/forge` | 源码不兼容 |
 | 版本线 | v3 | v0 预发布 | 发布不兼容 |
 | 最低 Go 版本 | Go 1.25 | Go 1.27 | 构建要求变化 |
-| Module 数量 | 28，包含 `cmd/forge` | 27 | 发布和工具变化 |
+| Module 数量 | 28，包含 `cmd/forge` | 31 | 发布和工具变化 |
 | 异步消息 Transport | 没有协议中立的异步契约 | 根 module 提供 `transport/message`；broker SDK 适配器仍是可选嵌套 module | 新增 API；不承诺 broker wire 兼容 |
 | 项目 CLI | `cmd/forge` | 已移除 | 工作流不兼容 |
-| Protobuf generator | Forge module 路径 | Forge module 路径 | 安装路径变化 |
+| Protobuf generator | Kratos module 路径 | Forge module 路径 | 安装路径变化 |
 | Contrib provider SDK | 旧 provider major 与已归档直接依赖 | 当前稳定 major 与受维护的标准替代 | 源码与依赖图变化 |
 | UUID 生成 | `google/uuid` 与 `gofrs/uuid` | 标准库 `uuid` | 源码与生成 ID 行为变化 |
 | HTTP protobuf 生成 | Open API 字段访问 | Editions 2023 Open/Opaque API accessor | 新增生成能力 |
@@ -55,7 +55,7 @@ Forge 也不会仅为了兼容 Forge 而保留 API。如果已有更清晰或更
 | OTel 属性 | 旧 semconv，transport 属性混用 | semconv v1.41，按 transport 区分 | 遥测 schema 变化 |
 | OTel Metrics | 使用自定义名称、`code` 与 `reason` 的通用 unary middleware | HTTP semconv v1.41 duration histogram 与 grpc-go A66 duration metrics | 源码与遥测 schema 不兼容 |
 | 错误分类 | 错误上存 HTTP 状态码，再映射到 gRPC | 与传输无关的 `Kind`，向每个 transport 单向投影 | 源码、线格式与行为不兼容 |
-| 错误构造 | `errors.BadRequest(reason, msg)` 与生成的 `ErrorXxx(format, args...)` | `errors.New(Kind)` 与生成的 sentinel 值 | 源码与生成代码不兼容 |
+| 错误构造 | `errors.BadRequest(reason, msg)` 与生成的 `ErrorXxx(format, args...)` | `errors.Of(Kind)` 与生成的 sentinel 值 | 源码与生成代码不兼容 |
 | 错误判定 | 生成的 `IsXxx(err)`，比较结构体字段 | 对生成 sentinel 用 `errors.Is`，另有 `errors.KindOf` | 源码不兼容 |
 | 错误 annotation | `default_code` 与 `code`，携带 HTTP 状态码 | `default_kind` 与 `kind`，携带 `Kind` | Protobuf 契约不兼容 |
 | 重试判定 | `errors.IsRetryable` 与 `Kind.Retryable` 孤立地按 Kind 分类 | 已移除；判定需要投递证据或幂等声明 | 源码不兼容 |
@@ -95,7 +95,7 @@ module tag 不会自动发布嵌套 module。
 Forge 要求 Go 1.27。在 final 工具链发布前，开发与 CI 使用 Go 1.27 RC2。
 上游基线要求 Go 1.25，因此仍需停留在 Go 1.25 或 Go 1.26 的项目无法直接迁移。
 
-仓库当前包含 27 个 Go module。根目录的 `go test ./...` 不会覆盖嵌套 module，
+仓库当前包含 31 个 Go module。根目录的 `go test ./...` 不会覆盖嵌套 module，
 完整验证方式见 [`DEVELOPMENT.md`](DEVELOPMENT.md)。
 
 ## 项目 CLI 与代码生成
@@ -244,7 +244,7 @@ pattern，匹配变量仍可通过 `transport/http.Context.Vars()` 和
   该选项，路径清理和尾部斜杠重定向遵循标准库；
 - `HandlePrefix` 使用路径段前缀语义，而不是任意字符串前缀；
 - 未匹配请求不会落入进程级 `http.DefaultServeMux`；确有需要时应将其显式传给
-  `NotFoundHandler`；
+  `WithNotFoundHandler`；
 - method 不匹配时使用配置的 method-not-allowed handler，不依赖 Gorilla matcher
   注册顺序。
 - 单路径段变量会对 slash 与 URL delimiter 做百分号编码；只有 AIP 多路径段模板
@@ -279,11 +279,11 @@ Selector API 和选择结果保持不变，但稳态成本不同：
 
 `App.Stop` 现在幂等。Before-stop、注销、server stop 与 after-stop 阶段会在安全
 范围内继续执行；多个失败通过 `errors.Join` 返回，不再由后发生的错误覆盖先前
-错误。`AfterStopTimeout` 配置受限的 after-stop 阶段，默认十秒。After-stop
+错误。`WithAfterStopTimeout` 配置受限的 after-stop 阶段，默认十秒。After-stop
 callback 保留 application context 的值，但不继承其取消状态。
 
 `transport.Healthzer` 与 `transport.GracefulStopper` 是 `transport.Server` 之外
-的可选能力接口。停机时 `App` 会在 `StopTimeout` 内优先排空实现了
+的可选能力接口。停机时 `App` 会在 `WithStopTimeout` 内优先排空实现了
 `GracefulStopper` 的 server，排空被放弃或失败时回退到 `Stop`；只实现
 `Start`/`Stop` 的 server 收到的仍是与之前相同的单次 `Stop` 调用。
 `App.Healthz` 报告所有实现 `Healthzer` 的 server 是否都能接收新请求，
@@ -501,7 +501,7 @@ Kratos v2 应用还需要先处理 v2 到 v3 的 API 变化，因为 Forge 从 v
 任何修改公开 API、默认行为、wire format、module、工具或最低 Go 版本的变更，
 都必须在同一变更中更新英文规范文档和本文。
 
-与 Forge 兼容本身不是保留较差公开 API 的理由。破坏性替代只有在迁移文档已
+与 Kratos 兼容本身不是保留较差公开 API 的理由。破坏性替代只有在迁移文档已
 说明技术依据、替代 API、新旧代码示例、重新生成要求与验证步骤后才能合并。
 
 - 本文只记录当前事实，不记录愿望；
