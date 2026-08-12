@@ -131,6 +131,64 @@ jobs:
             exit 1
           fi
 
+  consumer:
+    name: external consumer build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.27.0-rc.2
+
+      # An external `go get` sees the root module as the proxy packs it:
+      # without the nested api/, cmd/, and contrib/ modules, and with no
+      # effect from any replace directive. Building a consumer against that
+      # shape is the one test that fails if a require ever points at an
+      # untagged internal module again.
+      - name: Build a consumer against the packed module shape
+        run: |
+          packed=$(mktemp -d)
+          git archive HEAD | tar -x -C "$packed"
+          rm -rf "$packed/api" "$packed/cmd" "$packed/contrib"
+
+          consumer=$(mktemp -d)
+          cd "$consumer"
+          cat > go.mod <<EOF
+          module example.com/consumer
+
+          go 1.27rc2
+
+          require github.com/sylphylabs/forge v0.0.0
+          replace github.com/sylphylabs/forge => $packed
+          EOF
+          cat > main.go <<'EOF'
+          package main
+
+          import (
+          	"github.com/sylphylabs/forge"
+          	"github.com/sylphylabs/forge/errors"
+          	"github.com/sylphylabs/forge/transport/grpc"
+          	"github.com/sylphylabs/forge/transport/http"
+          )
+
+          func main() {
+          	app := forge.New(
+          		forge.WithName("consumer"),
+          		forge.WithServer(
+          			http.NewServer(http.WithAddress(":8000")),
+          			grpc.NewServer(grpc.WithAddress(":9000")),
+          		),
+          	)
+          	_ = app
+          	_ = errors.Of(errors.KindNotFound)
+          }
+          EOF
+          GOWORK=off GOFLAGS=-mod=mod go mod tidy
+          GOWORK=off go build ./...
+        env:
+          GOTOOLCHAIN: auto
+
   forward-go:
     name: Go tip forward compatibility
     runs-on: ubuntu-latest

@@ -8,9 +8,7 @@
       "support": "core",
       "owner": "sylphylabs-maintainers",
       "tagPrefix": "",
-      "dependsOn": [
-        "github.com/sylphylabs/forge/api"
-      ]
+      "dependsOn": []
     },
     {
       "path": "api",

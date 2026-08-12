@@ -87,7 +87,7 @@ go test ./selector/p2c -run '^$' -bench '^BenchmarkSelect' \
 
 ## Repository Identity
 
-All Forge modules and generated Go package paths use the `github.com/sylphylabs/forge` prefix. Internal cross-module requirements use the temporary `v0.0.0` version together with local `replace` directives until the first Forge tags are published.
+All Forge modules and generated Go package paths use the `github.com/sylphylabs/forge` prefix. An internal cross-module requirement points at a published tag (for example `api/v0.0.1`) with no `replace` directive, because external consumers do not honor replaces. The temporary `v0.0.0` version plus a local `replace` is reserved for a dependency that has no tag yet; `internal/releasecheck` enforces the pairing in both directions.
 
 The `upstream` remote cannot be pushed to from this checkout. Add the Forge repository as `origin` only after it has been created:
 

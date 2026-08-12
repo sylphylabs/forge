@@ -33,7 +33,8 @@ type goMod struct {
 		Path string
 	}
 	Require []struct {
-		Path string
+		Path    string
+		Version string
 	}
 	Replace []struct {
 		Old struct {
@@ -275,9 +276,23 @@ func validateManifest(t *testing.T, root string, entries []moduleEntry, discover
 				t.Errorf("module %q replace %q resolves to %q, want %q", entry.Module, replacement.Old.Path, got, want)
 			}
 		}
-		for _, dependency := range dependencies {
-			if !replacements[dependency] {
-				t.Errorf("module %q has no local replace for internal dependency %q", entry.Module, dependency)
+		// A replace directive is invisible to external consumers, so a
+		// requirement on a published version must resolve without one. The
+		// v0.0.0 placeholder marks the one legitimate use: an internal
+		// dependency that has no tag yet and therefore cannot resolve any
+		// other way. Requiring the pairing in both directions means tagging a
+		// module forces the replace to be removed everywhere in the same
+		// change, and an untagged dependency cannot silently ship.
+		for _, requirement := range mod.Require {
+			if _, ok := byModule[requirement.Path]; !ok {
+				continue
+			}
+			unreleased := requirement.Version == "v0.0.0"
+			if unreleased && !replacements[requirement.Path] {
+				t.Errorf("module %q requires unreleased %q with no local replace", entry.Module, requirement.Path)
+			}
+			if !unreleased && replacements[requirement.Path] {
+				t.Errorf("module %q requires published %s %s but hides it behind a replace, which external consumers do not honor", entry.Module, requirement.Path, requirement.Version)
 			}
 		}
 	}
