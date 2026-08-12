@@ -1,3 +1,7 @@
+// Package ewma wraps nodes with exponentially weighted moving averages of
+// their observed latency and success rate, so a balancer can prefer nodes
+// that are currently fast and healthy over ones that are merely declared
+// heavy.
 package ewma
 
 import (
@@ -12,9 +16,11 @@ import (
 )
 
 const (
-	// The mean lifetime of `cost`, it reaches its half-life after Tau*ln(2).
+	// tau is the mean lifetime of the moving average; it reaches its
+	// half-life after tau*ln(2).
 	tau = int64(time.Millisecond * 600)
-	// if statistic not collected,we add a big lag penalty to endpoint
+	// penalty is the lag charged to a node that has produced no statistics
+	// yet, so an unmeasured node is not mistaken for a fast one.
 	penalty = uint64(time.Microsecond * 100)
 )
 
@@ -23,9 +29,10 @@ var (
 	_ selector.WeightedNodeBuilder = (*Builder)(nil)
 )
 
-// Node is endpoint instance
+// Node is a weighted node whose effective weight follows the latency and
+// error feedback its DoneFuncs report.
 type Node struct {
-	selector.Node
+	node *selector.Node
 
 	// client statistic data
 	lag       atomic.Int64
@@ -48,15 +55,18 @@ type nodeWeight struct {
 	updateAt int64
 }
 
-// Builder is ewma node builder.
+// Builder wraps nodes as EWMA nodes.
 type Builder struct {
+	// ErrHandler classifies request errors as health failures. It runs
+	// before the built-in classification, which treats deadline, transport
+	// unavailability, and network errors as failures.
 	ErrHandler func(err error) (isErr bool)
 }
 
-// Build create a weighted node.
-func (b *Builder) Build(n selector.Node) selector.WeightedNode {
+// Build wraps n.
+func (b *Builder) Build(n *selector.Node) selector.WeightedNode {
 	s := &Node{
-		Node:         n,
+		node:         n,
 		inflights:    [200]atomic.Int64{},
 		errHandler:   b.ErrHandler,
 		cachedWeight: &atomic.Value{},
@@ -76,14 +86,16 @@ func (n *Node) load() (load uint64) {
 	predict := n.predict(avgLag, now)
 
 	if avgLag == 0 {
-		// penalty is the penalty value when there is no data when the node is just started.
+		// A node with no latency data yet is charged the penalty so it is
+		// tried, but not flooded, until real statistics arrive.
 		load = penalty * uint64(n.inflight.Load())
 		return
 	}
 	if predict > avgLag {
 		avgLag = predict
 	}
-	// add 5ms to eliminate the latency gap between different zones
+	// Add 5ms to flatten the latency gap between zones before compressing
+	// the scale.
 	avgLag += int64(time.Millisecond * 5)
 	avgLag = int64(math.Sqrt(float64(avgLag)))
 	load = uint64(avgLag) * uint64(n.inflight.Load())
@@ -113,7 +125,10 @@ func (n *Node) predict(avgLag int64, now int64) (predict int64) {
 	return
 }
 
-// Pick pick a node.
+// Pick records a pick and returns the callback that folds the request's
+// outcome into the node's statistics. The callback must run exactly once —
+// see [selector.DoneFunc]; the in-flight count it decrements is incremented
+// here.
 func (n *Node) Pick() selector.DoneFunc {
 	start := time.Now().UnixNano()
 	n.lastPick.Store(start)
@@ -147,7 +162,7 @@ func (n *Node) Pick() selector.DoneFunc {
 		lag = int64(float64(oldLag)*w + float64(lag)*(1.0-w))
 		n.lag.Store(lag)
 
-		success := uint64(1000) // error value ,if error set 1
+		success := uint64(1000) // health scale: 1000 healthy, 0 failed
 		if isHealthFailure(di.Err, n.errHandler) {
 			success = 0
 		}
@@ -172,7 +187,8 @@ func isHealthFailure(err error, handler func(error) bool) bool {
 		errors.As(err, &netErr)
 }
 
-// Weight is node effective weight.
+// Weight is the node's effective weight: health divided by load, cached
+// briefly because it is read far more often than its inputs change.
 func (n *Node) Weight() (weight float64) {
 	w, ok := n.cachedWeight.Load().(*nodeWeight)
 	now := time.Now().UnixNano()
@@ -190,10 +206,12 @@ func (n *Node) Weight() (weight float64) {
 	return
 }
 
+// PickElapsed is the time since the most recent pick.
 func (n *Node) PickElapsed() time.Duration {
 	return time.Duration(time.Now().UnixNano() - n.lastPick.Load())
 }
 
-func (n *Node) Raw() selector.Node {
-	return n.Node
+// Raw returns the underlying node.
+func (n *Node) Raw() *selector.Node {
+	return n.node
 }

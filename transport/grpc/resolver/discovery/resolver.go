@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/attributes"
@@ -43,8 +44,9 @@ type discoveryResolver struct {
 	w  registry.Watcher
 	cc resolver.ClientConn
 
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx       context.Context
+	cancel    context.CancelFunc
+	closeOnce sync.Once
 
 	insecure        bool
 	selectorKey     string
@@ -59,14 +61,25 @@ func (r *discoveryResolver) watch() {
 			return
 		default:
 		}
-		ins, err := r.w.Next()
+		ins, err := r.w.Next(r.ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				return
 			}
 			log.Error("[resolver] failed to watch discovery endpoint", "error", err)
-			time.Sleep(time.Second)
+			select {
+			case <-r.ctx.Done():
+				return
+			case <-time.After(time.Second):
+			}
 			continue
+		}
+		// Next may have returned an update raced with Close; a closed resolver
+		// must not push state into the connection.
+		select {
+		case <-r.ctx.Done():
+			return
+		default:
 		}
 		r.update(ins)
 	}
@@ -124,12 +137,17 @@ func (r *discoveryResolver) update(ins []*registry.ServiceInstance) {
 	log.Info("[resolver] update instances", "instances", string(b))
 }
 
+// Close terminates the watch goroutine and stops the watcher. It is
+// idempotent, so a second call — gRPC tearing down a connection a caller
+// already closed — does not stop the watcher twice.
 func (r *discoveryResolver) Close() {
-	r.cancel()
-	err := r.w.Stop()
-	if err != nil {
-		log.Error("[resolver] failed to stop watcher", "error", err)
-	}
+	r.closeOnce.Do(func() {
+		r.cancel()
+		err := r.w.Stop()
+		if err != nil {
+			log.Error("[resolver] failed to stop watcher", "error", err)
+		}
+	})
 }
 
 func (r *discoveryResolver) ResolveNow(_ resolver.ResolveNowOptions) {}

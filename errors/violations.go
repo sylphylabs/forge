@@ -61,7 +61,7 @@ func (v *Violations) Err(kind Kind) error {
 	if len(v.list) == 0 {
 		return nil
 	}
-	e := New(kind)
+	e := Of(kind)
 	e.violations = append([]Violation(nil), v.list...)
 	return e
 }

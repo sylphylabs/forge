@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -58,9 +59,14 @@ func newWatcher(configFile polaris.ConfigFile) *Watcher {
 	return w
 }
 
-func (w *Watcher) Next() ([]*config.KeyValue, error) {
+func (w *Watcher) Next(ctx context.Context) ([]*config.KeyValue, error) {
 	ec := eventChanMap[w.fullPath]
-	event := <-ec.event
+	var event model.ConfigFileChangeEvent
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case event = <-ec.event:
+	}
 	return []*config.KeyValue{
 		{
 			Key:    w.configFile.GetFileName(),

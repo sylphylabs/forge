@@ -52,10 +52,10 @@ func TestServeHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mux := NewServer(Listener(ln))
+	mux := NewServer(WithListener(ln))
 	mux.HandleFunc("/index", h)
 	mux.Route("/errors").GET("/cause", func(Context) error {
-		return forgeerrors.New(forgeerrors.KindInvalidArgument).WithReason("xxx").Msg("zzz").
+		return forgeerrors.Of(forgeerrors.KindInvalidArgument).WithReason("xxx").Msg("zzz").
 			WithMetadata(map[string]string{"foo": "bar"}).
 			Wrap(errors.New("error cause"))
 	})
@@ -93,7 +93,7 @@ func TestServer(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(testData{Path: r.RequestURI})
 	})
 	srv.Route("/errors").GET("/cause", func(Context) error {
-		return forgeerrors.New(forgeerrors.KindInvalidArgument).WithReason("xxx").Msg("zzz").
+		return forgeerrors.Of(forgeerrors.KindInvalidArgument).WithReason("xxx").Msg("zzz").
 			WithMetadata(map[string]string{"foo": "bar"}).
 			Wrap(errors.New("error cause"))
 	})
@@ -130,7 +130,7 @@ func testAccept(t *testing.T, srv *Server) {
 	if err != nil {
 		t.Errorf("expected nil got %v", err)
 	}
-	client, err := NewClient(context.Background(), WithEndpoint(e.Host))
+	client, err := NewClient(context.Background(), WithTarget(e.Host))
 	if err != nil {
 		t.Errorf("expected nil got %v", err)
 	}
@@ -155,7 +155,7 @@ func testHeader(t *testing.T, srv *Server) {
 	if err != nil {
 		t.Errorf("expected nil got %v", err)
 	}
-	client, err := NewClient(context.Background(), WithEndpoint(e.Host))
+	client, err := NewClient(context.Background(), WithTarget(e.Host))
 	if err != nil {
 		t.Errorf("expected nil got %v", err)
 	}
@@ -197,7 +197,7 @@ func testClient(t *testing.T, srv *Server) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := NewClient(context.Background(), WithEndpoint(e.Host))
+	client, err := NewClient(context.Background(), WithTarget(e.Host))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ func BenchmarkServer(b *testing.B) {
 	if !ok {
 		b.Errorf("expected port got %v", srv.lis)
 	}
-	client, err := NewClient(context.Background(), WithEndpoint(fmt.Sprintf("127.0.0.1:%d", port)))
+	client, err := NewClient(context.Background(), WithTarget(fmt.Sprintf("127.0.0.1:%d", port)))
 	if err != nil {
 		b.Errorf("expected nil got %v", err)
 	}
@@ -289,7 +289,7 @@ func BenchmarkServer(b *testing.B) {
 func TestNetwork(t *testing.T) {
 	o := &Server{}
 	v := "abc"
-	Network(v)(o)
+	WithNetwork(v)(o)
 	if !reflect.DeepEqual(v, o.network) {
 		t.Errorf("expected %v got %v", v, o.network)
 	}
@@ -298,7 +298,7 @@ func TestNetwork(t *testing.T) {
 func TestAddress(t *testing.T) {
 	o := &Server{}
 	v := "abc"
-	Address(v)(o)
+	WithAddress(v)(o)
 	if !reflect.DeepEqual(v, o.address) {
 		t.Errorf("expected %v got %v", v, o.address)
 	}
@@ -307,7 +307,7 @@ func TestAddress(t *testing.T) {
 func TestTimeout(t *testing.T) {
 	o := &Server{}
 	v := time.Duration(123)
-	Timeout(v)(o)
+	WithTimeout(v)(o)
 	if !reflect.DeepEqual(v, o.timeout) {
 		t.Errorf("expected %v got %v", v, o.timeout)
 	}
@@ -318,7 +318,7 @@ func TestServerWithoutTimeoutPreservesRequestContext(t *testing.T) {
 	parent, cancel := context.WithCancel(context.WithValue(context.Background(), contextKey{}, "value"))
 	defer cancel()
 
-	srv := NewServer(Timeout(0))
+	srv := NewServer(WithTimeout(0))
 	srv.Route("").GET("/context", func(ctx Context) error {
 		if _, ok := ctx.Deadline(); ok {
 			t.Fatal("unexpected deadline")
@@ -344,7 +344,7 @@ func TestMatchedRoutePreservesRequestSemantics(t *testing.T) {
 	parent, cancel := context.WithCancel(context.WithValue(context.Background(), contextKey{}, "value"))
 	defer cancel()
 
-	srv := NewServer(Timeout(0))
+	srv := NewServer(WithTimeout(0))
 	srv.Route("").GET("/context/{name}", func(ctx Context) error {
 		request := ctx.Request()
 		if got := request.Pattern; got != "/context/{name}" {
@@ -387,7 +387,7 @@ func TestMatchedRoutePreservesRequestSemantics(t *testing.T) {
 func TestRequestDecoder(t *testing.T) {
 	o := &Server{}
 	v := func(*http.Request, any) error { return nil }
-	RequestDecoder(v)(o)
+	WithRequestDecoder(v)(o)
 	if o.decBody == nil {
 		t.Errorf("expected nil got %v", o.decBody)
 	}
@@ -396,7 +396,7 @@ func TestRequestDecoder(t *testing.T) {
 func TestResponseEncoder(t *testing.T) {
 	o := &Server{}
 	v := func(http.ResponseWriter, *http.Request, any) error { return nil }
-	ResponseEncoder(v)(o)
+	WithResponseEncoder(v)(o)
 	if o.enc == nil {
 		t.Errorf("expected nil got %v", o.enc)
 	}
@@ -405,7 +405,7 @@ func TestResponseEncoder(t *testing.T) {
 func TestErrorEncoder(t *testing.T) {
 	o := &Server{}
 	v := func(http.ResponseWriter, *http.Request, error) {}
-	ErrorEncoder(v)(o)
+	WithErrorEncoder(v)(o)
 	if o.ene == nil {
 		t.Errorf("expected nil got %v", o.ene)
 	}
@@ -414,7 +414,7 @@ func TestErrorEncoder(t *testing.T) {
 func TestTLSConfig(t *testing.T) {
 	o := &Server{}
 	v := &tls.Config{}
-	TLSConfig(v)(o)
+	WithTLSConfig(v)(o)
 	if !reflect.DeepEqual(v, o.tlsConf) {
 		t.Errorf("expected %v got %v", v, o.tlsConf)
 	}
@@ -426,7 +426,7 @@ func TestListener(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &Server{}
-	Listener(lis)(s)
+	WithListener(lis)(s)
 	if !reflect.DeepEqual(s.lis, lis) {
 		t.Errorf("expected %v got %v", lis, s.lis)
 	}
@@ -436,7 +436,7 @@ func TestListener(t *testing.T) {
 }
 
 func TestNotFoundHandler(t *testing.T) {
-	srv := NewServer(NotFoundHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := NewServer(WithNotFoundHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
 	})))
 	recorder := httptest.NewRecorder()
@@ -447,7 +447,7 @@ func TestNotFoundHandler(t *testing.T) {
 }
 
 func TestMethodNotAllowedHandler(t *testing.T) {
-	srv := NewServer(MethodNotAllowedHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := NewServer(WithMethodNotAllowedHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
 	})))
 	srv.Route("/").GET("/resource", func(Context) error { return nil })
@@ -558,7 +558,7 @@ func (b *safeBytesBuffer) String() string {
 }
 
 func TestHealthzLifecycle(t *testing.T) {
-	srv := NewServer(Address("127.0.0.1:0"))
+	srv := NewServer(WithAddress("127.0.0.1:0"))
 	if srv.Healthz() {
 		t.Fatal("Healthz() before Start = true, want false")
 	}
@@ -580,10 +580,34 @@ func TestHealthzLifecycle(t *testing.T) {
 	}
 }
 
+// TestStartAfterStopFails proves a Server serves once: a Start following a
+// Stop must report ErrServerStopped rather than no-op and return nil.
+func TestStartAfterStopFails(t *testing.T) {
+	srv := NewServer(WithAddress("127.0.0.1:0"))
+	started := make(chan error, 1)
+	go func() { started <- srv.Start(context.Background()) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for !srv.Healthz() {
+		if time.Now().After(deadline) {
+			t.Fatal("Healthz() never became true after Start")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := srv.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-started; err != nil {
+		t.Fatalf("Start() = %v, want nil", err)
+	}
+	if err := srv.Start(context.Background()); !errors.Is(err, ErrServerStopped) {
+		t.Fatalf("second Start() = %v, want %v", err, ErrServerStopped)
+	}
+}
+
 func TestGracefulStopDrainsInFlightRequests(t *testing.T) {
 	inHandler := make(chan struct{})
 	release := make(chan struct{})
-	srv := NewServer(Address("127.0.0.1:0"), Timeout(0))
+	srv := NewServer(WithAddress("127.0.0.1:0"), WithTimeout(0))
 	srv.HandleFunc("/slow", func(w http.ResponseWriter, _ *http.Request) {
 		close(inHandler)
 		<-release
@@ -633,7 +657,7 @@ func TestGracefulStopDrainsInFlightRequests(t *testing.T) {
 func TestGracefulStopAbandonsDrainOnContextEnd(t *testing.T) {
 	inHandler := make(chan struct{})
 	release := make(chan struct{})
-	srv := NewServer(Address("127.0.0.1:0"), Timeout(0))
+	srv := NewServer(WithAddress("127.0.0.1:0"), WithTimeout(0))
 	srv.HandleFunc("/slow", func(w http.ResponseWriter, _ *http.Request) {
 		close(inHandler)
 		<-release

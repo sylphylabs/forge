@@ -100,8 +100,8 @@ func (r *Registry) Deregister(ctx context.Context, service *registry.ServiceInst
 	return err
 }
 
-// GetService get services from zookeeper
-func (r *Registry) GetService(_ context.Context, serviceName string) ([]*registry.ServiceInstance, error) {
+// Instances returns the currently known instances of the named service.
+func (r *Registry) Instances(_ context.Context, serviceName string) ([]*registry.ServiceInstance, error) {
 	instances, err, _ := r.group.Do(serviceName, func() (any, error) {
 		serviceNamePath := path.Join(r.opts.namespace, serviceName)
 		servicesID, _, err := r.conn.Children(serviceNamePath)

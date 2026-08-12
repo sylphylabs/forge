@@ -90,11 +90,13 @@ func newWatcher(a *apollo) (config.Watcher, error) {
 	}, nil
 }
 
-// Next will be blocked until the Stop method is called
-func (w *watcher) Next() ([]*config.KeyValue, error) {
+// Next blocks until a change arrives, ctx is done, or the watcher stops.
+func (w *watcher) Next(ctx context.Context) ([]*config.KeyValue, error) {
 	select {
 	case kv := <-w.out:
 		return kv, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-w.ctx.Done():
 		return nil, w.ctx.Err()
 	}

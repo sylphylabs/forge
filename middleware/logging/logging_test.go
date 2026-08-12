@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
 
@@ -104,8 +105,15 @@ func TestHTTP(t *testing.T) {
 			if got := handler.attrs[0]["operation"]; got != "/package.service/method" {
 				t.Fatalf("operation = %v, want %q", got, "/package.service/method")
 			}
-			if got := handler.attrs[0]["args"]; got != "req.args" {
-				t.Fatalf("args = %v, want %q", got, "req.args")
+			if got := handler.attrs[0]["args"]; got != "string" {
+				t.Fatalf("args = %v, want %q", got, "string")
+			}
+			_, hasErrorKind := handler.attrs[0]["error_kind"]
+			if test.err == nil && hasErrorKind {
+				t.Fatalf("error_kind = %v, want no error attributes on success", handler.attrs[0]["error_kind"])
+			}
+			if test.err != nil && !hasErrorKind {
+				t.Fatal("error_kind missing on failure")
 			}
 		})
 	}
@@ -195,8 +203,9 @@ func TestExtractArgs(t *testing.T) {
 		req      any
 		expected string
 	}{
-		{name: "dummyStringer", req: &dummyStringer{field: ""}, expected: "my value"},
-		{name: "dummy", req: &dummy{field: "value"}, expected: "&{field:value}"},
+		// Only a Redacter discloses content; everything else logs its type.
+		{name: "dummyStringer", req: &dummyStringer{field: ""}, expected: "*logging.dummyStringer"},
+		{name: "dummy", req: &dummy{field: "value"}, expected: "*logging.dummy"},
 		{name: "dummyStringerRedacter", req: &dummyStringerRedacter{field: ""}, expected: "my value redacted"},
 	}
 	for _, test := range tests {
@@ -208,26 +217,30 @@ func TestExtractArgs(t *testing.T) {
 	}
 }
 
-func TestExtractError(t *testing.T) {
-	tests := []struct {
-		name       string
-		err        error
-		wantLevel  slog.Level
-		wantErrStr string
-	}{
-		{name: "no error", err: nil, wantLevel: slog.LevelInfo, wantErrStr: ""},
-		{name: "error", err: errors.New("test error"), wantLevel: slog.LevelError, wantErrStr: "test error"},
+func TestErrorAttrs(t *testing.T) {
+	if attrs := errorAttrs(nil); attrs != nil {
+		t.Errorf("errorAttrs(nil) = %v, want nil", attrs)
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			level, errStr := extractError(test.err)
-			if level != test.wantLevel {
-				t.Errorf("want: %d, got: %d", test.wantLevel, level)
-			}
-			if errStr != test.wantErrStr {
-				t.Errorf("want: %s, got: %s", test.wantErrStr, errStr)
-			}
-		})
+	attrs := errorAttrs(errors.New("test error"))
+	if len(attrs) == 0 {
+		t.Fatal("errorAttrs(err) returned no attributes")
+	}
+	byKey := make(map[string]slog.Attr, len(attrs))
+	for _, attr := range attrs {
+		byKey[attr.Key] = attr
+	}
+	if _, ok := byKey["error_kind"]; !ok {
+		t.Error("error_kind attribute missing")
+	}
+	if _, ok := byKey["stack"]; ok {
+		t.Error("stack attribute must not be emitted; the value never was a stack")
+	}
+	errAttr, ok := byKey["error"]
+	if !ok {
+		t.Fatal("error attribute missing")
+	}
+	if got := fmt.Sprint(errAttr.Value.Any()); got != "test error" {
+		t.Errorf("error = %q, want %q", got, "test error")
 	}
 }
 

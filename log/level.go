@@ -2,7 +2,6 @@ package log
 
 import (
 	"log/slog"
-	"strings"
 )
 
 // Level is a logger level.
@@ -26,18 +25,15 @@ const (
 	LevelWarn Level = slog.LevelWarn
 	// LevelError is logger error level.
 	LevelError Level = slog.LevelError
-	// LevelFatal is logger fatal level.
-	LevelFatal Level = slog.LevelError + 4
 )
 
-// ParseLevel parses a level string into a logger Level value.
-func ParseLevel(s string) Level {
-	if strings.EqualFold(s, "FATAL") {
-		return LevelFatal
-	}
+// ParseLevel parses a level string into a logger Level value. It accepts the
+// forms slog's [slog.Level.UnmarshalText] accepts, such as "INFO" and
+// "ERROR+2", in any case. It returns an error when s names no known level.
+func ParseLevel(s string) (Level, error) {
 	var level slog.Level
-	if err := level.UnmarshalText([]byte(s)); err == nil {
-		return level
+	if err := level.UnmarshalText([]byte(s)); err != nil {
+		return level, err
 	}
-	return LevelInfo
+	return level, nil
 }

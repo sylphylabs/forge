@@ -3,6 +3,7 @@ package encoding
 import (
 	"encoding/xml"
 	"runtime/debug"
+	"sync"
 	"testing"
 )
 
@@ -59,6 +60,32 @@ func TestRegisterCodec(t *testing.T) {
 	got := GetCodec("xml")
 	if got != codec {
 		t.Fatalf("RegisterCodec(%v) want %v got %v", codec, codec, got)
+	}
+}
+
+// TestConcurrentRegisterAndGet exercises the registry's concurrency contract
+// under the race detector.
+func TestConcurrentRegisterAndGet(t *testing.T) {
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			for range 100 {
+				RegisterCodec(codec2{})
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for range 100 {
+				_ = GetCodec("xml")
+			}
+		}()
+	}
+	wg.Wait()
+
+	if GetCodec("xml") == nil {
+		t.Fatal(`GetCodec("xml") = nil after registration`)
 	}
 }
 

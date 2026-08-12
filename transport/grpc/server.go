@@ -18,6 +18,7 @@ import (
 	"github.com/sylphylabs/forge/internal/endpoint"
 	"github.com/sylphylabs/forge/internal/host"
 	"github.com/sylphylabs/forge/log"
+	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/transport"
 )
 
@@ -31,78 +32,102 @@ var (
 // ServerOption is gRPC server option.
 type ServerOption func(o *Server)
 
-// Network with server network.
-func Network(network string) ServerOption {
+// WithNetwork sets the server network.
+func WithNetwork(network string) ServerOption {
 	return func(s *Server) {
 		s.network = network
 	}
 }
 
-// Address with server address.
-func Address(addr string) ServerOption {
+// WithAddress sets the server listen address.
+func WithAddress(addr string) ServerOption {
 	return func(s *Server) {
 		s.address = addr
 	}
 }
 
-// Endpoint with server address.
-func Endpoint(endpoint *url.URL) ServerOption {
+// WithEndpoint sets the endpoint the server advertises to the registry.
+func WithEndpoint(endpoint *url.URL) ServerOption {
 	return func(s *Server) {
 		s.endpoint = endpoint
 	}
 }
 
-// Timeout with server timeout.
-func Timeout(timeout time.Duration) ServerOption {
+// WithTimeout sets the per-request server timeout.
+func WithTimeout(timeout time.Duration) ServerOption {
 	return func(s *Server) {
 		s.timeout = timeout
 	}
 }
 
-// CustomHealth Checks server.
-func CustomHealth() ServerOption {
+// WithCustomHealth leaves health service registration to the application.
+func WithCustomHealth() ServerOption {
 	return func(s *Server) {
 		s.customHealth = true
 	}
 }
 
-// TLSConfig with TLS config.
-func TLSConfig(c *tls.Config) ServerOption {
+// WithTLSConfig sets the server TLS config.
+func WithTLSConfig(c *tls.Config) ServerOption {
 	return func(s *Server) {
 		s.tlsConf = c
 	}
 }
 
-// Listener with server lis
-func Listener(lis net.Listener) ServerOption {
+// WithListener sets the listener the server serves on.
+func WithListener(lis net.Listener) ServerOption {
 	return func(s *Server) {
 		s.lis = lis
 	}
 }
 
-// UnaryInterceptor returns a ServerOption that sets the UnaryServerInterceptor for the server.
-func UnaryInterceptor(in ...grpc.UnaryServerInterceptor) ServerOption {
+// WithMiddleware attaches server-wide unary middleware. It is composed once,
+// inside NewServer, and runs outside (before) any middleware attached through
+// a generated service plan. A nil middleware, or one returning a nil handler,
+// is reported by Start and Endpoint, the way a bad listener is.
+//
+// The client option of the same intent is [WithClientMiddleware].
+func WithMiddleware(ms ...middleware.UnaryMiddleware) ServerOption {
+	return func(s *Server) {
+		s.middleware = append(s.middleware, ms...)
+	}
+}
+
+// WithStreamMiddleware attaches server-wide stream middleware. It is composed
+// once, inside NewServer, and wraps every streaming method outside (before)
+// any middleware attached through a generated service plan. At this layer the
+// initial request is not yet decoded, so the handler's request argument is
+// always nil; per-message behaviour comes from decorating the stream.
+func WithStreamMiddleware(ms ...middleware.StreamMiddleware) ServerOption {
+	return func(s *Server) {
+		s.streamMiddleware = append(s.streamMiddleware, ms...)
+	}
+}
+
+// WithUnaryInterceptor sets the UnaryServerInterceptors for the server.
+func WithUnaryInterceptor(in ...grpc.UnaryServerInterceptor) ServerOption {
 	return func(s *Server) {
 		s.unaryInts = in
 	}
 }
 
-// StreamInterceptor returns a ServerOption that sets the StreamServerInterceptor for the server.
-func StreamInterceptor(in ...grpc.StreamServerInterceptor) ServerOption {
+// WithStreamInterceptor sets the StreamServerInterceptors for the server.
+func WithStreamInterceptor(in ...grpc.StreamServerInterceptor) ServerOption {
 	return func(s *Server) {
 		s.streamInts = in
 	}
 }
 
-// DisableReflection disable grpc reflection.
-func DisableReflection() ServerOption {
+// WithDisableReflection disables gRPC reflection.
+func WithDisableReflection() ServerOption {
 	return func(s *Server) {
 		s.disableReflection = true
 	}
 }
 
-// Options with grpc options.
-func Options(opts ...grpc.ServerOption) ServerOption {
+// WithOptions appends raw grpc.ServerOption values passed through to the
+// underlying gRPC server.
+func WithOptions(opts ...grpc.ServerOption) ServerOption {
 	return func(s *Server) {
 		s.grpcOpts = opts
 	}
@@ -121,6 +146,10 @@ type Server struct {
 	timeout           time.Duration
 	unaryInts         []grpc.UnaryServerInterceptor
 	streamInts        []grpc.StreamServerInterceptor
+	middleware        []middleware.UnaryMiddleware
+	streamMiddleware  []middleware.StreamMiddleware
+	unaryHandler      middleware.UnaryHandler
+	streamHandler     middleware.StreamHandler
 	grpcOpts          []grpc.ServerOption
 	health            *health.Server
 	customHealth      bool
@@ -144,6 +173,7 @@ func NewServer(opts ...ServerOption) *Server {
 	for _, o := range opts {
 		o(srv)
 	}
+	srv.composeMiddleware()
 	unaryInts := []grpc.UnaryServerInterceptor{
 		srv.unaryServerInterceptor(),
 	}
@@ -204,7 +234,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 // Healthz reports whether the server accepts new RPCs: true after Start
 // resumes serving, false before Start and as soon as a stop begins. It reads
-// the lifecycle-driven internal health state; with [CustomHealth] the
+// the lifecycle-driven internal health state; with [WithCustomHealth] the
 // registered health service is user-owned and may report differently.
 func (s *Server) Healthz() bool {
 	resp, err := s.health.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{})
@@ -252,7 +282,42 @@ func (s *Server) Stop(ctx context.Context) error {
 	return nil
 }
 
+// composeMiddleware composes the server-wide middleware exactly once, during
+// construction. The composed handlers close over a pointer cell each
+// interceptor fills per call, so composition cost is paid here and never on
+// the request path. A compose failure is stored in s.err and surfaces from
+// Start and Endpoint, where a bad listener surfaces too.
+func (s *Server) composeMiddleware() {
+	unary, err := middleware.ComposeUnary(func(ctx context.Context, req any) (any, error) {
+		c := callFrom(ctx)
+		if c.unary == nil {
+			return nil, errLostCall
+		}
+		return c.unary(ctx, req)
+	}, s.middleware...)
+	if err != nil {
+		s.err = err
+		return
+	}
+	s.unaryHandler = unary
+	stream, err := middleware.ComposeStream(func(request any, ss middleware.ServerStream) error {
+		c := callFrom(ss.Context())
+		if c.stream == nil {
+			return errLostCall
+		}
+		return c.stream(request, ss)
+	}, s.streamMiddleware...)
+	if err != nil {
+		s.err = err
+		return
+	}
+	s.streamHandler = stream
+}
+
 func (s *Server) listenAndEndpoint() error {
+	if s.err != nil {
+		return s.err
+	}
 	if s.lis == nil {
 		lis, err := net.Listen(s.network, s.address)
 		if err != nil {

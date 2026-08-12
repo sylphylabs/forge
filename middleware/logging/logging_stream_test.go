@@ -59,15 +59,16 @@ func TestServerStreamLogsInitialRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := handler.attrs[0]["args"]; got != "my value" {
-		t.Errorf("args = %v, want %q", got, "my value")
+	// Content is not disclosed by default; the type identifies the message.
+	if got := handler.attrs[0]["args"]; got != "*logging.dummyStringer" {
+		t.Errorf("args = %v, want %q", got, "*logging.dummyStringer")
 	}
 }
 
 func TestServerStreamLogsError(t *testing.T) {
 	handler := &captureHandler{}
 	logger := slog.New(handler)
-	want := errors.New(errors.KindInternal).WithReason("STREAM_FAILED").Msg("stream failed")
+	want := errors.Of(errors.KindInternal).WithReason("STREAM_FAILED").Msg("stream failed")
 
 	next := ServerStream(logger)(func(any, middleware.ServerStream) error { return want })
 	if err := next(nil, &testStream{ctx: t.Context()}); err != want {

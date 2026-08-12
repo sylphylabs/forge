@@ -31,7 +31,7 @@ type AppSnapshot struct {
 // bound. Register it under a name of your choosing — "app" by convention:
 //
 //	reg := diagnosis.NewRegistry()
-//	app := forge.New(forge.Name("checkout"), ...)
+//	app := forge.New(forge.WithName("checkout"), ...)
 //	reg.Register("app", forge.AppProbe(app))
 //
 // AppProbe panics if info is nil; a probe wired to nothing is a construction
@@ -46,7 +46,7 @@ func AppProbe(info AppInfo) diagnosis.ProbeFunc {
 			Name:      info.Name(),
 			Version:   info.Version(),
 			Metadata:  maps.Clone(info.Metadata()),
-			Endpoints: slices.Clone(info.Endpoint()),
+			Endpoints: slices.Clone(info.Endpoints()),
 		}, nil
 	}
 }

@@ -63,7 +63,7 @@ func BenchmarkDefaultRequestDecoder(b *testing.B) {
 }
 
 func TestDefaultRequestVarsProto(t *testing.T) {
-	srv := NewServer(Timeout(0))
+	srv := NewServer(WithTimeout(0))
 	srv.Route("").GET("/hello/{name}", func(ctx Context) error {
 		var request binding.HelloRequest
 		if err := ctx.BindVars(&request); err != nil {
@@ -275,7 +275,7 @@ func TestDefaultErrorEncoder(t *testing.T) {
 	var (
 		w    = &mockResponseWriter{header: make(http.Header)}
 		r, _ = http.NewRequest(http.MethodPost, "", nil)
-		err  = errors.New(errors.KindInternal)
+		err  = errors.Of(errors.KindInternal)
 	)
 	r.Header.Set("Content-Type", "application/json")
 
@@ -306,6 +306,30 @@ func TestDefaultErrorEncoderRedirect(t *testing.T) {
 	}
 }
 
+// customRedirect is a user-defined Redirector: the interface is exported, so
+// an implementation outside this package must redirect like the built-in one.
+type customRedirect struct{}
+
+func (customRedirect) Error() string { return "redirect to /custom" }
+
+func (customRedirect) Redirect() (string, int) {
+	return "/custom", http.StatusFound
+}
+
+func TestDefaultErrorEncoderCustomRedirector(t *testing.T) {
+	w := &mockResponseWriter{header: make(http.Header)}
+	r, _ := http.NewRequest(http.MethodGet, "/test", nil)
+
+	DefaultErrorEncoder(w, r, customRedirect{})
+
+	if w.StatusCode != http.StatusFound {
+		t.Errorf("expected %v, got %v", http.StatusFound, w.StatusCode)
+	}
+	if w.Header().Get("Location") != "/custom" {
+		t.Errorf("expected %v, got %v", "/custom", w.Header().Get("Location"))
+	}
+}
+
 // An error response does not take part in content negotiation, so a codec that
 // cannot marshal is no longer reachable from this path. What must hold instead
 // is that an exotic Accept header changes nothing about the response.
@@ -317,7 +341,7 @@ func TestDefaultErrorEncoderIgnoresAccept(t *testing.T) {
 			r.Header.Set("Accept", accept)
 		}
 
-		DefaultErrorEncoder(w, r, errors.New(errors.KindInternal).WithReason("MOCK").Msg("boom"))
+		DefaultErrorEncoder(w, r, errors.Of(errors.KindInternal).WithReason("MOCK").Msg("boom"))
 
 		if got := w.Header().Get("Content-Type"); got != ProblemContentType {
 			t.Errorf("Accept %q: content type = %v, want %v", accept, got, ProblemContentType)

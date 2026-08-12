@@ -137,12 +137,12 @@ func BenchmarkRouteMux(b *testing.B) {
 
 func BenchmarkServerRoute(b *testing.B) {
 	b.Run("parameter", func(b *testing.B) {
-		srv := NewServer(Timeout(0))
+		srv := NewServer(WithTimeout(0))
 		srv.Route("").GET("/resource/{value}", func(Context) error { return nil })
 		benchmarkRouter(b, srv, "/resource/42", false)
 	})
 	b.Run("parameter-vars", func(b *testing.B) {
-		srv := NewServer(Timeout(0))
+		srv := NewServer(WithTimeout(0))
 		srv.Route("").GET("/resource/{value}", func(ctx Context) error {
 			ctx.Response().(*benchmarkResponseWriter).value = ctx.Vars().Get("value")
 			return nil
@@ -150,7 +150,7 @@ func BenchmarkServerRoute(b *testing.B) {
 		benchmarkRouter(b, srv, "/resource/42", false)
 	})
 	b.Run("parameter-proto", func(b *testing.B) {
-		srv := NewServer(Timeout(0))
+		srv := NewServer(WithTimeout(0))
 		srv.Route("").GET("/resource/{value}", func(ctx Context) error {
 			var target wrapperspb.StringValue
 			return ctx.BindVars(&target)
@@ -158,7 +158,7 @@ func BenchmarkServerRoute(b *testing.B) {
 		benchmarkRouter(b, srv, "/resource/42", false)
 	})
 	b.Run("parameter-proto-nested", func(b *testing.B) {
-		srv := NewServer(Timeout(0))
+		srv := NewServer(WithTimeout(0))
 		srv.Route("").GET("/resource/{sub.naming}", func(ctx Context) error {
 			var target binding.HelloRequest
 			return ctx.BindVars(&target)
@@ -166,7 +166,7 @@ func BenchmarkServerRoute(b *testing.B) {
 		benchmarkRouter(b, srv, "/resource/42", false)
 	})
 	b.Run("parameter-aip", func(b *testing.B) {
-		srv := NewServer(Timeout(0))
+		srv := NewServer(WithTimeout(0))
 		srv.Route("").GET("/v1/{name=publishers/*/books/*}", func(ctx Context) error {
 			ctx.Response().(*benchmarkResponseWriter).value = ctx.Vars().Get("name")
 			return nil

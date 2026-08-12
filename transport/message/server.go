@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sylphylabs/forge/internal/backstop"
 	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/transport"
 )
@@ -34,33 +35,31 @@ var _ transport.Server = (*Server)(nil)
 // ServerOption configures a message Server before it starts.
 type ServerOption func(*Server)
 
-// WithMiddleware adds middleware to every binding.
+// WithMiddleware attaches server-wide middleware to every binding.
 //
 // The middleware is the same [middleware.UnaryMiddleware] HTTP and gRPC use, so
 // recovery, logging, rate limiting, and the rest apply to a message consumer
-// without a message-specific implementation of each.
+// without a message-specific implementation of each. It is composed once,
+// inside NewServer; a nil middleware, or one returning a nil handler, is
+// reported by Start, the way a nil subscriber is.
 func WithMiddleware(m ...middleware.UnaryMiddleware) ServerOption {
 	return func(s *Server) {
-		for _, mw := range m {
-			if mw != nil {
-				s.middleware = append(s.middleware, mw)
-			}
-		}
+		s.middleware = append(s.middleware, m...)
 	}
 }
 
-// Endpoint sets the broker endpoint reported to middleware through
+// WithEndpoint sets the broker endpoint reported to middleware through
 // transport.Transporter. It is descriptive only: the subscriber owns the
 // actual connection.
-func Endpoint(endpoint string) ServerOption {
+func WithEndpoint(endpoint string) ServerOption {
 	return func(s *Server) {
 		s.endpoint = endpoint
 	}
 }
 
-// ShutdownTimeout bounds cleanup triggered by cancellation of Start's parent
+// WithShutdownTimeout bounds cleanup triggered by cancellation of Start's parent
 // context. Explicit Stop callers provide their own context.
-func ShutdownTimeout(timeout time.Duration) ServerOption {
+func WithShutdownTimeout(timeout time.Duration) ServerOption {
 	return func(s *Server) {
 		s.shutdownTimeout = timeout
 	}
@@ -89,18 +88,30 @@ type Server struct {
 	shutdownTimeout time.Duration
 	endpoint        string
 
-	mu         sync.Mutex
-	state      serverState
-	bindings   []binding
+	mu       sync.Mutex
+	state    serverState
+	bindings []binding
+	// middleware is filled by options during construction only; handler is
+	// the chain composed once by NewServer, and err a composition failure
+	// held for Start to report.
 	middleware []middleware.UnaryMiddleware
+	handler    middleware.UnaryHandler
+	err        error
 	subs       []Subscription
 	cancel     context.CancelFunc
 	closeOnce  sync.Once
 	closeErr   error
 }
 
-// NewServer creates a message lifecycle coordinator. A nil subscriber is
-// reported by Start so construction can remain side-effect free.
+// bindingKey carries the destination handler of one delivery through the
+// server-wide middleware chain. The chain itself is composed once, in
+// NewServer; only the bound handler of the current delivery travels through
+// the context.
+type bindingKey struct{}
+
+// NewServer creates a message lifecycle coordinator. A nil subscriber or an
+// invalid middleware chain is reported by Start so construction can remain
+// side-effect free.
 func NewServer(subscriber Subscriber, opts ...ServerOption) *Server {
 	s := &Server{
 		subscriber:      subscriber,
@@ -111,6 +122,13 @@ func NewServer(subscriber Subscriber, opts ...ServerOption) *Server {
 			opt(s)
 		}
 	}
+	s.handler, s.err = middleware.ComposeUnary(func(ctx context.Context, req any) (any, error) {
+		next, ok := ctx.Value(bindingKey{}).(middleware.UnaryHandler)
+		if !ok {
+			return nil, fmt.Errorf("message: middleware severed the delivery from its handler")
+		}
+		return next(ctx, req)
+	}, s.middleware...)
 	return s
 }
 
@@ -134,22 +152,19 @@ func (s *Server) Handle(topic string, handler middleware.UnaryHandler) error {
 	return nil
 }
 
-// Use adds typed middleware before Start.
-func (s *Server) Use(m ...middleware.UnaryMiddleware) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.state != stateNew {
-		if s.state == stateStopped {
-			return ErrStopped
-		}
-		return ErrAlreadyStarted
+// bound places one destination handler under the server-wide chain, with the
+// transport backstop outside both: a panic anywhere below is logged with its
+// stack and surfaces to the adapter as a generic internal error, never as an
+// unwound worker.
+func (s *Server) bound(handler middleware.UnaryHandler) middleware.UnaryHandler {
+	return func(ctx context.Context, req any) (reply any, err error) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				reply, err = nil, backstop.Recovered(ctx, "[Message]", rec)
+			}
+		}()
+		return s.handler(context.WithValue(ctx, bindingKey{}, handler), req)
 	}
-	for _, mw := range m {
-		if mw != nil {
-			s.middleware = append(s.middleware, mw)
-		}
-	}
-	return nil
 }
 
 // Start creates all subscriptions and waits until the server is stopped or
@@ -162,6 +177,11 @@ func (s *Server) Start(ctx context.Context) error {
 	if s.subscriber == nil {
 		s.mu.Unlock()
 		return ErrNilSubscriber
+	}
+	if s.err != nil {
+		err := s.err
+		s.mu.Unlock()
+		return err
 	}
 	if len(s.bindings) == 0 {
 		s.mu.Unlock()
@@ -179,15 +199,13 @@ func (s *Server) Start(ctx context.Context) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
 	bindings := append([]binding(nil), s.bindings...)
-	chain := append([]middleware.UnaryMiddleware(nil), s.middleware...)
 	s.mu.Unlock()
 
-	wrapped := middleware.ChainUnary(chain...)
 	for _, b := range bindings {
 		if runCtx.Err() != nil {
 			return s.closeAfterCancellation(ctx)
 		}
-		handler := deliver(s.endpoint, wrapped(b.handler))
+		handler := deliver(s.endpoint, s.bound(b.handler))
 		sub, err := s.subscriber.Subscribe(runCtx, b.topic, handler)
 		if err != nil {
 			cleanupErr := s.closeAfterCancellation(ctx)

@@ -7,7 +7,7 @@ import (
 
 func TestPeer(t *testing.T) {
 	p := Peer{
-		Node: mockWeightedNode{},
+		Node: NewNode("http", "127.0.0.1:8080", nil),
 	}
 	ctx := NewPeerContext(context.Background(), &p)
 	p2, ok := FromPeerContext(ctx)

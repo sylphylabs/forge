@@ -1,21 +1,30 @@
+// Package env sources configuration from process environment variables,
+// optionally filtered and trimmed by prefix.
 package env
 
 import (
+	"context"
 	"os"
 	"strings"
 
 	"github.com/sylphylabs/forge/config"
 )
 
+var _ config.Source = (*env)(nil)
+
 type env struct {
 	prefixes []string
 }
 
+// NewSource returns a source that loads environment variables. With no
+// prefixes every variable is loaded under its own name; with prefixes, only
+// matching variables are loaded, keyed by the name with the prefix (and one
+// separating underscore) removed.
 func NewSource(prefixes ...string) config.Source {
 	return &env{prefixes: prefixes}
 }
 
-func (e *env) Load() (kvs []*config.KeyValue, err error) {
+func (e *env) Load(context.Context) ([]*config.KeyValue, error) {
 	return e.load(os.Environ()), nil
 }
 
@@ -44,12 +53,8 @@ func (e *env) load(envs []string) []*config.KeyValue {
 	return kvs
 }
 
-func (e *env) Watch() (config.Watcher, error) {
-	w, err := NewWatcher()
-	if err != nil {
-		return nil, err
-	}
-	return w, nil
+func (e *env) Watch(context.Context) (config.Watcher, error) {
+	return newWatcher(), nil
 }
 
 func matchPrefix(prefixes []string, s string) (string, bool) {

@@ -11,7 +11,7 @@ import (
 	"github.com/sylphylabs/forge/registry"
 )
 
-func TestRegistry_GetService(t *testing.T) {
+func TestRegistry_Instances(t *testing.T) {
 	conn, _, err := zk.Connect([]string{"127.0.0.1:2181"}, time.Second*15)
 	if err != nil {
 		t.Fatal(err)
@@ -103,14 +103,14 @@ func TestRegistry_GetService(t *testing.T) {
 				defer tt.deferFunc(t)
 			}
 			r := tt.fields.registry
-			got, err := r.GetService(tt.args.ctx, tt.args.serviceName)
+			got, err := r.Instances(tt.args.ctx, tt.args.serviceName)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("GetService() error = %v, wantErr %v", err, tt.wantErr)
-				t.Errorf("GetService() got = %v", got)
+				t.Errorf("Instances() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Instances() got = %v", got)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetService() got = %v, want %v", got, tt.want)
+				t.Errorf("Instances() got = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -397,7 +397,7 @@ func TestRegistry_Watch(t *testing.T) {
 					t.Error(err)
 				}
 			}()
-			_, err = watcher.Next()
+			_, err = watcher.Next(tt.args.ctx)
 			if err != nil {
 				t.Error(err)
 				return
@@ -407,7 +407,7 @@ func TestRegistry_Watch(t *testing.T) {
 				tt.processFunc(t, watcher)
 			}
 
-			want, err := watcher.Next()
+			want, err := watcher.Next(tt.args.ctx)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Watch() error = %v, wantErr %v", err, tt.wantErr)
 				return

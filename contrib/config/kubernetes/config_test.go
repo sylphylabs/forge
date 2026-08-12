@@ -38,11 +38,11 @@ var (
 func TestSource(t *testing.T) {
 	home := homedir.HomeDir()
 	s := NewSource(
-		Namespace("default"),
-		LabelSelector(""),
-		KubeConfig(filepath.Join(home, ".kube", "config")),
+		WithNamespace("default"),
+		WithLabelSelector(""),
+		WithKubeConfig(filepath.Join(home, ".kube", "config")),
 	)
-	kvs, err := s.Load()
+	kvs, err := s.Load(t.Context())
 	if err != nil {
 		t.Error(err)
 	}
@@ -52,16 +52,16 @@ func TestSource(t *testing.T) {
 }
 
 func ExampleNewSource() {
-	conf := config.New(
+	_, err := config.New(
+		context.Background(),
 		config.WithSource(
 			NewSource(
-				Namespace("mesh"),
-				LabelSelector("app=test"),
-				KubeConfig(filepath.Join(homedir.HomeDir(), ".kube", "config")),
+				WithNamespace("mesh"),
+				WithLabelSelector("app=test"),
+				WithKubeConfig(filepath.Join(homedir.HomeDir(), ".kube", "config")),
 			),
 		),
 	)
-	err := conf.Load()
 	if err != nil {
 		log.Panic(err)
 	}
@@ -72,8 +72,8 @@ func TestConfig(t *testing.T) {
 	home := homedir.HomeDir()
 
 	options := []Option{
-		Namespace(namespace),
-		LabelSelector("app=test"),
+		WithNamespace(namespace),
+		WithLabelSelector("app=test"),
 	}
 
 	if err != nil {
@@ -82,7 +82,7 @@ func TestConfig(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		options = append(options, KubeConfig(kubeconfig))
+		options = append(options, WithKubeConfig(kubeconfig))
 	}
 	clientSet, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
@@ -106,7 +106,7 @@ func TestConfig(t *testing.T) {
 			t.Error(err)
 		}
 	}()
-	kvs, err := source.Load()
+	kvs, err := source.Load(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestConfig(t *testing.T) {
 		t.Fatal("config error")
 	}
 
-	w, err := source.Watch()
+	w, err := source.Watch(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestConfig(t *testing.T) {
 		_ = w.Stop()
 	}()
 	// create also produce an event, discard it
-	if _, err = w.Next(); err != nil {
+	if _, err = w.Next(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -135,7 +135,7 @@ func TestConfig(t *testing.T) {
 		t.Error(err)
 	}
 
-	if kvs, err = w.Next(); err != nil {
+	if kvs, err = w.Next(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -149,8 +149,8 @@ func TestExtToFormat(t *testing.T) {
 	home := homedir.HomeDir()
 
 	options := []Option{
-		Namespace(namespace),
-		LabelSelector("app=test"),
+		WithNamespace(namespace),
+		WithLabelSelector("app=test"),
 	}
 
 	if err != nil {
@@ -159,7 +159,7 @@ func TestExtToFormat(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		options = append(options, KubeConfig(kubeconfig))
+		options = append(options, WithKubeConfig(kubeconfig))
 	}
 	clientSet, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
@@ -189,7 +189,7 @@ func TestExtToFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	kvs, err := source.Load()
+	kvs, err := source.Load(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

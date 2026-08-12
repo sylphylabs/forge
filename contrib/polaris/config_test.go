@@ -225,7 +225,7 @@ func TestConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	kv, err := config.Load()
+	kv, err := config.Load(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +237,7 @@ func TestConfig(t *testing.T) {
 		t.Fatal("config error")
 	}
 
-	w, err := config.Watch()
+	w, err := config.Watch(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func TestConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if kv, err = w.Next(); err != nil {
+	if kv, err = w.Next(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -303,7 +303,7 @@ func TestExtToFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	kv, err := cfg.Load()
+	kv, err := cfg.Load(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +351,7 @@ func TestGetMultipleConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	kvs, err := cfg.Load()
+	kvs, err := cfg.Load(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +359,7 @@ func TestGetMultipleConfig(t *testing.T) {
 		t.Logf("key: %s, value: %s", kv.Key, kv.Value)
 	}
 
-	w, err := cfg.Watch()
+	w, err := cfg.Watch(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,7 +368,7 @@ func TestGetMultipleConfig(t *testing.T) {
 		if err = client.publishConfigFile(file.Name); err != nil {
 			t.Fatal(err)
 		}
-		kvs, err := w.Next()
+		kvs, err := w.Next(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}

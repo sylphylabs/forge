@@ -87,10 +87,12 @@ func newWatcher(s *source) (*watcher, error) {
 	return w, nil
 }
 
-func (w *watcher) Next() ([]*config.KeyValue, error) {
+func (w *watcher) Next(ctx context.Context) ([]*config.KeyValue, error) {
 	select {
 	case kv := <-w.ch:
 		return kv, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-w.ctx.Done():
 		return nil, w.ctx.Err()
 	}

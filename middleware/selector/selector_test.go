@@ -109,8 +109,12 @@ func TestMatch(t *testing.T) {
 			next := func(_ context.Context, _ any) (any, error) {
 				return "reply", nil
 			}
-			next = Client(markApplied).Prefix("/hello/").Regex(`/test/[0-9]+`).
-				Path("/example/forge").Build()(next)
+			m, err := Client(markApplied).Prefix("/hello/").Regex(`/test/[0-9]+`).
+				Path("/example/forge").Build()
+			if err != nil {
+				t.Fatal(err)
+			}
+			next = m(next)
 			reply, err := next(test.ctx, test.name)
 			if err != nil {
 				t.Fatal(err)
@@ -163,8 +167,12 @@ func TestMatchClient(t *testing.T) {
 			next := func(_ context.Context, _ any) (any, error) {
 				return "reply", nil
 			}
-			next = Client(markApplied).Prefix("/hello/").Regex(`/test/[0-9]+`).
-				Path("/example/forge").Build()(next)
+			m, err := Client(markApplied).Prefix("/hello/").Regex(`/test/[0-9]+`).
+				Path("/example/forge").Build()
+			if err != nil {
+				t.Fatal(err)
+			}
+			next = m(next)
 			reply, err := next(test.ctx, test.name)
 			if err != nil {
 				t.Fatal(err)
@@ -207,12 +215,16 @@ func TestFunc(t *testing.T) {
 				t.Log(req)
 				return "reply", nil
 			}
-			next = Client(testMiddleware).Match(func(_ context.Context, operation string) bool {
+			m, err := Client(testMiddleware).Match(func(_ context.Context, operation string) bool {
 				if strings.HasPrefix(operation, "/go-kratos.dev") || strings.HasSuffix(operation, "world") {
 					return true
 				}
 				return false
-			}).Build()(next)
+			}).Build()
+			if err != nil {
+				t.Fatal(err)
+			}
+			next = m(next)
 			reply, err := next(test.ctx, test.name)
 			if err != nil {
 				t.Errorf("expect error is nil, but got %v", err)
@@ -264,7 +276,7 @@ func TestHeaderFunc(t *testing.T) {
 				t.Log(req)
 				return "reply", nil
 			}
-			next = Client(testMiddleware).Match(func(ctx context.Context, _ string) bool {
+			m, err := Client(testMiddleware).Match(func(ctx context.Context, _ string) bool {
 				tr, ok := transport.FromClientContext(ctx)
 				if !ok {
 					return false
@@ -276,7 +288,11 @@ func TestHeaderFunc(t *testing.T) {
 					return true
 				}
 				return false
-			}).Build()(next)
+			}).Build()
+			if err != nil {
+				t.Fatal(err)
+			}
+			next = m(next)
 			reply, err := next(test.ctx, test.name)
 			if err != nil {
 				t.Errorf("expect error is nil, but got %v", err)
@@ -333,18 +349,6 @@ func Test_RegexMatch(t *testing.T) {
 			want:      false,
 		},
 		{
-			name:      "invalid regex is skipped",
-			regex:     []string{"^\b(?"},
-			operation: "something",
-			want:      false,
-		},
-		{
-			name:      "invalid regex mixed with valid",
-			regex:     []string{"^\b(?", `/test/[0-9]+`},
-			operation: "/test/1234",
-			want:      true,
-		},
-		{
 			name:      "empty regex list",
 			regex:     []string{},
 			operation: "/test/1234",
@@ -364,7 +368,11 @@ func Test_RegexMatch(t *testing.T) {
 				return "reply", nil
 			}
 			ctx := transport.NewClientContext(context.Background(), &Transport{operation: tt.operation})
-			handler := Client(markMiddleware).Regex(tt.regex...).Build()(next)
+			m, err := Client(markMiddleware).Regex(tt.regex...).Build()
+			if err != nil {
+				t.Fatal(err)
+			}
+			handler := m(next)
 			_, _ = handler(ctx, tt.operation)
 			if middlewareApplied != tt.want {
 				t.Errorf("middleware applied = %v, want %v", middlewareApplied, tt.want)
@@ -373,20 +381,57 @@ func Test_RegexMatch(t *testing.T) {
 	}
 }
 
-func Test_InvalidRegexSkipped(t *testing.T) {
-	b := Client(testMiddleware).Regex("^\b(?", `/valid/[0-9]+`)
-	m := b.Build()
-	if m == nil {
-		t.Fatal("Build() must not return nil")
+func Test_InvalidRegexFailsBuild(t *testing.T) {
+	m, err := Client(testMiddleware).Regex("^\b(?", `/valid/[0-9]+`).Build()
+	if err == nil {
+		t.Fatal("Build() error = nil, want error for invalid regex")
 	}
-	if len(b.compiled) != 1 {
-		t.Errorf("expected 1 compiled regex, got %d", len(b.compiled))
+	if m != nil {
+		t.Errorf("Build() middleware = %v, want nil on error", m)
 	}
 }
 
 func Test_matches(t *testing.T) {
-	b := Builder{}
-	if b.matches(context.Background(), func(_ context.Context) (transport.Transporter, bool) { return nil, false }) {
+	m, err := newMatcher(nil, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.matches(context.Background(), func(_ context.Context) (transport.Transporter, bool) { return nil, false }) {
 		t.Error("The matches method must return false.")
+	}
+}
+
+// TestSelectorComposesOnce asserts the Request-Path Contract: the selected
+// chain is composed when the middleware wraps its handler, not per request.
+func TestSelectorComposesOnce(t *testing.T) {
+	var compositions, calls int
+	m := func(next middleware.UnaryHandler) middleware.UnaryHandler {
+		compositions++
+		return func(ctx context.Context, req any) (any, error) {
+			calls++
+			return next(ctx, req)
+		}
+	}
+
+	built, err := Client(m).Prefix("/example").Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := built(func(_ context.Context, _ any) (any, error) {
+		return "reply", nil
+	})
+
+	ctx := transport.NewClientContext(context.Background(), &Transport{operation: "/example/forge"})
+	for range 3 {
+		if _, err := handler(ctx, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if compositions != 1 {
+		t.Errorf("middleware compositions = %d, want 1", compositions)
+	}
+	if calls != 3 {
+		t.Errorf("middleware calls = %d, want 3", calls)
 	}
 }

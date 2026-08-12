@@ -29,24 +29,23 @@ type MiddlewareFunc func(http.Handler) http.Handler
 // ServerOption is an HTTP server option.
 type ServerOption func(*Server)
 
-// Address with server address.
-func Address(addr string) ServerOption {
+// WithAddress sets the server listen address.
+func WithAddress(addr string) ServerOption {
 	return func(s *Server) {
 		s.address = addr
 	}
 }
 
-// Endpoint with server address.
-func Endpoint(endpoint *url.URL) ServerOption {
+// WithEndpoint sets the endpoint the server advertises to the registry.
+func WithEndpoint(endpoint *url.URL) ServerOption {
 	return func(s *Server) {
 		s.endpoint = endpoint
 	}
 }
 
-// Middleware with server middleware. Repeated calls append, and the first
-// middleware is the outermost wrapper, matching WithMiddleware in
-// transport/message. Nil middleware is ignored.
-func Middleware(m ...MiddlewareFunc) ServerOption {
+// WithMiddleware attaches server middleware. Repeated calls append, and the first
+// middleware is the outermost wrapper. Nil middleware is ignored.
+func WithMiddleware(m ...MiddlewareFunc) ServerOption {
 	return func(s *Server) {
 		for _, mw := range m {
 			if mw != nil {
@@ -56,15 +55,15 @@ func Middleware(m ...MiddlewareFunc) ServerOption {
 	}
 }
 
-// SrvOptions with server options.
-func SrvOptions(opts ...server.ServerOption) ServerOption {
+// WithSrvOptions appends raw MCP server options.
+func WithSrvOptions(opts ...server.ServerOption) ServerOption {
 	return func(s *Server) {
 		s.srvOpts = append(s.srvOpts, opts...)
 	}
 }
 
-// SSEOptions with server SSE options.
-func SSEOptions(opts ...server.SSEOption) ServerOption {
+// WithSSEOptions appends raw SSE server options.
+func WithSSEOptions(opts ...server.SSEOption) ServerOption {
 	return func(s *Server) {
 		s.sseOpts = append(s.sseOpts, opts...)
 	}

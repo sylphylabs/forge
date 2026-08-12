@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	forgeerrors "github.com/sylphylabs/forge/errors"
+	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/transport"
 )
 
@@ -120,7 +121,7 @@ func TestClientMarksServerErrorAsFailed(t *testing.T) {
 	breaker := &circuitBreakerMock{}
 	ctx := transport.NewClientContext(context.Background(), &transportMock{operation: "/foo"})
 	next := func(context.Context, any) (any, error) {
-		return nil, forgeerrors.New(forgeerrors.KindInternal).WithReason("").Msg("")
+		return nil, forgeerrors.Of(forgeerrors.KindInternal).WithReason("").Msg("")
 	}
 
 	_, _ = Client(WithBreakerFactory(func() CircuitBreaker {
@@ -129,5 +130,28 @@ func TestClientMarksServerErrorAsFailed(t *testing.T) {
 
 	if breaker.success != 0 || breaker.failed != 1 {
 		t.Fatalf("breaker success=%d failed=%d, want success=0 failed=1", breaker.success, breaker.failed)
+	}
+}
+
+func TestClientWithoutTransportUsesUnkeyedOperation(t *testing.T) {
+	breaker := &circuitBreakerMock{}
+	next := func(context.Context, any) (any, error) {
+		return "reply", nil
+	}
+	chained := middleware.ChainUnary(Client(WithBreakerFactory(func() CircuitBreaker {
+		return breaker
+	})))(next)
+
+	// No transport in context: the middleware must not panic and must key
+	// the unkeyed operation.
+	reply, err := chained(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reply != "reply" {
+		t.Fatalf("reply = %v, want reply", reply)
+	}
+	if breaker.success != 1 || breaker.failed != 0 {
+		t.Fatalf("breaker success=%d failed=%d, want success=1 failed=0", breaker.success, breaker.failed)
 	}
 }

@@ -14,12 +14,12 @@ import (
 // node addresses and nothing else. This validates that the O(1) length-based
 // staleness detection is equivalent to a full per-pick set comparison.
 func TestNoStaleEntriesUnderRandomChurn(t *testing.T) {
-	balancer := &Balancer{currentWeight: make(map[string]float64)}
+	balancer := newBalancer()
 	ctx := context.Background()
 	rng := rand.New(rand.NewPCG(1, 2))
 
 	makeNode := func(i int) selector.WeightedNode {
-		return &mockWeightedNode{address: fmt.Sprintf("node-%d", i), weight: float64(1 + i%10)}
+		return newMockWeightedNode(fmt.Sprintf("node-%d", i), float64(1+i%10))
 	}
 
 	for iter := 0; iter < 20000; iter++ {
@@ -31,7 +31,7 @@ func TestNoStaleEntriesUnderRandomChurn(t *testing.T) {
 		for _, idx := range perm[:size] {
 			n := makeNode(idx)
 			nodes = append(nodes, n)
-			live[n.Address()] = struct{}{}
+			live[n.Raw().Address] = struct{}{}
 		}
 
 		// A few picks against this set (steady state between changes).

@@ -157,7 +157,7 @@ func run() error {
 	// The edge instance is told where its backend lives. Reaching it over gRPC
 	// exercises the client interceptor that restores Forge errors.
 	if addr := os.Getenv("BACKEND_ADDR"); addr != "" {
-		conn, err := grpc.NewClient(context.Background(), grpc.WithEndpoint(addr))
+		conn, err := grpc.NewClient(context.Background(), grpc.WithTarget(addr))
 		if err != nil {
 			return fmt.Errorf("dial backend: %w", err)
 		}
@@ -165,16 +165,16 @@ func run() error {
 		srv.backend = pb.NewGreeterClient(conn)
 	}
 
-	grpcSrv := grpc.NewServer(grpc.Address(":9000"))
+	grpcSrv := grpc.NewServer(grpc.WithAddress(":9000"))
 	pb.RegisterGreeterServer(grpcSrv, srv)
 
-	httpSrv := http.NewServer(http.Address(":8000"))
+	httpSrv := http.NewServer(http.WithAddress(":8000"))
 	pb.RegisterGreeterHTTPServer(httpSrv, srv)
 	registerStreamRoutes(httpSrv)
 
 	app := forge.New(
-		forge.Name("e2e-service"),
-		forge.Server(grpcSrv, httpSrv),
+		forge.WithName("e2e-service"),
+		forge.WithServer(grpcSrv, httpSrv),
 	)
 	return app.Run()
 }

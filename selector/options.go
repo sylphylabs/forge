@@ -1,16 +1,18 @@
 package selector
 
-// SelectOptions is Select Options.
-type SelectOptions struct {
-	NodeFilters []NodeFilter
+// selectOptions collects the per-call options of [Selector.Select].
+type selectOptions struct {
+	filters []NodeFilter
 }
 
-// SelectOption is Selector option.
-type SelectOption func(*SelectOptions)
+// SelectOption configures one Select call.
+type SelectOption func(*selectOptions)
 
-// WithNodeFilter with filter options
+// WithNodeFilter appends node filters to the Select call. Every application
+// of the option adds to the filters earlier applications contributed, and
+// filters run in the order given.
 func WithNodeFilter(fn ...NodeFilter) SelectOption {
-	return func(opts *SelectOptions) {
-		opts.NodeFilters = fn
+	return func(opts *selectOptions) {
+		opts.filters = append(opts.filters, fn...)
 	}
 }

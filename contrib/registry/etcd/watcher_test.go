@@ -15,7 +15,7 @@ func TestWatcherClosedChannelHonorsCancellation(t *testing.T) {
 		close(watchChan)
 		cancel()
 		w := &watcher{ctx: ctx, watchChan: watchChan}
-		_, err := w.Next()
+		_, err := w.Next(context.Background())
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("Next() error = %v, want context.Canceled", err)
 		}

@@ -15,14 +15,14 @@ func TestEmptyCallOptions(t *testing.T) {
 }
 
 func TestContentType(t *testing.T) {
-	if !reflect.DeepEqual(ContentType("aaa").(ContentTypeCallOption).ContentType, "aaa") {
-		t.Errorf("want: %v,got: %v", "aaa", ContentType("aaa").(ContentTypeCallOption).ContentType)
+	if !reflect.DeepEqual(WithContentType("aaa").(ContentTypeCallOption).ContentType, "aaa") {
+		t.Errorf("want: %v,got: %v", "aaa", WithContentType("aaa").(ContentTypeCallOption).ContentType)
 	}
 }
 
 func TestContentTypeCallOption_before(t *testing.T) {
 	c := &callInfo{}
-	err := ContentType("aaa").before(c)
+	err := WithContentType("aaa").before(c)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -32,14 +32,14 @@ func TestContentTypeCallOption_before(t *testing.T) {
 }
 
 func TestAccept(t *testing.T) {
-	if !reflect.DeepEqual(Accept("aaa").(AcceptCallOption).ContentType, "aaa") {
-		t.Errorf("want: %v,got: %v", "aaa", Accept("aaa").(AcceptCallOption).ContentType)
+	if !reflect.DeepEqual(WithAccept("aaa").(AcceptCallOption).ContentType, "aaa") {
+		t.Errorf("want: %v,got: %v", "aaa", WithAccept("aaa").(AcceptCallOption).ContentType)
 	}
 }
 
 func TestAcceptCallOption_before(t *testing.T) {
 	c := &callInfo{}
-	err := Accept("aaa").before(c)
+	err := WithAccept("aaa").before(c)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -63,14 +63,14 @@ func TestDefaultCallInfo(t *testing.T) {
 }
 
 func TestOperation(t *testing.T) {
-	if !reflect.DeepEqual("aaa", Operation("aaa").(OperationCallOption).Operation) {
-		t.Errorf("want: %v,got: %v", "aaa", Operation("aaa").(OperationCallOption).Operation)
+	if !reflect.DeepEqual("aaa", WithOperation("aaa").(OperationCallOption).Operation) {
+		t.Errorf("want: %v,got: %v", "aaa", WithOperation("aaa").(OperationCallOption).Operation)
 	}
 }
 
 func TestOperationCallOption_before(t *testing.T) {
 	c := &callInfo{}
-	err := Operation("aaa").before(c)
+	err := WithOperation("aaa").before(c)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -80,14 +80,14 @@ func TestOperationCallOption_before(t *testing.T) {
 }
 
 func TestPathTemplate(t *testing.T) {
-	if !reflect.DeepEqual("aaa", PathTemplate("aaa").(PathTemplateCallOption).Pattern) {
-		t.Errorf("want: %v,got: %v", "aaa", PathTemplate("aaa").(PathTemplateCallOption).Pattern)
+	if !reflect.DeepEqual("aaa", WithPathTemplate("aaa").(PathTemplateCallOption).Pattern) {
+		t.Errorf("want: %v,got: %v", "aaa", WithPathTemplate("aaa").(PathTemplateCallOption).Pattern)
 	}
 }
 
 func TestPathTemplateCallOption_before(t *testing.T) {
 	c := &callInfo{}
-	err := PathTemplate("aaa").before(c)
+	err := WithPathTemplate("aaa").before(c)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -98,15 +98,15 @@ func TestPathTemplateCallOption_before(t *testing.T) {
 
 func TestHeader(t *testing.T) {
 	h := http.Header{"A": []string{"123"}}
-	if !reflect.DeepEqual(Header(&h).(HeaderCallOption).header.Get("A"), "123") {
-		t.Errorf("want: %v,got: %v", "123", Header(&h).(HeaderCallOption).header.Get("A"))
+	if !reflect.DeepEqual(WithHeader(&h).(HeaderCallOption).header.Get("A"), "123") {
+		t.Errorf("want: %v,got: %v", "123", WithHeader(&h).(HeaderCallOption).header.Get("A"))
 	}
 }
 
 func TestHeaderCallOption_before(t *testing.T) {
 	h := http.Header{"A": []string{"123"}}
 	c := &callInfo{}
-	o := Header(&h)
+	o := WithHeader(&h)
 	err := o.before(c)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -120,7 +120,7 @@ func TestHeaderCallOption_after(t *testing.T) {
 	h := http.Header{"A": []string{"123"}}
 	c := &callInfo{}
 	cs := &csAttempt{res: &http.Response{Header: h}}
-	o := Header(&h)
+	o := WithHeader(&h)
 	o.after(c, cs)
 	if !reflect.DeepEqual(&h, o.(HeaderCallOption).header) {
 		t.Errorf("want: %v,got: %v", &h, o.(HeaderCallOption).header)

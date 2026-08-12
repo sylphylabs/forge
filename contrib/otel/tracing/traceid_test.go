@@ -19,7 +19,7 @@ func tracedCtx(t *testing.T) (context.Context, string) {
 
 func TestWithTraceIDStamps(t *testing.T) {
 	ctx, want := tracedCtx(t)
-	err := withTraceID(ctx, errors.New(errors.KindInternal).WithReason("BOOM"))
+	err := withTraceID(ctx, errors.Of(errors.KindInternal).WithReason("BOOM"))
 	if got := errors.FromError(err).TraceID(); got != want {
 		t.Errorf("trace ID = %q, want %q", got, want)
 	}
@@ -27,7 +27,7 @@ func TestWithTraceIDStamps(t *testing.T) {
 
 func TestWithTraceIDPreservesExisting(t *testing.T) {
 	ctx, _ := tracedCtx(t)
-	err := withTraceID(ctx, errors.New(errors.KindInternal).WithTraceID("closer-to-failure"))
+	err := withTraceID(ctx, errors.Of(errors.KindInternal).WithTraceID("closer-to-failure"))
 	if got := errors.FromError(err).TraceID(); got != "closer-to-failure" {
 		t.Errorf("trace ID = %q, want the existing one kept", got)
 	}
@@ -49,7 +49,7 @@ func TestWithTraceIDNilAndUntraced(t *testing.T) {
 	if withTraceID(ctx, nil) != nil {
 		t.Error("nil error must stay nil")
 	}
-	plain := errors.New(errors.KindInternal)
+	plain := errors.Of(errors.KindInternal)
 	if got := withTraceID(t.Context(), plain); errors.FromError(got).TraceID() != "" {
 		t.Error("no ambient trace must leave the error unchanged")
 	}

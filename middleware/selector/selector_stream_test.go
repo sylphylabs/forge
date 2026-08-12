@@ -23,13 +23,13 @@ func TestServerStreamSelectorMatches(t *testing.T) {
 	tests := []struct {
 		name      string
 		operation string
-		build     func(*bool) middleware.StreamMiddleware
+		build     func(*bool) (middleware.StreamMiddleware, error)
 		want      bool
 	}{
 		{
 			name:      "prefix matches",
 			operation: "/example/forge/SayHello",
-			build: func(a *bool) middleware.StreamMiddleware {
+			build: func(a *bool) (middleware.StreamMiddleware, error) {
 				return ServerStream(tracingStream(a)).Prefix("/example").Build()
 			},
 			want: true,
@@ -37,7 +37,7 @@ func TestServerStreamSelectorMatches(t *testing.T) {
 		{
 			name:      "prefix does not match",
 			operation: "/other/forge/SayHello",
-			build: func(a *bool) middleware.StreamMiddleware {
+			build: func(a *bool) (middleware.StreamMiddleware, error) {
 				return ServerStream(tracingStream(a)).Prefix("/example").Build()
 			},
 			want: false,
@@ -45,7 +45,7 @@ func TestServerStreamSelectorMatches(t *testing.T) {
 		{
 			name:      "path matches",
 			operation: "/example/forge",
-			build: func(a *bool) middleware.StreamMiddleware {
+			build: func(a *bool) (middleware.StreamMiddleware, error) {
 				return ServerStream(tracingStream(a)).Path("/example/forge").Build()
 			},
 			want: true,
@@ -53,7 +53,7 @@ func TestServerStreamSelectorMatches(t *testing.T) {
 		{
 			name:      "regex matches",
 			operation: "/example/forge",
-			build: func(a *bool) middleware.StreamMiddleware {
+			build: func(a *bool) (middleware.StreamMiddleware, error) {
 				return ServerStream(tracingStream(a)).Regex("/example/.*").Build()
 			},
 			want: true,
@@ -61,7 +61,7 @@ func TestServerStreamSelectorMatches(t *testing.T) {
 		{
 			name:      "match func matches",
 			operation: "/example/forge",
-			build: func(a *bool) middleware.StreamMiddleware {
+			build: func(a *bool) (middleware.StreamMiddleware, error) {
 				return ServerStream(tracingStream(a)).Match(func(_ context.Context, operation string) bool {
 					return operation == "/example/forge"
 				}).Build()
@@ -71,8 +71,10 @@ func TestServerStreamSelectorMatches(t *testing.T) {
 		{
 			name:      "no rule matches nothing",
 			operation: "/example/forge",
-			build:     func(a *bool) middleware.StreamMiddleware { return ServerStream(tracingStream(a)).Build() },
-			want:      false,
+			build: func(a *bool) (middleware.StreamMiddleware, error) {
+				return ServerStream(tracingStream(a)).Build()
+			},
+			want: false,
 		},
 	}
 
@@ -81,8 +83,12 @@ func TestServerStreamSelectorMatches(t *testing.T) {
 			applied := false
 			ctx := transport.NewServerContext(t.Context(), &Transport{operation: test.operation})
 
+			m, err := test.build(&applied)
+			if err != nil {
+				t.Fatal(err)
+			}
 			called := false
-			handler := test.build(&applied)(func(any, middleware.ServerStream) error {
+			handler := m(func(any, middleware.ServerStream) error {
 				called = true
 				return nil
 			})
@@ -104,9 +110,11 @@ func TestClientStreamSelectorUsesClientContext(t *testing.T) {
 	applied := false
 	ctx := transport.NewClientContext(t.Context(), &Transport{operation: "/example/forge"})
 
-	handler := ClientStream(tracingStream(&applied)).Prefix("/example").Build()(
-		func(any, middleware.ServerStream) error { return nil },
-	)
+	m, err := ClientStream(tracingStream(&applied)).Prefix("/example").Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := m(func(any, middleware.ServerStream) error { return nil })
 	if err := handler(nil, &streamStub{ctx: ctx}); err != nil {
 		t.Fatal(err)
 	}
@@ -117,14 +125,60 @@ func TestClientStreamSelectorUsesClientContext(t *testing.T) {
 
 func TestStreamSelectorWithoutTransport(t *testing.T) {
 	applied := false
-	handler := ServerStream(tracingStream(&applied)).Prefix("/example").Build()(
-		func(any, middleware.ServerStream) error { return nil },
-	)
+	m, err := ServerStream(tracingStream(&applied)).Prefix("/example").Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := m(func(any, middleware.ServerStream) error { return nil })
 	if err := handler(nil, &streamStub{ctx: t.Context()}); err != nil {
 		t.Fatal(err)
 	}
 	if applied {
 		t.Error("middleware must not apply without a transport in context")
+	}
+}
+
+func TestStreamSelectorInvalidRegexFailsBuild(t *testing.T) {
+	m, err := ServerStream().Regex("^\b(?").Build()
+	if err == nil {
+		t.Fatal("Build() error = nil, want error for invalid regex")
+	}
+	if m != nil {
+		t.Errorf("Build() middleware = %v, want nil on error", m)
+	}
+}
+
+// TestStreamSelectorComposesOnce asserts the Request-Path Contract: the
+// selected chain is composed when the middleware wraps its handler, not per
+// stream.
+func TestStreamSelectorComposesOnce(t *testing.T) {
+	var compositions, calls int
+	m := func(next middleware.StreamHandler) middleware.StreamHandler {
+		compositions++
+		return func(request any, stream middleware.ServerStream) error {
+			calls++
+			return next(request, stream)
+		}
+	}
+
+	built, err := ServerStream(m).Prefix("/example").Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := built(func(any, middleware.ServerStream) error { return nil })
+
+	ctx := transport.NewServerContext(t.Context(), &Transport{operation: "/example/forge"})
+	for range 3 {
+		if err := handler(nil, &streamStub{ctx: ctx}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if compositions != 1 {
+		t.Errorf("middleware compositions = %d, want 1", compositions)
+	}
+	if calls != 3 {
+		t.Errorf("middleware calls = %d, want 3", calls)
 	}
 }
 

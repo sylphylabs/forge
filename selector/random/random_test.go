@@ -11,7 +11,7 @@ import (
 
 func TestWrr(t *testing.T) {
 	random := New()
-	nodes := make([]selector.Node, 0, 2)
+	nodes := make([]*selector.Node, 0, 2)
 	nodes = append(nodes, selector.NewNode(
 		"http",
 		"127.0.0.1:8080",
@@ -42,9 +42,9 @@ func TestWrr(t *testing.T) {
 			t.Errorf("expect not nil, got:%v", n)
 		}
 		done(context.Background(), selector.DoneInfo{})
-		if n.Address() == "127.0.0.1:8080" {
+		if n.Address == "127.0.0.1:8080" {
 			count1++
-		} else if n.Address() == "127.0.0.1:9090" {
+		} else if n.Address == "127.0.0.1:9090" {
 			count2++
 		}
 	}
@@ -63,7 +63,7 @@ func TestWrr(t *testing.T) {
 }
 
 func TestEmpty(t *testing.T) {
-	b := &Balancer{}
+	b := balancer{}
 	_, _, err := b.Pick(context.Background(), []selector.WeightedNode{})
 	if err == nil {
 		t.Errorf("expect nil, got %v", err)

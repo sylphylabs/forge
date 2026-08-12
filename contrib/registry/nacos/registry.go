@@ -179,8 +179,8 @@ func (r *Registry) Watch(ctx context.Context, serviceName string) (registry.Watc
 	return newWatcher(ctx, r.cli, serviceName, r.opts.group, r.opts.kind, []string{r.opts.cluster})
 }
 
-// GetService return the service instances in memory according to the service name.
-func (r *Registry) GetService(_ context.Context, serviceName string) ([]*registry.ServiceInstance, error) {
+// Instances returns the currently known instances of the named service.
+func (r *Registry) Instances(_ context.Context, serviceName string) ([]*registry.ServiceInstance, error) {
 	res, err := r.cli.SelectInstances(vo.SelectInstancesParam{
 		ServiceName: serviceName,
 		GroupName:   r.opts.group,

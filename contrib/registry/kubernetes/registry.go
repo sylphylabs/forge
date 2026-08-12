@@ -161,8 +161,8 @@ func (s *Registry) Deregister(ctx context.Context, _ *registry.ServiceInstance) 
 	})
 }
 
-// GetService return the service instances in memory according to the service name.
-func (s *Registry) GetService(_ context.Context, name string) ([]*registry.ServiceInstance, error) {
+// Instances returns the currently known instances of the named service.
+func (s *Registry) Instances(_ context.Context, name string) ([]*registry.ServiceInstance, error) {
 	pods, err := s.podLister.List(labels.SelectorFromSet(map[string]string{
 		LabelsKeyServiceName: name,
 	}))
@@ -184,7 +184,7 @@ func (s *Registry) GetService(_ context.Context, name string) ([]*registry.Servi
 }
 
 func (s *Registry) sendLatestInstances(ctx context.Context, name string, announcement chan []*registry.ServiceInstance) {
-	instances, err := s.GetService(ctx, name)
+	instances, err := s.Instances(ctx, name)
 	if err != nil {
 		panic(err)
 	}
@@ -298,8 +298,10 @@ func NewIterator(channel chan []*registry.ServiceInstance, stopCh chan struct{})
 }
 
 // Next will block until ServiceInstance changes
-func (iter *Iterator) Next() ([]*registry.ServiceInstance, error) {
+func (iter *Iterator) Next(ctx context.Context) ([]*registry.ServiceInstance, error) {
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case instances := <-iter.ch:
 		return instances, nil
 	case <-iter.stopCh:

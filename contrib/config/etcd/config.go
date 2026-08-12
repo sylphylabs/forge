@@ -68,13 +68,13 @@ func New(client *clientv3.Client, opts ...Option) (config.Source, error) {
 }
 
 // Load return the config values
-func (s *source) Load() ([]*config.KeyValue, error) {
+func (s *source) Load(ctx context.Context) ([]*config.KeyValue, error) {
 	var opts []clientv3.OpOption
 	if s.options.prefix {
 		opts = append(opts, clientv3.WithPrefix())
 	}
 
-	rsp, err := s.client.Get(s.options.ctx, s.options.path, opts...)
+	rsp, err := s.client.Get(ctx, s.options.path, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +91,6 @@ func (s *source) Load() ([]*config.KeyValue, error) {
 }
 
 // Watch return the watcher
-func (s *source) Watch() (config.Watcher, error) {
+func (s *source) Watch(context.Context) (config.Watcher, error) {
 	return newWatcher(s), nil
 }

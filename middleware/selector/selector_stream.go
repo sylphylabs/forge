@@ -2,7 +2,6 @@ package selector
 
 import (
 	"context"
-	"regexp"
 
 	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/transport"
@@ -17,7 +16,10 @@ var serverTransporter transporter = func(ctx context.Context) (transport.Transpo
 // matching rules are the ones of [Builder]; only the composed middleware kind
 // differs.
 type StreamBuilder struct {
-	Builder
+	prefix []string
+	regex  []string
+	path   []string
+	match  MatchFunc
 
 	transporter transporter
 	ms          []middleware.StreamMiddleware
@@ -35,47 +37,49 @@ func ClientStream(ms ...middleware.StreamMiddleware) *StreamBuilder {
 
 // Prefix is with StreamBuilder's prefix.
 func (b *StreamBuilder) Prefix(prefix ...string) *StreamBuilder {
-	b.Builder.Prefix(prefix...)
+	b.prefix = prefix
 	return b
 }
 
 // Regex is with StreamBuilder's regex.
 func (b *StreamBuilder) Regex(regex ...string) *StreamBuilder {
-	b.Builder.Regex(regex...)
+	b.regex = regex
 	return b
 }
 
 // Path is with StreamBuilder's path.
 func (b *StreamBuilder) Path(path ...string) *StreamBuilder {
-	b.Builder.Path(path...)
+	b.path = path
 	return b
 }
 
 // Match is with StreamBuilder's match.
 func (b *StreamBuilder) Match(fn MatchFunc) *StreamBuilder {
-	b.Builder.Match(fn)
+	b.match = fn
 	return b
 }
 
-// Build creates stream middleware that selects by operation.
-func (b *StreamBuilder) Build() middleware.StreamMiddleware {
-	b.compiled = make([]*regexp.Regexp, 0, len(b.regex))
-	for _, regex := range b.regex {
-		if r, err := regexp.Compile(regex); err == nil {
-			b.compiled = append(b.compiled, r)
-		}
+// Build creates stream middleware that selects by operation. It returns an
+// error if any configured regex does not compile.
+func (b *StreamBuilder) Build() (middleware.StreamMiddleware, error) {
+	m, err := newMatcher(b.prefix, b.regex, b.path, b.match)
+	if err != nil {
+		return nil, err
 	}
-	return streamSelector(b.transporter, b.matches, b.ms...)
+	return streamSelector(b.transporter, m.matches, b.ms...), nil
 }
 
-// streamSelector applies ms only when the operation matches.
+// streamSelector applies ms only when the operation matches. The selected
+// chain is composed once, when the middleware wraps its handler, never per
+// request.
 func streamSelector(transporter transporter, match func(context.Context, transporter) bool, ms ...middleware.StreamMiddleware) middleware.StreamMiddleware {
 	return func(handler middleware.StreamHandler) middleware.StreamHandler {
+		selected := middleware.ChainStream(ms...)(handler)
 		return func(request any, stream middleware.ServerStream) error {
 			if !match(stream.Context(), transporter) {
 				return handler(request, stream)
 			}
-			return middleware.ChainStream(ms...)(handler)(request, stream)
+			return selected(request, stream)
 		}
 	}
 }

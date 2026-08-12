@@ -27,8 +27,6 @@ func (v *testValue) Slice() ([]config.Value, error)   { return nil, errors.ErrUn
 func (v *testValue) Map() (map[string]config.Value, error) {
 	return nil, errors.ErrUnsupported
 }
-func (v *testValue) Load() any   { return v.val }
-func (v *testValue) Store(a any) { v.val = a }
 
 func (v *testValue) Scan(obj any) error {
 	data, err := json.Marshal(v.val)

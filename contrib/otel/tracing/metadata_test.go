@@ -34,7 +34,7 @@ func TestMetadata_Inject(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := forge.New(forge.Name(tt.args.appName))
+			a := forge.New(forge.WithName(tt.args.appName))
 			ctx := forge.NewContext(context.Background(), a)
 			m := new(Metadata)
 			m.Inject(ctx, tt.args.carrier)

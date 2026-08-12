@@ -169,8 +169,8 @@ func TestToolMiddlewareAccumulatesAndSkipsNil(t *testing.T) {
 	noop := func(next middleware.UnaryHandler) middleware.UnaryHandler { return next }
 
 	srv := &Server{}
-	ToolMiddleware(noop, nil)(srv)
-	ToolMiddleware(noop)(srv)
+	WithToolMiddleware(noop, nil)(srv)
+	WithToolMiddleware(noop)(srv)
 
 	if got := len(srv.unaryMiddleware); got != 2 {
 		t.Errorf("unaryMiddleware len = %d, want 2 with nil skipped", got)
@@ -181,8 +181,8 @@ func TestMiddlewareAccumulatesAndSkipsNil(t *testing.T) {
 	noop := func(next http.Handler) http.Handler { return next }
 
 	srv := &Server{}
-	Middleware(noop, nil)(srv)
-	Middleware(noop)(srv)
+	WithMiddleware(noop, nil)(srv)
+	WithMiddleware(noop)(srv)
 
 	if got := len(srv.middleware); got != 2 {
 		t.Errorf("middleware len = %d, want 2 with nil skipped", got)
@@ -223,7 +223,7 @@ func TestServerToolMiddlewareIsRegistered(t *testing.T) {
 		}
 	}
 
-	srv := NewServer("forge-mcp", "v1.0.0", Address(":8000"), ToolMiddleware(probe))
+	srv := NewServer("forge-mcp", "v1.0.0", WithAddress(":8000"), WithToolMiddleware(probe))
 	srv.AddTool(mcpgo.NewTool("hello_world"), okHandler)
 
 	response := srv.HandleMessage(t.Context(), []byte(

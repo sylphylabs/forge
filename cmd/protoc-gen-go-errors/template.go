@@ -10,9 +10,10 @@ import (
 var errorsTemplate string
 
 type errorInfo struct {
-	// Enum is the Go identifier of the generated enum type.
-	Enum string
-	// Value is the Protobuf enum value name, used as the reason.
+	// Value is the Protobuf enum value name. It is emitted as the reason
+	// literal: a package-level sentinel initializes before the init() that
+	// registers the enum descriptor, so the generated code must not call the
+	// enum's String() method to obtain the same string.
 	Value string
 	// SentinelName is the Go identifier of the generated sentinel variable.
 	SentinelName string

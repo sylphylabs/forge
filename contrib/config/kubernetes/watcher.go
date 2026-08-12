@@ -16,8 +16,8 @@ type watcher struct {
 	watcher watch.Interface
 }
 
-func newWatcher(k *kube) (config.Watcher, error) {
-	w, err := k.client.CoreV1().ConfigMaps(k.opts.Namespace).Watch(context.Background(), metav1.ListOptions{
+func newWatcher(ctx context.Context, k *kube) (config.Watcher, error) {
+	w, err := k.client.CoreV1().ConfigMaps(k.opts.Namespace).Watch(ctx, metav1.ListOptions{
 		LabelSelector: k.opts.LabelSelector,
 		FieldSelector: k.opts.FieldSelector,
 	})
@@ -30,12 +30,20 @@ func newWatcher(k *kube) (config.Watcher, error) {
 	}, nil
 }
 
-func (w *watcher) Next() ([]*config.KeyValue, error) {
+func (w *watcher) Next(ctx context.Context) ([]*config.KeyValue, error) {
 ResultChan:
-	ch := <-w.watcher.ResultChan()
+	var ch watch.Event
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case ch = <-w.watcher.ResultChan():
+	}
 	if ch.Object == nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		// recreate the watcher
-		k8sWatcher, err := w.k.client.CoreV1().ConfigMaps(w.k.opts.Namespace).Watch(context.Background(), metav1.ListOptions{
+		k8sWatcher, err := w.k.client.CoreV1().ConfigMaps(w.k.opts.Namespace).Watch(ctx, metav1.ListOptions{
 			LabelSelector: w.k.opts.LabelSelector,
 			FieldSelector: w.k.opts.FieldSelector,
 		})

@@ -21,13 +21,13 @@ func TestBuilderDefaultsText(t *testing.T) {
 func TestBuilderJSON(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(NewHandler(WithWriter(&buf), WithFormat(FormatJSON)))
-	logger.LogAttrs(context.Background(), LevelFatal, "boom")
+	logger.LogAttrs(context.Background(), LevelError, "boom")
 	var got map[string]any
 	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &got); err != nil {
 		t.Fatalf("unmarshal: %v (%q)", err, buf.String())
 	}
-	if got["level"] != LevelFatal.String() {
-		t.Fatalf("level = %v, want %s", got["level"], LevelFatal.String())
+	if got["level"] != LevelError.String() {
+		t.Fatalf("level = %v, want %s", got["level"], LevelError.String())
 	}
 }
 
@@ -64,7 +64,7 @@ func TestBuilderWithHandler(t *testing.T) {
 func TestBuilderWithFilter(t *testing.T) {
 	var buf bytes.Buffer
 	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: LevelWarn})
-	logger := NewLogger(handler, WithFilter(FilterKey("password")))
+	logger := NewLogger(handler, WithFilter(WithFilterKey("password")))
 	logger.Info("ignored")
 	logger.Warn("login", "password", "secret")
 	out := buf.String()

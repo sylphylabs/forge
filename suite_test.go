@@ -3,11 +3,13 @@ package forge
 import (
 	"io"
 	"log/slog"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/sylphylabs/forge/registry"
+	"github.com/sylphylabs/forge/transport"
 )
 
 // optionsSuite is the simplest possible Suite: a fixed option list.
@@ -25,8 +27,8 @@ type observabilitySuite struct {
 
 func (s *observabilitySuite) Options() []Option {
 	return []Option{
-		Logger(s.logger),
-		Metadata(s.labels),
+		WithLogger(s.logger),
+		WithMetadata(s.labels),
 	}
 }
 
@@ -40,14 +42,14 @@ type discoverySuite struct {
 
 func (s *discoverySuite) Options() []Option {
 	return []Option{
-		Registrar(s.registrar),
-		RegistrarTimeout(s.timeout),
+		WithRegistrar(s.registrar),
+		WithRegistrarTimeout(s.timeout),
 	}
 }
 
 func TestWithSuiteAppliesOptions(t *testing.T) {
 	o := &options{}
-	WithSuite(optionsSuite{ID("1"), Name("svc")})(o)
+	WithSuite(optionsSuite{WithID("1"), WithName("svc")})(o)
 	if o.id != "1" {
 		t.Errorf("o.id = %q, want %q", o.id, "1")
 	}
@@ -81,7 +83,7 @@ func TestWithSuiteLastOptionWins(t *testing.T) {
 	// A directly written option after the suite overrides the suite's value,
 	// exactly as it would override an earlier direct option.
 	o := &options{}
-	for _, opt := range []Option{WithSuite(optionsSuite{Name("from-suite")}), Name("direct")} {
+	for _, opt := range []Option{WithSuite(optionsSuite{WithName("from-suite")}), WithName("direct")} {
 		opt(o)
 	}
 	if o.name != "direct" {
@@ -90,11 +92,35 @@ func TestWithSuiteLastOptionWins(t *testing.T) {
 
 	// And symmetrically: a suite applied later overrides a direct option.
 	o = &options{}
-	for _, opt := range []Option{Name("direct"), WithSuite(optionsSuite{Name("from-suite")})} {
+	for _, opt := range []Option{WithName("direct"), WithSuite(optionsSuite{WithName("from-suite")})} {
 		opt(o)
 	}
 	if o.name != "from-suite" {
 		t.Errorf("o.name = %q, want %q", o.name, "from-suite")
+	}
+}
+
+func TestWithSuiteCollectionsFromTwoSuitesSurvive(t *testing.T) {
+	firstServer := &mockServer{}
+	secondServer := &mockServer{}
+	first := optionsSuite{
+		WithServer(firstServer),
+		WithMetadata(map[string]string{"team": "platform", "tier": "1"}),
+	}
+	second := optionsSuite{
+		WithServer(secondServer),
+		WithMetadata(map[string]string{"tier": "2", "region": "ap-northeast"}),
+	}
+
+	app := New(WithSuite(first), WithSuite(second))
+
+	wantServers := []transport.Server{firstServer, secondServer}
+	if !reflect.DeepEqual(app.opts.servers, wantServers) {
+		t.Errorf("app.opts.servers = %v, want %v", app.opts.servers, wantServers)
+	}
+	wantMetadata := map[string]string{"team": "platform", "tier": "2", "region": "ap-northeast"}
+	if got := app.Metadata(); !reflect.DeepEqual(got, wantMetadata) {
+		t.Errorf("Metadata() = %v, want %v", got, wantMetadata)
 	}
 }
 
@@ -110,7 +136,7 @@ func TestWithSuiteTwoIndependentSuitesStack(t *testing.T) {
 	app := New(
 		WithSuite(obs),
 		WithSuite(disc),
-		Name("stacked"),
+		WithName("stacked"),
 	)
 
 	if app.opts.logger != logger {
@@ -154,7 +180,7 @@ func TestWithSuiteNilOptionPanics(t *testing.T) {
 			t.Fatalf("panic = %v, want message containing %q", r, "nil Option at index 1")
 		}
 	}()
-	WithSuite(optionsSuite{Name("ok"), nil})
+	WithSuite(optionsSuite{WithName("ok"), nil})
 }
 
 func TestWithSuitePanicsBeforeApplication(t *testing.T) {
@@ -174,7 +200,7 @@ func TestWithSuiteReadsOptionsOnce(t *testing.T) {
 	calls := 0
 	s := suiteFunc(func() []Option {
 		calls++
-		return []Option{Name("once")}
+		return []Option{WithName("once")}
 	})
 	opt := WithSuite(s)
 	o := &options{}

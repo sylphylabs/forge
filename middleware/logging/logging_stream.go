@@ -17,9 +17,9 @@ import (
 // user data. Use a transport or application middleware if per-message
 // records are required.
 //
-// The args attribute holds the initial request for server-streaming methods
-// and is empty for client and bidirectional streaming methods, where no
-// initial request exists.
+// The args attribute describes the initial request for server-streaming
+// methods and is empty for client and bidirectional streaming methods, where
+// no initial request exists.
 func ServerStream(logger *slog.Logger) middleware.StreamMiddleware {
 	if logger == nil {
 		logger = slog.Default()

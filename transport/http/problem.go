@@ -79,15 +79,19 @@ const NoStatus = 0
 
 // unmarshalProblem parses a problem document, and reports whether data was one.
 //
-// The status line is authoritative and the body only refines it. A body is
-// therefore read only when it is plausibly a problem document, and it is
-// rejected outright when it contradicts the status: a stale intermediary can
-// serve an old body under a new status, and believing it would let a caller
-// match a 503 against a NotFound sentinel and stop retrying.
+// The status line is authoritative for classification and the body is
+// authoritative for identity. A body is read only when it is plausibly a
+// problem document; its kind is believed only when it projects onto the
+// response status. When the two disagree — a proxy rewrote the status, or a
+// stale intermediary served an old body under a new one — the Kind is
+// reclassified from the status line while the document's domain, reason,
+// message, metadata, trace ID, and violations are kept: the contradiction
+// discredits the classification, not the identity, and discarding the
+// document would lose the only diagnostics the peer sent.
 //
-// A body naming an unrecognized kind is still a problem document — a peer
-// running a newer version may know a kind this build does not — so its identity
-// is kept and only the classification falls back to the status line.
+// A body naming an unrecognized kind degrades the same way — a peer running a
+// newer version may know a kind this build does not — so both cases keep
+// identity and classify by the status line.
 func unmarshalProblem(contentType string, data []byte, status int) (*errors.Error, bool) {
 	if !isProblemContentType(contentType) {
 		return nil, false
@@ -109,15 +113,16 @@ func unmarshalProblem(contentType string, data []byte, status int) (*errors.Erro
 
 	kind, known := errors.ParseKind(p.Kind)
 	switch {
-	case known && status != NoStatus && StatusOf(kind) != status:
-		// The body claims a classification the status line contradicts.
-		return nil, false
-	case !known && status != NoStatus:
+	case status == NoStatus:
+		// A stream frame arrives without a status: it was sent when the stream
+		// opened, long before the failure. There is nothing to reclassify an
+		// unknown kind by, so the failure stays unclassified rather than being
+		// invented.
+		if !known {
+			kind = errors.KindUnknown
+		}
+	case !known || StatusOf(kind) != status:
 		kind = KindOf(status)
-	case !known:
-		// A stream frame naming an unknown kind has no status to fall back on,
-		// so the failure stays unclassified rather than being invented.
-		kind = errors.KindUnknown
 	}
 	public := errors.Public{
 		Kind:     kind,

@@ -27,8 +27,9 @@ import (
 // ClientOption is gRPC client option.
 type ClientOption func(o *clientOptions)
 
-// WithEndpoint with client endpoint.
-func WithEndpoint(endpoint string) ClientOption {
+// WithTarget sets the target the client dials: a host:port, or a
+// discovery:/// service name resolved through the configured discovery.
+func WithTarget(endpoint string) ClientOption {
 	return func(o *clientOptions) {
 		o.endpoint = endpoint
 	}
@@ -42,22 +43,23 @@ func WithSubset(size int) ClientOption {
 	}
 }
 
-// WithTimeout with client timeout.
-func WithTimeout(timeout time.Duration) ClientOption {
+// WithRequestTimeout bounds each unary RPC with a per-call deadline.
+func WithRequestTimeout(timeout time.Duration) ClientOption {
 	return func(o *clientOptions) {
 		o.timeout = timeout
 	}
 }
 
-// WithMiddleware with client middleware.
-func WithMiddleware(m ...middleware.UnaryMiddleware) ClientOption {
+// WithClientMiddleware attaches client-side unary middleware around each call.
+func WithClientMiddleware(m ...middleware.UnaryMiddleware) ClientOption {
 	return func(o *clientOptions) {
 		o.middleware = m
 	}
 }
 
-// WithStreamMiddleware with client stream middleware.
-func WithStreamMiddleware(m ...middleware.UnaryMiddleware) ClientOption {
+// WithClientStreamMiddleware attaches client-side middleware around each
+// message send and receive on a stream.
+func WithClientStreamMiddleware(m ...middleware.UnaryMiddleware) ClientOption {
 	return func(o *clientOptions) {
 		o.streamMiddleware = m
 	}
@@ -70,29 +72,30 @@ func WithDiscovery(d registry.Discovery) ClientOption {
 	}
 }
 
-// WithTLSConfig with TLS config.
-func WithTLSConfig(c *tls.Config) ClientOption {
+// WithClientTLSConfig sets the TLS config the client dials with.
+func WithClientTLSConfig(c *tls.Config) ClientOption {
 	return func(o *clientOptions) {
 		o.tlsConf = c
 	}
 }
 
-// WithUnaryInterceptor returns a ClientOption that specifies the interceptor for unary RPCs.
-func WithUnaryInterceptor(in ...grpc.UnaryClientInterceptor) ClientOption {
+// WithUnaryClientInterceptor specifies the interceptors for unary RPCs.
+func WithUnaryClientInterceptor(in ...grpc.UnaryClientInterceptor) ClientOption {
 	return func(o *clientOptions) {
 		o.ints = in
 	}
 }
 
-// WithStreamInterceptor returns a ClientOption that specifies the interceptor for streaming RPCs.
-func WithStreamInterceptor(in ...grpc.StreamClientInterceptor) ClientOption {
+// WithStreamClientInterceptor specifies the interceptors for streaming RPCs.
+func WithStreamClientInterceptor(in ...grpc.StreamClientInterceptor) ClientOption {
 	return func(o *clientOptions) {
 		o.streamInts = in
 	}
 }
 
-// WithOptions with gRPC options.
-func WithOptions(opts ...grpc.DialOption) ClientOption {
+// WithDialOptions appends raw grpc.DialOption values passed through to the
+// underlying connection.
+func WithDialOptions(opts ...grpc.DialOption) ClientOption {
 	return func(o *clientOptions) {
 		o.grpcOpts = opts
 	}
@@ -179,12 +182,15 @@ func NewClient(ctx context.Context, opts ...ClientOption) (*grpc.ClientConn, err
 	}
 
 	if options.discovery != nil {
+		// The resolver's watcher-creation timeout is deliberately not wired to
+		// options.timeout: that value bounds a single RPC, while establishing a
+		// registry watch is a one-time setup cost with its own default
+		// (discovery.DefaultWatchTimeout), tunable via discovery.WithTimeout.
 		grpcOpts = append(grpcOpts,
 			grpc.WithResolvers(
 				discovery.NewBuilder(
 					options.discovery,
 					discovery.WithInsecure(isInsecure),
-					discovery.WithTimeout(options.timeout),
 					discovery.WithSubset(options.subsetSize),
 					discovery.WithSelector(options.selectorBuilder),
 				)))

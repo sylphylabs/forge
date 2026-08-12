@@ -106,7 +106,7 @@ func TestTrailer(t *testing.T) {
 func TestFilters(t *testing.T) {
 	o := &clientOptions{}
 
-	WithNodeFilter(func(_ context.Context, nodes []selector.Node) []selector.Node {
+	WithNodeFilter(func(_ context.Context, nodes []*selector.Node) []*selector.Node {
 		return nodes
 	})(o)
 	if !reflect.DeepEqual(1, len(o.filters)) {

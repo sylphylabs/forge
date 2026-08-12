@@ -11,7 +11,7 @@ import (
 
 func benchSelector(nodeCount int) selector.Selector {
 	s := New()
-	nodes := make([]selector.Node, 0, nodeCount)
+	nodes := make([]*selector.Node, 0, nodeCount)
 	for i := 0; i < nodeCount; i++ {
 		addr := fmt.Sprintf("127.0.0.%d:8080", i)
 		nodes = append(nodes, selector.NewNode("http", addr, &registry.ServiceInstance{

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -70,7 +71,7 @@ func newTestJSONSource(data string) *testJSONSource {
 	return &testJSONSource{data: data, sig: make(chan struct{}), err: make(chan struct{})}
 }
 
-func (p *testJSONSource) Load() ([]*KeyValue, error) {
+func (p *testJSONSource) Load(context.Context) ([]*KeyValue, error) {
 	p.mu.RLock()
 	data := p.data
 	p.mu.RUnlock()
@@ -88,7 +89,7 @@ func (p *testJSONSource) setData(data string) {
 	p.mu.Unlock()
 }
 
-func (p *testJSONSource) Watch() (Watcher, error) {
+func (p *testJSONSource) Watch(context.Context) (Watcher, error) {
 	return newTestWatcher(p.sig, p.err), nil
 }
 
@@ -102,7 +103,7 @@ func newTestWatcher(sig, err chan struct{}) Watcher {
 	return &testWatcher{sig: sig, err: err, exit: make(chan struct{})}
 }
 
-func (w *testWatcher) Next() ([]*KeyValue, error) {
+func (w *testWatcher) Next(ctx context.Context) ([]*KeyValue, error) {
 	select {
 	case <-w.sig:
 		return nil, nil
@@ -110,6 +111,8 @@ func (w *testWatcher) Next() ([]*KeyValue, error) {
 		return nil, errors.New("error")
 	case <-w.exit:
 		return nil, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
@@ -128,31 +131,26 @@ func TestConfig(t *testing.T) {
 		databaseDriver = "mysql"
 	)
 
-	c := New(
+	c, err := New(
+		t.Context(),
 		WithSource(newTestJSONSource(_testJSON)),
 		WithDecoder(defaultDecoder),
 		WithResolver(defaultResolver),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = c.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	jSource := newTestJSONSource(_testJSON)
-	opts := options{
-		sources:  []Source{jSource},
-		decoder:  defaultDecoder,
-		resolver: defaultResolver,
-		merge:    defaultMerge,
-	}
-	cf := &config{}
-	cf.opts = opts
-	cf.reader.Store(newReader(opts))
-
-	err = cf.Load()
+	cf, err := New(t.Context(), WithSource(jSource))
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = cf.Close() })
 
 	driver, err := cf.Value("data.database.driver").String()
 	if err != nil {
@@ -216,11 +214,75 @@ func TestConfig(t *testing.T) {
 	}
 }
 
+func TestConfigWatchMissingKey(t *testing.T) {
+	c, err := New(t.Context(), WithSource(newTestJSONSource(_testJSON)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	if err := c.Watch("no.such.key", func(string, Value) {}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Watch(missing key) = %v, want ErrNotFound", err)
+	}
+}
+
+func TestConfigWatchNilObserverPanics(t *testing.T) {
+	c, err := New(t.Context(), WithSource(newTestJSONSource(_testJSON)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	defer func() {
+		if recover() == nil {
+			t.Fatal("Watch(nil observer) did not panic")
+		}
+	}()
+	_ = c.Watch("endpoints", nil)
+}
+
+// Every observer registered for a key must see every change; a second
+// registration must not displace the first.
+func TestConfigWatchMultipleObservers(t *testing.T) {
+	src := newTestJSONSource(`{"key":"one"}`)
+	c, err := New(t.Context(), WithSource(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+
+	first := make(chan string, 1)
+	second := make(chan string, 1)
+	if err := c.Watch("key", func(_ string, v Value) {
+		got, _ := v.String()
+		first <- got
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Watch("key", func(_ string, v Value) {
+		got, _ := v.String()
+		second <- got
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	src.setData(`{"key":"two"}`)
+	src.sig <- struct{}{}
+	for name, ch := range map[string]chan string{"first": first, "second": second} {
+		select {
+		case got := <-ch:
+			if got != "two" {
+				t.Fatalf("%s observer saw %q, want two", name, got)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for the %s observer", name)
+		}
+	}
+}
+
 func TestConfigWatchReloadsCrossSourceReferences(t *testing.T) {
 	reference := newTestJSONSource(`{"endpoint":"${remote.endpoint}"}`)
 	remote := newTestJSONSource(`{"remote":{"endpoint":"one"}}`)
-	c := New(WithSource(reference, remote))
-	if err := c.Load(); err != nil {
+	c, err := New(t.Context(), WithSource(reference, remote))
+	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = c.Close() })
@@ -250,5 +312,34 @@ func TestConfigWatchReloadsCrossSourceReferences(t *testing.T) {
 	value, err = c.Value("endpoint").String()
 	if err != nil || value != "two" {
 		t.Fatalf("current endpoint = %q, %v", value, err)
+	}
+}
+
+// failingWatchSource loads but cannot watch, which must fail construction
+// and stop the watchers of sources constructed before it.
+type failingWatchSource struct {
+	inner *testJSONSource
+}
+
+func (s *failingWatchSource) Load(ctx context.Context) ([]*KeyValue, error) {
+	return s.inner.Load(ctx)
+}
+
+func (s *failingWatchSource) Watch(context.Context) (Watcher, error) {
+	return nil, errors.New("watch refused")
+}
+
+func TestNewRollsBackWatchersOnFailure(t *testing.T) {
+	good := newTestJSONSource(`{"a":1}`)
+	bad := &failingWatchSource{inner: newTestJSONSource(`{"b":2}`)}
+	if _, err := New(t.Context(), WithSource(good, bad)); err == nil {
+		t.Fatal("New with a failing source watch must return an error")
+	}
+	// The good source's watcher was stopped: nothing is left consuming its
+	// signal channel.
+	select {
+	case good.sig <- struct{}{}:
+		t.Fatal("good source watcher still consuming signals after failed New")
+	default:
 	}
 }

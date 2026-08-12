@@ -25,6 +25,13 @@ const (
 // Kind classifies a failure independently of any transport. It is the single
 // source of truth for an error's category: transports project a Kind onto their
 // own status vocabulary, never the reverse.
+//
+// The values are the annotation vocabulary for declaring contract errors on
+// enums. Each value is the KIND_-prefixed spelling of the wire name the Forge
+// runtime uses (KIND_NOT_FOUND names the kind that travels as "NOT_FOUND"):
+// the prefix is Protobuf enum scoping, not part of the name. There is no
+// Protobuf error envelope; HTTP carries errors as Problem Details and gRPC as
+// a status with standard details.
 type Kind int32
 
 const (
@@ -113,165 +120,6 @@ func (Kind) EnumDescriptor() ([]byte, []int) {
 	return file_sylphy_errors_v1_errors_proto_rawDescGZIP(), []int{0}
 }
 
-// Violation is a single field-level failure within an aggregate error.
-type Violation struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Field identifies what failed, as a path into the request message.
-	Field string `protobuf:"bytes,1,opt,name=field,proto3" json:"field,omitempty"`
-	// Description explains the failure in terms a caller can act on.
-	Description   string `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Violation) Reset() {
-	*x = Violation{}
-	mi := &file_sylphy_errors_v1_errors_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Violation) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Violation) ProtoMessage() {}
-
-func (x *Violation) ProtoReflect() protoreflect.Message {
-	mi := &file_sylphy_errors_v1_errors_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Violation.ProtoReflect.Descriptor instead.
-func (*Violation) Descriptor() ([]byte, []int) {
-	return file_sylphy_errors_v1_errors_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *Violation) GetField() string {
-	if x != nil {
-		return x.Field
-	}
-	return ""
-}
-
-func (x *Violation) GetDescription() string {
-	if x != nil {
-		return x.Description
-	}
-	return ""
-}
-
-// Status is the portable error representation used by Forge transports.
-type Status struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Kind classifies the failure. Transports project it onto their own status
-	// vocabulary.
-	Kind Kind `protobuf:"varint,1,opt,name=kind,proto3,enum=sylphy.errors.v1.Kind" json:"kind,omitempty"`
-	// Domain namespaces the reason, normally the Protobuf package that declared
-	// it.
-	Domain string `protobuf:"bytes,2,opt,name=domain,proto3" json:"domain,omitempty"`
-	// Reason is the stable machine-readable identifier for this failure.
-	Reason string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
-	// Message describes the failure for a human reader. It is not stable and
-	// must not be parsed.
-	Message string `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
-	// Metadata carries additional structured context.
-	Metadata map[string]string `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// TraceID correlates this failure with a distributed trace. It is the
-	// supported way to follow a failure across process boundaries.
-	TraceId string `protobuf:"bytes,6,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
-	// Violations carries per-field failures for an aggregate error.
-	Violations    []*Violation `protobuf:"bytes,7,rep,name=violations,proto3" json:"violations,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Status) Reset() {
-	*x = Status{}
-	mi := &file_sylphy_errors_v1_errors_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Status) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Status) ProtoMessage() {}
-
-func (x *Status) ProtoReflect() protoreflect.Message {
-	mi := &file_sylphy_errors_v1_errors_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Status.ProtoReflect.Descriptor instead.
-func (*Status) Descriptor() ([]byte, []int) {
-	return file_sylphy_errors_v1_errors_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *Status) GetKind() Kind {
-	if x != nil {
-		return x.Kind
-	}
-	return Kind_KIND_UNSPECIFIED
-}
-
-func (x *Status) GetDomain() string {
-	if x != nil {
-		return x.Domain
-	}
-	return ""
-}
-
-func (x *Status) GetReason() string {
-	if x != nil {
-		return x.Reason
-	}
-	return ""
-}
-
-func (x *Status) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
-func (x *Status) GetMetadata() map[string]string {
-	if x != nil {
-		return x.Metadata
-	}
-	return nil
-}
-
-func (x *Status) GetTraceId() string {
-	if x != nil {
-		return x.TraceId
-	}
-	return ""
-}
-
-func (x *Status) GetViolations() []*Violation {
-	if x != nil {
-		return x.Violations
-	}
-	return nil
-}
-
 var file_sylphy_errors_v1_errors_proto_extTypes = []protoimpl.ExtensionInfo{
 	{
 		ExtendedType:  (*descriptorpb.EnumOptions)(nil),
@@ -307,23 +155,7 @@ var File_sylphy_errors_v1_errors_proto protoreflect.FileDescriptor
 
 const file_sylphy_errors_v1_errors_proto_rawDesc = "" +
 	"\n" +
-	"\x1dsylphy/errors/v1/errors.proto\x12\x10sylphy.errors.v1\x1a google/protobuf/descriptor.proto\"C\n" +
-	"\tViolation\x12\x14\n" +
-	"\x05field\x18\x01 \x01(\tR\x05field\x12 \n" +
-	"\vdescription\x18\x02 \x01(\tR\vdescription\"\xd7\x02\n" +
-	"\x06Status\x12*\n" +
-	"\x04kind\x18\x01 \x01(\x0e2\x16.sylphy.errors.v1.KindR\x04kind\x12\x16\n" +
-	"\x06domain\x18\x02 \x01(\tR\x06domain\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x18\n" +
-	"\amessage\x18\x04 \x01(\tR\amessage\x12B\n" +
-	"\bmetadata\x18\x05 \x03(\v2&.sylphy.errors.v1.Status.MetadataEntryR\bmetadata\x12\x19\n" +
-	"\btrace_id\x18\x06 \x01(\tR\atraceId\x12;\n" +
-	"\n" +
-	"violations\x18\a \x03(\v2\x1b.sylphy.errors.v1.ViolationR\n" +
-	"violations\x1a;\n" +
-	"\rMetadataEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\x83\x03\n" +
+	"\x1dsylphy/errors/v1/errors.proto\x12\x10sylphy.errors.v1\x1a google/protobuf/descriptor.proto*\x83\x03\n" +
 	"\x04Kind\x12\x14\n" +
 	"\x10KIND_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15KIND_INVALID_ARGUMENT\x10\x01\x12\x1c\n" +
@@ -359,28 +191,21 @@ func file_sylphy_errors_v1_errors_proto_rawDescGZIP() []byte {
 }
 
 var file_sylphy_errors_v1_errors_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sylphy_errors_v1_errors_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_sylphy_errors_v1_errors_proto_goTypes = []any{
 	(Kind)(0),                             // 0: sylphy.errors.v1.Kind
-	(*Violation)(nil),                     // 1: sylphy.errors.v1.Violation
-	(*Status)(nil),                        // 2: sylphy.errors.v1.Status
-	nil,                                   // 3: sylphy.errors.v1.Status.MetadataEntry
-	(*descriptorpb.EnumOptions)(nil),      // 4: google.protobuf.EnumOptions
-	(*descriptorpb.EnumValueOptions)(nil), // 5: google.protobuf.EnumValueOptions
+	(*descriptorpb.EnumOptions)(nil),      // 1: google.protobuf.EnumOptions
+	(*descriptorpb.EnumValueOptions)(nil), // 2: google.protobuf.EnumValueOptions
 }
 var file_sylphy_errors_v1_errors_proto_depIdxs = []int32{
-	0, // 0: sylphy.errors.v1.Status.kind:type_name -> sylphy.errors.v1.Kind
-	3, // 1: sylphy.errors.v1.Status.metadata:type_name -> sylphy.errors.v1.Status.MetadataEntry
-	1, // 2: sylphy.errors.v1.Status.violations:type_name -> sylphy.errors.v1.Violation
-	4, // 3: sylphy.errors.v1.default_kind:extendee -> google.protobuf.EnumOptions
-	5, // 4: sylphy.errors.v1.kind:extendee -> google.protobuf.EnumValueOptions
-	0, // 5: sylphy.errors.v1.default_kind:type_name -> sylphy.errors.v1.Kind
-	0, // 6: sylphy.errors.v1.kind:type_name -> sylphy.errors.v1.Kind
-	7, // [7:7] is the sub-list for method output_type
-	7, // [7:7] is the sub-list for method input_type
-	5, // [5:7] is the sub-list for extension type_name
-	3, // [3:5] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	1, // 0: sylphy.errors.v1.default_kind:extendee -> google.protobuf.EnumOptions
+	2, // 1: sylphy.errors.v1.kind:extendee -> google.protobuf.EnumValueOptions
+	0, // 2: sylphy.errors.v1.default_kind:type_name -> sylphy.errors.v1.Kind
+	0, // 3: sylphy.errors.v1.kind:type_name -> sylphy.errors.v1.Kind
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	2, // [2:4] is the sub-list for extension type_name
+	0, // [0:2] is the sub-list for extension extendee
+	0, // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_sylphy_errors_v1_errors_proto_init() }
@@ -394,14 +219,13 @@ func file_sylphy_errors_v1_errors_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sylphy_errors_v1_errors_proto_rawDesc), len(file_sylphy_errors_v1_errors_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   3,
+			NumMessages:   0,
 			NumExtensions: 2,
 			NumServices:   0,
 		},
 		GoTypes:           file_sylphy_errors_v1_errors_proto_goTypes,
 		DependencyIndexes: file_sylphy_errors_v1_errors_proto_depIdxs,
 		EnumInfos:         file_sylphy_errors_v1_errors_proto_enumTypes,
-		MessageInfos:      file_sylphy_errors_v1_errors_proto_msgTypes,
 		ExtensionInfos:    file_sylphy_errors_v1_errors_proto_extTypes,
 	}.Build()
 	File_sylphy_errors_v1_errors_proto = out.File

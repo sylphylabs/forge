@@ -26,16 +26,16 @@ func filterInstancesByZone(ins *disInstancesInfo, zone string) []*registry.Servi
 	return out
 }
 
-func (d *Discovery) GetService(ctx context.Context, serviceName string) ([]*registry.ServiceInstance, error) {
+func (d *Discovery) Instances(ctx context.Context, serviceName string) ([]*registry.ServiceInstance, error) {
 	r := d.resolveBuild(serviceName)
 	ins, ok := r.fetch(ctx)
 	if !ok {
-		return nil, errors.New("Discovery.GetService fetch failed")
+		return nil, errors.New("Discovery.Instances fetch failed")
 	}
 
 	out := filterInstancesByZone(ins, d.config.Zone)
 	if len(out) == 0 {
-		return nil, fmt.Errorf("Discovery.GetService(%s) not found", serviceName)
+		return nil, fmt.Errorf("Discovery.Instances(%s) not found", serviceName)
 	}
 
 	return out, nil
@@ -56,12 +56,14 @@ type watcher struct {
 	serviceName string
 }
 
-func (w *watcher) Next() ([]*registry.ServiceInstance, error) {
+func (w *watcher) Next(ctx context.Context) ([]*registry.ServiceInstance, error) {
 	event := w.resolve.Watch()
 
 	select {
 	case <-event:
 	// change event come
+	case <-ctx.Done():
+		return nil, fmt.Errorf("watch context canceled: %v", ctx.Err())
 	case <-w.cancelCtx.Done():
 		return nil, fmt.Errorf("watch context canceled: %v", w.cancelCtx.Err())
 	}
@@ -71,12 +73,12 @@ func (w *watcher) Next() ([]*registry.ServiceInstance, error) {
 
 	ins, ok := w.resolve.fetch(ctx)
 	if !ok {
-		return nil, errors.New("Discovery.GetService fetch failed")
+		return nil, errors.New("Discovery.Instances fetch failed")
 	}
 
 	out := filterInstancesByZone(ins, w.resolve.d.config.Zone)
 	if len(out) == 0 {
-		return nil, fmt.Errorf("Discovery.GetService(%s) not found", w.serviceName)
+		return nil, fmt.Errorf("Discovery.Instances(%s) not found", w.serviceName)
 	}
 
 	return out, nil

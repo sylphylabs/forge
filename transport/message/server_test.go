@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	forgeerrors "github.com/sylphylabs/forge/errors"
 	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/transport"
 )
@@ -205,7 +207,7 @@ func TestServerJoinsCloseErrors(t *testing.T) {
 
 func TestServerParentCancellationClosesSubscriptions(t *testing.T) {
 	subscriber := newFakeSubscriber()
-	server := NewServer(subscriber, ShutdownTimeout(time.Second))
+	server := NewServer(subscriber, WithShutdownTimeout(time.Second))
 	if err := server.Handle("events", func(context.Context, any) (any, error) { return nil, nil }); err != nil {
 		t.Fatal(err)
 	}
@@ -250,14 +252,19 @@ func TestServerValidatesConfigurationAndFreezesMiddleware(t *testing.T) {
 	startErr := make(chan error, 1)
 	go func() { startErr <- server.Start(context.Background()) }()
 	waitTopics(t, subscriber.subscribed, 1)
-	if err := server.Use(func(next middleware.UnaryHandler) middleware.UnaryHandler { return next }); !errors.Is(err, ErrAlreadyStarted) {
-		t.Errorf("Use after Start error = %v, want ErrAlreadyStarted", err)
-	}
 	if err := server.Stop(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if err := <-startErr; err != nil {
 		t.Fatal(err)
+	}
+
+	broken := NewServer(newFakeSubscriber(), WithMiddleware(nil))
+	if err := broken.Handle("events", func(context.Context, any) (any, error) { return nil, nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := broken.Start(context.Background()); err == nil {
+		t.Error("Start with a nil middleware must report the composition failure")
 	}
 }
 
@@ -269,5 +276,86 @@ func waitTopics(t *testing.T, topics <-chan string, count int) {
 		case <-time.After(time.Second):
 			t.Fatal("timed out waiting for subscription")
 		}
+	}
+}
+
+// The backstop must fire with zero middleware configured: a panicking handler
+// surfaces to the adapter as a generic internal error, never as an unwound
+// worker, and never with the panic text.
+func TestBackstopRecoversPanickingHandler(t *testing.T) {
+	subscriber := newFakeSubscriber()
+	server := NewServer(subscriber)
+	calls := 0
+	if err := server.Handle("events", func(context.Context, any) (any, error) {
+		calls++
+		if calls == 1 {
+			panic("secret panic detail")
+		}
+		return nil, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	startErr := make(chan error, 1)
+	go func() { startErr <- server.Start(context.Background()) }()
+	waitTopics(t, subscriber.subscribed, 1)
+	subscriber.mu.Lock()
+	handler := subscriber.handlers[0]
+	subscriber.mu.Unlock()
+
+	err := handler(context.Background(), "events", New([]byte("body")))
+	if err == nil {
+		t.Fatal("a panicking handler must surface an error")
+	}
+	if forgeerrors.KindOf(err) != forgeerrors.KindInternal {
+		t.Errorf("kind = %v, want KindInternal", forgeerrors.KindOf(err))
+	}
+	if strings.Contains(forgeerrors.PublicOf(err).Message, "secret panic detail") {
+		t.Errorf("error %v discloses the panic value", err)
+	}
+
+	// The worker survived: the same handler delivers the next message.
+	if err := handler(context.Background(), "events", New([]byte("body"))); err != nil {
+		t.Fatalf("delivery after panic: %v", err)
+	}
+
+	if err := server.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-startErr; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The backstop sits outside the server-wide chain, so a panicking middleware
+// is contained too.
+func TestBackstopContainsPanickingMiddleware(t *testing.T) {
+	subscriber := newFakeSubscriber()
+	server := NewServer(subscriber, WithMiddleware(func(middleware.UnaryHandler) middleware.UnaryHandler {
+		return func(context.Context, any) (any, error) {
+			panic("middleware panic")
+		}
+	}))
+	if err := server.Handle("events", func(context.Context, any) (any, error) { return nil, nil }); err != nil {
+		t.Fatal(err)
+	}
+
+	startErr := make(chan error, 1)
+	go func() { startErr <- server.Start(context.Background()) }()
+	waitTopics(t, subscriber.subscribed, 1)
+	subscriber.mu.Lock()
+	handler := subscriber.handlers[0]
+	subscriber.mu.Unlock()
+
+	err := handler(context.Background(), "events", New([]byte("body")))
+	if forgeerrors.KindOf(err) != forgeerrors.KindInternal {
+		t.Errorf("kind = %v, want KindInternal", forgeerrors.KindOf(err))
+	}
+
+	if err := server.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-startErr; err != nil {
+		t.Fatal(err)
 	}
 }

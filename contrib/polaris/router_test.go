@@ -145,7 +145,7 @@ func TestRouter(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(time.Second * 5)
-	nodes := []selector.Node{
+	nodes := []*selector.Node{
 		selector.NewNode("grpc", "127.0.0.1:9000", &registry.ServiceInstance{
 			ID:        "123",
 			Name:      "test-ut",
@@ -173,7 +173,7 @@ func TestRouter(t *testing.T) {
 	ctx := forge.NewContext(context.Background(), &mockApp{})
 	n := f(ctx, nodes)
 	for _, node := range n {
-		if node.Metadata()["az"] != "1" {
+		if node.Metadata["az"] != "1" {
 			t.Fatal("node filter result wrong")
 		}
 		t.Log(node)
@@ -201,6 +201,6 @@ func (m mockApp) Metadata() map[string]string {
 	return map[string]string{}
 }
 
-func (m mockApp) Endpoint() []string {
+func (m mockApp) Endpoints() []string {
 	return []string{"grpc://123.123.123.123:9090"}
 }

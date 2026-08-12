@@ -15,12 +15,15 @@ type watcher struct {
 	cancel context.CancelFunc
 }
 
-func (w *watcher) Next() (services []*registry.ServiceInstance, err error) {
+func (w *watcher) Next(ctx context.Context) (services []*registry.ServiceInstance, err error) {
 	if err = w.ctx.Err(); err != nil {
 		return
 	}
 
 	select {
+	case <-ctx.Done():
+		err = ctx.Err()
+		return
 	case <-w.ctx.Done():
 		err = w.ctx.Err()
 		return

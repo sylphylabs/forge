@@ -395,3 +395,17 @@ func TestWithMergeFunc(t *testing.T) {
 		t.Fatal("c.merge is nil")
 	}
 }
+
+func TestWithSourceAccumulates(t *testing.T) {
+	c := &options{}
+	first := newTestJSONSource(`{"a":1}`)
+	second := newTestJSONSource(`{"b":2}`)
+	WithSource(first)(c)
+	WithSource(second)(c)
+	if len(c.sources) != 2 {
+		t.Fatalf("len(c.sources) = %d, want 2", len(c.sources))
+	}
+	if c.sources[0] != first || c.sources[1] != second {
+		t.Fatalf("c.sources = %v, want [%v %v]", c.sources, first, second)
+	}
+}

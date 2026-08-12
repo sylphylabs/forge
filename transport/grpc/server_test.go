@@ -43,7 +43,7 @@ func (s *server) SayHelloStream(streamServer pb.Greeter_SayHelloStreamServer) er
 			return err
 		}
 		if in.Name == "error" {
-			return errors.New(errors.KindInvalidArgument).WithReason("custom_error").Msg(fmt.Sprintf("invalid argument %s", in.Name))
+			return errors.Of(errors.KindInvalidArgument).WithReason("custom_error").Msg(fmt.Sprintf("invalid argument %s", in.Name))
 		}
 		if in.Name == "panic" {
 			panic("server panic")
@@ -64,7 +64,7 @@ func (s *server) SayHelloStream(streamServer pb.Greeter_SayHelloStreamServer) er
 // SayHello implements helloworld.GreeterServer
 func (s *server) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	if in.Name == "error" {
-		return nil, errors.New(errors.KindInvalidArgument).WithReason("custom_error").Msg(fmt.Sprintf("invalid argument %s", in.Name))
+		return nil, errors.Of(errors.KindInvalidArgument).WithReason("custom_error").Msg(fmt.Sprintf("invalid argument %s", in.Name))
 	}
 	if in.Name == "panic" {
 		panic("server panic")
@@ -78,7 +78,7 @@ func TestServer(t *testing.T) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, testKey{}, "test")
 	srv := NewServer(
-		UnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+		WithUnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 			if tr, ok := transport.FromServerContext(ctx); ok {
 				if rh, ok := tr.(transport.ReplyHeaderer); ok && rh.ReplyHeader() != nil {
 					rh.ReplyHeader().Set("req_id", "3344")
@@ -86,7 +86,7 @@ func TestServer(t *testing.T) {
 			}
 			return handler(ctx, req)
 		}),
-		Options(grpc.InitialConnWindowSize(0)),
+		WithOptions(grpc.InitialConnWindowSize(0)),
 	)
 	pb.RegisterGreeterServer(srv, &server{})
 
@@ -112,12 +112,12 @@ func testClient(t *testing.T, srv *Server) {
 	}
 	// new a gRPC client
 	conn, err := NewClient(context.Background(),
-		WithEndpoint(u.Host),
-		WithUnaryInterceptor(
+		WithTarget(u.Host),
+		WithUnaryClientInterceptor(
 			func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 				return invoker(ctx, method, req, reply, cc, opts...)
 			}),
-		WithMiddleware(func(handler middleware.UnaryHandler) middleware.UnaryHandler {
+		WithClientMiddleware(func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 			return func(ctx context.Context, req any) (reply any, err error) {
 				if tr, ok := transport.FromClientContext(ctx); ok {
 					header := tr.RequestHeader()
@@ -169,7 +169,7 @@ func testClient(t *testing.T, srv *Server) {
 func TestNetwork(t *testing.T) {
 	o := &Server{}
 	v := "abc"
-	Network(v)(o)
+	WithNetwork(v)(o)
 	if !reflect.DeepEqual(v, o.network) {
 		t.Errorf("expect %s, got %s", v, o.network)
 	}
@@ -177,7 +177,7 @@ func TestNetwork(t *testing.T) {
 
 func TestAddress(t *testing.T) {
 	v := "abc"
-	o := NewServer(Address(v))
+	o := NewServer(WithAddress(v))
 	if !reflect.DeepEqual(v, o.address) {
 		t.Errorf("expect %s, got %s", v, o.address)
 	}
@@ -193,7 +193,7 @@ func TestAddress(t *testing.T) {
 func TestTimeout(t *testing.T) {
 	o := &Server{}
 	v := time.Duration(123)
-	Timeout(v)(o)
+	WithTimeout(v)(o)
 	if !reflect.DeepEqual(v, o.timeout) {
 		t.Errorf("expect %s, got %s", v, o.timeout)
 	}
@@ -202,7 +202,7 @@ func TestTimeout(t *testing.T) {
 func TestTLSConfig(t *testing.T) {
 	o := &Server{}
 	v := &tls.Config{}
-	TLSConfig(v)(o)
+	WithTLSConfig(v)(o)
 	if !reflect.DeepEqual(v, o.tlsConf) {
 		t.Errorf("expect %v, got %v", v, o.tlsConf)
 	}
@@ -218,7 +218,7 @@ func TestUnaryInterceptor(t *testing.T) {
 			return nil, nil
 		},
 	}
-	UnaryInterceptor(v...)(o)
+	WithUnaryInterceptor(v...)(o)
 	if !reflect.DeepEqual(v, o.unaryInts) {
 		t.Errorf("expect %v, got %v", v, o.unaryInts)
 	}
@@ -234,7 +234,7 @@ func TestStreamInterceptor(t *testing.T) {
 			return nil
 		},
 	}
-	StreamInterceptor(v...)(o)
+	WithStreamInterceptor(v...)(o)
 	if !reflect.DeepEqual(v, o.streamInts) {
 		t.Errorf("expect %v, got %v", v, o.streamInts)
 	}
@@ -245,7 +245,7 @@ func TestOptions(t *testing.T) {
 	v := []grpc.ServerOption{
 		grpc.EmptyServerOption{},
 	}
-	Options(v...)(o)
+	WithOptions(v...)(o)
 	if !reflect.DeepEqual(v, o.grpcOpts) {
 		t.Errorf("expect %v, got %v", v, o.grpcOpts)
 	}
@@ -265,6 +265,7 @@ func TestServer_unaryServerInterceptor(t *testing.T) {
 		endpoint: u,
 		timeout:  time.Duration(10),
 	}
+	srv.composeMiddleware()
 	req := &struct{}{}
 	rv, err := srv.unaryServerInterceptor()(context.TODO(), req, &grpc.UnaryServerInfo{}, func(context.Context, any) (any, error) {
 		return &testResp{Data: "hi"}, nil
@@ -323,6 +324,7 @@ func TestServer_streamServerInterceptor(t *testing.T) {
 		endpoint: u,
 		timeout:  time.Duration(10),
 	}
+	srv.composeMiddleware()
 
 	mockStream := &mockServerStream{
 		ctx: srv.baseCtx,
@@ -349,13 +351,44 @@ func TestServer_streamServerInterceptor(t *testing.T) {
 	}
 }
 
+func TestServer_streamServerInterceptorUnresolvedEndpoint(t *testing.T) {
+	srv := &Server{
+		baseCtx: context.Background(),
+	}
+	srv.composeMiddleware()
+
+	mockStream := &mockServerStream{
+		ctx: srv.baseCtx,
+	}
+
+	var endpoint string
+	handler := func(_ any, stream grpc.ServerStream) error {
+		if tr, ok := transport.FromServerContext(stream.Context()); ok {
+			endpoint = tr.Endpoint()
+		}
+		return nil
+	}
+
+	info := &grpc.StreamServerInfo{
+		FullMethod: "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo",
+	}
+
+	err := srv.streamServerInterceptor()(nil, mockStream, info, handler)
+	if err != nil {
+		t.Errorf("expect %v, got %v", nil, err)
+	}
+	if endpoint != "" {
+		t.Errorf("expect empty endpoint, got %q", endpoint)
+	}
+}
+
 func TestListener(t *testing.T) {
 	lis, err := net.Listen("tcp", ":0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := &Server{}
-	Listener(lis)(s)
+	WithListener(lis)(s)
 	if !reflect.DeepEqual(lis, s.lis) {
 		t.Errorf("expect %v, got %v", lis, s.lis)
 	}
@@ -403,7 +436,7 @@ func TestStop(t *testing.T) {
 			var logs safeBytesBuffer
 			log.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
 
-			s := NewServer(Listener(l))
+			s := NewServer(WithListener(l))
 			pb.RegisterGreeterServer(s, &server{})
 
 			go func() {
@@ -417,7 +450,7 @@ func TestStop(t *testing.T) {
 
 			conn, err := NewClient(
 				context.Background(),
-				WithEndpoint(l.Addr().String()),
+				WithTarget(l.Addr().String()),
 			)
 			if err != nil {
 				t.Fatal(err)
@@ -493,7 +526,7 @@ func TestHealthzLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer l.Close()
-	srv := NewServer(Listener(l))
+	srv := NewServer(WithListener(l))
 	if srv.Healthz() {
 		t.Fatal("Healthz() before Start = true, want false")
 	}
@@ -519,11 +552,11 @@ func TestGracefulStopDrainsInFlightRPCs(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer l.Close()
-	srv := NewServer(Listener(l))
+	srv := NewServer(WithListener(l))
 	pb.RegisterGreeterServer(srv, &server{})
 	go func() { _ = srv.Start(context.Background()) }()
 
-	conn, err := NewClient(context.Background(), WithEndpoint(l.Addr().String()))
+	conn, err := NewClient(context.Background(), WithTarget(l.Addr().String()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -569,11 +602,11 @@ func TestGracefulStopAbandonsDrainOnContextEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer l.Close()
-	srv := NewServer(Listener(l))
+	srv := NewServer(WithListener(l))
 	pb.RegisterGreeterServer(srv, &server{})
 	go func() { _ = srv.Start(context.Background()) }()
 
-	conn, err := NewClient(context.Background(), WithEndpoint(l.Addr().String()))
+	conn, err := NewClient(context.Background(), WithTarget(l.Addr().String()))
 	if err != nil {
 		t.Fatal(err)
 	}

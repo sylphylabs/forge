@@ -39,7 +39,6 @@ type RoundTripperWrapper func(http.RoundTripper) (http.RoundTripper, error)
 
 // Client is an HTTP transport client.
 type clientOptions struct {
-	ctx                  context.Context
 	tlsConf              *tls.Config
 	timeout              time.Duration
 	endpoint             string
@@ -89,8 +88,9 @@ func WithRoundTripperWrapper(wrappers ...RoundTripperWrapper) ClientOption {
 	}
 }
 
-// WithTimeout with client request timeout.
-func WithTimeout(d time.Duration) ClientOption {
+// WithRequestTimeout bounds each request end to end, including connection,
+// redirects, and reading the response body.
+func WithRequestTimeout(d time.Duration) ClientOption {
 	return func(o *clientOptions) {
 		o.timeout = d
 	}
@@ -103,15 +103,16 @@ func WithUserAgent(ua string) ClientOption {
 	}
 }
 
-// WithMiddleware with client middleware.
-func WithMiddleware(m ...middleware.UnaryMiddleware) ClientOption {
+// WithClientMiddleware attaches client-side unary middleware around each call.
+func WithClientMiddleware(m ...middleware.UnaryMiddleware) ClientOption {
 	return func(o *clientOptions) {
 		o.middleware = m
 	}
 }
 
-// WithEndpoint with client addr.
-func WithEndpoint(endpoint string) ClientOption {
+// WithTarget sets the target the client connects to: a host:port, a URL, or a
+// discovery:/// service name resolved through the configured discovery.
+func WithTarget(endpoint string) ClientOption {
 	return func(o *clientOptions) {
 		o.endpoint = endpoint
 	}
@@ -159,8 +160,8 @@ func WithBlock() ClientOption {
 	}
 }
 
-// WithTLSConfig with tls config.
-func WithTLSConfig(c *tls.Config) ClientOption {
+// WithClientTLSConfig sets the TLS config the client dials with.
+func WithClientTLSConfig(c *tls.Config) ClientOption {
 	return func(o *clientOptions) {
 		o.tlsConf = c
 	}
@@ -177,9 +178,12 @@ type Client struct {
 }
 
 // NewClient returns an HTTP client.
+//
+// ctx bounds construction only: with [WithBlock] it is the deadline for the
+// first discovery update, and canceling it afterwards does not stop the
+// client or its service discovery — Close does.
 func NewClient(ctx context.Context, opts ...ClientOption) (*Client, error) {
 	options := clientOptions{
-		ctx:          ctx,
 		timeout:      2000 * time.Millisecond,
 		encoder:      DefaultRequestEncoder,
 		decoder:      DefaultResponseDecoder,
@@ -367,7 +371,7 @@ func (client *Client) do(req *http.Request) (*http.Response, error) {
 		}
 		var (
 			err  error
-			node selector.Node
+			node *selector.Node
 		)
 		if node, done, err = client.selector.Select(req.Context(), selector.WithNodeFilter(client.opts.nodeFilters...)); err != nil {
 			// Selection failed, so no connection was ever attempted and no
@@ -379,8 +383,8 @@ func (client *Client) do(req *http.Request) (*http.Response, error) {
 		} else {
 			req.URL.Scheme = schemeHTTPS
 		}
-		req.URL.Host = node.Address()
-		req.Host = node.Address()
+		req.URL.Host = node.Address
+		req.Host = node.Address
 	}
 	resp, err := client.cc.Do(req)
 	if err != nil {

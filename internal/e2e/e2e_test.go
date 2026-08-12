@@ -93,7 +93,7 @@ func requireStack(t *testing.T) {
 
 func grpcClient(t *testing.T) pb.GreeterClient {
 	t.Helper()
-	conn, err := grpc.NewClient(t.Context(), grpc.WithEndpoint(edgeGRPCEndpoint))
+	conn, err := grpc.NewClient(t.Context(), grpc.WithTarget(edgeGRPCEndpoint))
 	if err != nil {
 		t.Fatalf("dial edge: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestGRPCStreamEchoesAndFailsWithIdentity(t *testing.T) {
 // forced to learn two error contracts.
 func TestHTTPErrorMatchesGRPC(t *testing.T) {
 	requireStack(t)
-	client, err := forgehttp.NewClient(t.Context(), forgehttp.WithEndpoint(edgeHTTPEndpoint))
+	client, err := forgehttp.NewClient(t.Context(), forgehttp.WithTarget(edgeHTTPEndpoint))
 	if err != nil {
 		t.Fatalf("dial edge: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestHTTPErrorMatchesGRPC(t *testing.T) {
 
 	var reply pb.HelloReply
 	callErr := client.Invoke(t.Context(), http.MethodGet, "/helloworld/error", nil, &reply,
-		forgehttp.Operation("/helloworld.Greeter/SayHello"))
+		forgehttp.WithOperation("/helloworld.Greeter/SayHello"))
 	if callErr == nil {
 		t.Fatal("expected an error")
 	}
@@ -270,7 +270,7 @@ func TestHTTPErrorBodyIsProblemJSON(t *testing.T) {
 // uses, so a stream failure is matchable against the same sentinel.
 func TestSSEStreamCarriesIdentity(t *testing.T) {
 	requireStack(t)
-	client, err := forgehttp.NewClient(t.Context(), forgehttp.WithEndpoint(edgeHTTPEndpoint))
+	client, err := forgehttp.NewClient(t.Context(), forgehttp.WithTarget(edgeHTTPEndpoint))
 	if err != nil {
 		t.Fatalf("dial edge: %v", err)
 	}
@@ -301,7 +301,7 @@ func TestSSEStreamCarriesIdentity(t *testing.T) {
 // A stream that ends normally reports io.EOF, not an error identity.
 func TestSSEStreamEndsCleanly(t *testing.T) {
 	requireStack(t)
-	client, err := forgehttp.NewClient(t.Context(), forgehttp.WithEndpoint(edgeHTTPEndpoint))
+	client, err := forgehttp.NewClient(t.Context(), forgehttp.WithTarget(edgeHTTPEndpoint))
 	if err != nil {
 		t.Fatalf("dial edge: %v", err)
 	}
@@ -327,7 +327,7 @@ func TestSSEStreamEndsCleanly(t *testing.T) {
 // stream plus the terminal error.
 func TestWebSocketStreamEchoesAndCarriesIdentity(t *testing.T) {
 	requireStack(t)
-	client, err := forgehttp.NewClient(t.Context(), forgehttp.WithEndpoint(edgeHTTPEndpoint))
+	client, err := forgehttp.NewClient(t.Context(), forgehttp.WithTarget(edgeHTTPEndpoint))
 	if err != nil {
 		t.Fatalf("dial edge: %v", err)
 	}

@@ -1,6 +1,7 @@
 package governance
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -23,13 +24,13 @@ func newMemorySource(data string) *memorySource {
 	return &memorySource{data: data, sig: make(chan struct{})}
 }
 
-func (s *memorySource) Load() ([]*config.KeyValue, error) {
+func (s *memorySource) Load(context.Context) ([]*config.KeyValue, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return []*config.KeyValue{{Key: "memory", Value: []byte(s.data), Format: "json"}}, nil
 }
 
-func (s *memorySource) Watch() (config.Watcher, error) {
+func (s *memorySource) Watch(context.Context) (config.Watcher, error) {
 	return &memoryWatcher{sig: s.sig, exit: make(chan struct{})}, nil
 }
 
@@ -45,12 +46,14 @@ type memoryWatcher struct {
 	exit chan struct{}
 }
 
-func (w *memoryWatcher) Next() ([]*config.KeyValue, error) {
+func (w *memoryWatcher) Next(ctx context.Context) ([]*config.KeyValue, error) {
 	select {
 	case <-w.sig:
 		return nil, nil
 	case <-w.exit:
 		return nil, errors.New("watcher stopped")
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
@@ -162,8 +165,8 @@ func TestRulesConcurrency(t *testing.T) {
 
 func TestWatchHotUpdate(t *testing.T) {
 	src := newMemorySource(`{"governance":{"ratelimit":{"*":100,"/svc/Method":10}}}`)
-	c := config.New(config.WithSource(src))
-	if err := c.Load(); err != nil {
+	c, err := config.New(t.Context(), config.WithSource(src))
+	if err != nil {
 		t.Fatal(err)
 	}
 	defer c.Close()
@@ -194,8 +197,8 @@ func TestWatchHotUpdate(t *testing.T) {
 
 func TestWatchRejectsInvalidSnapshot(t *testing.T) {
 	src := newMemorySource(`{"governance":{"ratelimit":{"*":100}}}`)
-	c := config.New(config.WithSource(src))
-	if err := c.Load(); err != nil {
+	c, err := config.New(t.Context(), config.WithSource(src))
+	if err != nil {
 		t.Fatal(err)
 	}
 	defer c.Close()
@@ -220,8 +223,8 @@ func TestWatchRejectsInvalidSnapshot(t *testing.T) {
 
 func TestWatchRejectsMalformedSection(t *testing.T) {
 	src := newMemorySource(`{"governance":{"ratelimit":{"*":100}}}`)
-	c := config.New(config.WithSource(src))
-	if err := c.Load(); err != nil {
+	c, err := config.New(t.Context(), config.WithSource(src))
+	if err != nil {
 		t.Fatal(err)
 	}
 	defer c.Close()
@@ -240,8 +243,8 @@ func TestWatchRejectsMalformedSection(t *testing.T) {
 
 func TestWatchInitialErrors(t *testing.T) {
 	src := newMemorySource(`{"governance":{"ratelimit":{"/svc/Method":-5}}}`)
-	c := config.New(config.WithSource(src))
-	if err := c.Load(); err != nil {
+	c, err := config.New(t.Context(), config.WithSource(src))
+	if err != nil {
 		t.Fatal(err)
 	}
 	defer c.Close()

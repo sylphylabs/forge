@@ -93,7 +93,7 @@ func TestServerDeliveryCarriesTransport(t *testing.T) {
 	)
 
 	sub := newRecordingSubscriber()
-	srv := NewServer(sub, Endpoint("nats://127.0.0.1:4222"))
+	srv := NewServer(sub, WithEndpoint("nats://127.0.0.1:4222"))
 	if err := srv.Handle("orders.*", func(ctx context.Context, _ any) (any, error) {
 		if tr, ok := transport.FromServerContext(ctx); ok {
 			gotKind = tr.Kind()

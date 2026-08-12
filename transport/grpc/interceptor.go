@@ -8,13 +8,47 @@ import (
 	grpcmd "google.golang.org/grpc/metadata"
 
 	"github.com/sylphylabs/forge/errors"
+	"github.com/sylphylabs/forge/internal/backstop"
 	ic "github.com/sylphylabs/forge/internal/context"
+	"github.com/sylphylabs/forge/middleware"
 	"github.com/sylphylabs/forge/transport"
 )
 
+// callKey carries the terminal handlers of one RPC through the server-wide
+// middleware chain. The chain itself is composed once, in NewServer; only the
+// grpc-go continuation of the current call travels through the context.
+type callKey struct{}
+
+type call struct {
+	unary  middleware.UnaryHandler
+	stream middleware.StreamHandler
+}
+
+// errLostCall reports server-wide middleware that severed the call from its
+// continuation by passing next a context not derived from the one it was
+// given.
+var errLostCall = errors.MustDefine(errors.KindInternal, errors.Domain, "GRPC_DISPATCH").
+	Msg("server middleware severed the call from its handler")
+
+// callFrom returns the current call's terminal handlers. The interceptor is
+// the only writer of the key, so a miss cannot happen on a served request; the
+// nil-map-safe zero value keeps the accessor total anyway.
+func callFrom(ctx context.Context) call {
+	c, _ := ctx.Value(callKey{}).(call)
+	return c
+}
+
 // unaryServerInterceptor is a gRPC unary server interceptor
 func (s *Server) unaryServerInterceptor() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (reply any, err error) {
+		// The backstop is the transport's own recover, outside even
+		// server-wide middleware: a panic anywhere below is logged with its
+		// stack and leaves the process as a generic internal error.
+		defer func() {
+			if rec := recover(); rec != nil {
+				reply, err = nil, s.projectError(backstop.Recovered(ctx, "[gRPC]", rec))
+			}
+		}()
 		ctx, cancel := ic.Merge(ctx, s.baseCtx)
 		defer cancel()
 		md, _ := grpcmd.FromIncomingContext(ctx)
@@ -32,7 +66,10 @@ func (s *Server) unaryServerInterceptor() grpc.UnaryServerInterceptor {
 			ctx, cancel = context.WithTimeout(ctx, s.timeout)
 			defer cancel()
 		}
-		reply, err := handler(ctx, req)
+		ctx = context.WithValue(ctx, callKey{}, call{unary: func(ctx context.Context, req any) (any, error) {
+			return handler(ctx, req)
+		}})
+		reply, err = s.unaryHandler(ctx, req)
 		if len(replyHeader) > 0 {
 			_ = grpc.SetHeader(ctx, replyHeader)
 		}
@@ -73,47 +110,67 @@ func forgeError(err error) *errors.Error {
 	return errors.FromError(err)
 }
 
-// wrappedStream is rewrite grpc stream's context
-type wrappedStream struct {
-	grpc.ServerStream
-	ctx context.Context
-}
-
-func NewWrappedStream(ctx context.Context, stream grpc.ServerStream) grpc.ServerStream {
-	return &wrappedStream{
-		ServerStream: stream,
-		ctx:          ctx,
-	}
-}
-
-func (w *wrappedStream) Context() context.Context {
-	return w.ctx
-}
-
 // streamServerInterceptor is a gRPC stream server interceptor
 func (s *Server) streamServerInterceptor() grpc.StreamServerInterceptor {
-	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
+		// The backstop is the transport's own recover, outside even
+		// server-wide middleware: a panic anywhere below is logged with its
+		// stack and leaves the process as a generic internal error.
+		defer func() {
+			if rec := recover(); rec != nil {
+				err = s.projectError(backstop.Recovered(ss.Context(), "[gRPC]", rec))
+			}
+		}()
 		ctx, cancel := ic.Merge(ss.Context(), s.baseCtx)
 		defer cancel()
 		md, _ := grpcmd.FromIncomingContext(ctx)
 		replyHeader := grpcmd.MD{}
-		ctx = transport.NewServerContext(ctx, &Transport{
-			endpoint:    s.endpoint.String(),
+		tr := &Transport{
 			operation:   info.FullMethod,
 			reqHeader:   headerCarrier(md),
 			replyHeader: headerCarrier(replyHeader),
-		})
+		}
+		if s.endpoint != nil {
+			tr.endpoint = s.endpoint.String()
+		}
+		ctx = transport.NewServerContext(ctx, tr)
 
 		ctx = context.WithValue(ctx, streamKey{}, ss)
-		ws := NewWrappedStream(ctx, ss)
+		ctx = context.WithValue(ctx, callKey{}, call{stream: func(_ any, mws middleware.ServerStream) error {
+			// Present the possibly decorated stream to grpc-go's method
+			// handler; transport-only capabilities stay on the native stream.
+			return handler(srv, &chainedStream{ServerStream: ss, mws: mws})
+		}})
 
-		err := handler(srv, ws)
+		err = s.streamHandler(nil, &grpcServerStream{ServerStream: ss, ctx: ctx})
 		if len(replyHeader) > 0 {
 			_ = grpc.SetHeader(ctx, replyHeader)
 		}
 		return s.projectError(err)
 	}
 }
+
+// grpcServerStream is the middleware view of a native stream: the interceptor
+// context replaces the native one, message flow stays native.
+type grpcServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s *grpcServerStream) Context() context.Context { return s.ctx }
+
+// chainedStream is the native view of a middleware-decorated stream: grpc-go's
+// method handler sees the decorated context and message flow, while every
+// transport-only capability (headers, trailers, peer) stays on the embedded
+// native stream.
+type chainedStream struct {
+	grpc.ServerStream
+	mws middleware.ServerStream
+}
+
+func (s *chainedStream) Context() context.Context { return s.mws.Context() }
+func (s *chainedStream) SendMsg(m any) error      { return s.mws.SendMsg(m) }
+func (s *chainedStream) RecvMsg(m any) error      { return s.mws.RecvMsg(m) }
 
 // streamKey is the context key carrying the server stream.
 //

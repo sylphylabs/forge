@@ -43,7 +43,7 @@ func (p *Polaris) NodeFilter(opts ...RouterOption) selector.NodeFilter {
 	for _, opt := range opts {
 		opt(&o)
 	}
-	return func(ctx context.Context, nodes []selector.Node) []selector.Node {
+	return func(ctx context.Context, nodes []*selector.Node) []*selector.Node {
 		if len(nodes) == 0 {
 			return nodes
 		}
@@ -84,9 +84,9 @@ func (p *Polaris) NodeFilter(opts ...RouterOption) selector.NodeFilter {
 			}
 		}
 
-		n := make(map[string]selector.Node, len(nodes))
+		n := make(map[string]*selector.Node, len(nodes))
 		for _, node := range nodes {
-			n[node.Address()] = node
+			n[node.Address] = node
 		}
 
 		instances, err := p.processRouters(sourceService, buildPolarisInstance(p.namespace, nodes))
@@ -95,7 +95,7 @@ func (p *Polaris) NodeFilter(opts ...RouterOption) selector.NodeFilter {
 			return nodes
 		}
 
-		newNode := make([]selector.Node, 0, len(instances))
+		newNode := make([]*selector.Node, 0, len(instances))
 		for _, ins := range instances {
 			if v, ok := n[net.JoinHostPort(ins.GetHost(), strconv.FormatUint(uint64(ins.GetPort()), 10))]; ok {
 				newNode = append(newNode, v)
@@ -219,10 +219,10 @@ func (r serviceRuleResponse) IsCacheLoaded() bool {
 	return false
 }
 
-func buildPolarisInstance(namespace string, nodes []selector.Node) *pb.ServiceInstancesInProto {
+func buildPolarisInstance(namespace string, nodes []*selector.Node) *pb.ServiceInstancesInProto {
 	ins := make([]*v1.Instance, 0, len(nodes))
 	for _, node := range nodes {
-		host, port, err := net.SplitHostPort(node.Address())
+		host, port, err := net.SplitHostPort(node.Address)
 		if err != nil {
 			log.Error("split host port failed", "error", err)
 			return nil
@@ -233,15 +233,15 @@ func buildPolarisInstance(namespace string, nodes []selector.Node) *pb.ServiceIn
 			return nil
 		}
 		ins = append(ins, &v1.Instance{
-			Id:        wrapperspb.String(node.Metadata()["merge"]),
-			Service:   wrapperspb.String(node.ServiceName()),
+			Id:        wrapperspb.String(node.Metadata["merge"]),
+			Service:   wrapperspb.String(node.ServiceName),
 			Namespace: wrapperspb.String(namespace),
 			Host:      wrapperspb.String(host),
 			Port:      wrapperspb.UInt32(uint32(portUint64)),
-			Protocol:  wrapperspb.String(node.Scheme()),
-			Version:   wrapperspb.String(node.Version()),
-			Weight:    wrapperspb.UInt32(uint32(*node.InitialWeight())),
-			Metadata:  node.Metadata(),
+			Protocol:  wrapperspb.String(node.Scheme),
+			Version:   wrapperspb.String(node.Version),
+			Weight:    wrapperspb.UInt32(uint32(node.InitialWeight)),
+			Metadata:  node.Metadata,
 		})
 	}
 
@@ -249,7 +249,7 @@ func buildPolarisInstance(namespace string, nodes []selector.Node) *pb.ServiceIn
 		Code:      wrapperspb.UInt32(1),
 		Info:      wrapperspb.String("ok"),
 		Type:      v1.DiscoverResponse_INSTANCE,
-		Service:   &v1.Service{Name: wrapperspb.String(nodes[0].ServiceName()), Namespace: wrapperspb.String(namespace)},
+		Service:   &v1.Service{Name: wrapperspb.String(nodes[0].ServiceName), Namespace: wrapperspb.String(namespace)},
 		Instances: ins,
 	}
 	return pb.NewServiceInstancesInProto(d, func(string) local.InstanceLocalValue {

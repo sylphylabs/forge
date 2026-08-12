@@ -59,12 +59,14 @@ func (w *watcher) watch(ctx context.Context) {
 	}
 }
 
-func (w *watcher) Next() ([]*registry.ServiceInstance, error) {
+func (w *watcher) Next(ctx context.Context) ([]*registry.ServiceInstance, error) {
 	// TODO: multiple calls to Next may lead to inconsistent service instance information
 	if w.first.CompareAndSwap(false, true) {
 		return w.getServices()
 	}
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-w.ctx.Done():
 		return nil, w.ctx.Err()
 	case e := <-w.event:

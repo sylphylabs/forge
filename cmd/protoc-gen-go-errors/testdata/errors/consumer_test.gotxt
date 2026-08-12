@@ -1,0 +1,38 @@
+package api
+
+import (
+	"testing"
+
+	"github.com/sylphylabs/forge/errors"
+)
+
+// The generated file compiles against the live errors runtime — including the
+// support-version assertion — and its sentinels behave like hand-written ones.
+func TestGeneratedSentinels(t *testing.T) {
+	if got := ErrNotFound.Kind(); got != errors.KindNotFound {
+		t.Errorf("ErrNotFound.Kind() = %v, want KindNotFound", got)
+	}
+	if got := ErrNotFound.Domain(); got != "errors.test.v1" {
+		t.Errorf("ErrNotFound.Domain() = %q, want the proto package", got)
+	}
+	if got := ErrNotFound.Reason(); got != "FAILURE_REASON_NOT_FOUND" {
+		t.Errorf("ErrNotFound.Reason() = %q, want the enum value name", got)
+	}
+
+	// A value without its own kind inherits default_kind.
+	if got := ErrBackendDown.Kind(); got != errors.KindInternal {
+		t.Errorf("ErrBackendDown.Kind() = %v, want KindInternal", got)
+	}
+
+	// Deriving from a sentinel matches it and never mutates it.
+	derived := ErrNotFound.Msgf("document %q", "42").Meta("tenant", "acme")
+	if !errors.Is(derived, ErrNotFound) {
+		t.Error("a derived error does not match its sentinel")
+	}
+	if ErrNotFound.Message() != "" {
+		t.Errorf("the sentinel was mutated: message = %q", ErrNotFound.Message())
+	}
+	if errors.Is(derived, ErrBackendDown) {
+		t.Error("distinct sentinels matched each other")
+	}
+}

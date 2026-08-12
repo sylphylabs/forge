@@ -186,7 +186,7 @@ func (x *{{$svrType}}_{{.Name}}HTTPClient) open(m *{{.Request}}) error {
 	}
 	{{- if .BodyHTTPBody}}
 	opts := append([]{{$.HTTPIdent}}.CallOption{
-		{{$.HTTPIdent}}.ContentType({{$.HTTPIdent}}.BodyContentType(m{{.BodyGetter}})),
+		{{$.HTTPIdent}}.WithContentType({{$.HTTPIdent}}.BodyContentType(m{{.BodyGetter}})),
 	}, x.opts...)
 	{{- else}}
 	opts := x.opts
@@ -261,12 +261,12 @@ func (c *{{$svrType}}HTTPClientImpl) {{.Name}}(ctx {{$.ContextIdent}}.Context, o
 	{{- else}}
 	pattern := "{{.PathTemplate}}"
 	opts = append([]{{$.HTTPIdent}}.CallOption{
-		{{$.HTTPIdent}}.Accept("application/protojson"),
+		{{$.HTTPIdent}}.WithAccept("application/protojson"),
 		{{- if not .BodyHTTPBody}}
-		{{$.HTTPIdent}}.ContentType("application/protojson"),
+		{{$.HTTPIdent}}.WithContentType("application/protojson"),
 		{{- end}}
-		{{$.HTTPIdent}}.Operation(Operation{{$svrType}}{{.OriginalName}}),
-		{{$.HTTPIdent}}.PathTemplate(pattern),
+		{{$.HTTPIdent}}.WithOperation(Operation{{$svrType}}{{.OriginalName}}),
+		{{$.HTTPIdent}}.WithPathTemplate(pattern),
 	}, opts...)
 	return &{{$svrType}}_{{.Name}}HTTPClient{ctx: ctx, cc: c.cc, path: _{{$svrType}}_{{.Name}}{{.Num}}_HTTP_Path, opts: opts}, nil
 	{{- end}}
@@ -285,24 +285,24 @@ func (c *{{$svrType}}HTTPClientImpl) {{.Name}}(ctx {{$.ContextIdent}}.Context, i
 	}
 	{{- if .HasBody}}
 	opts = append([]{{$.HTTPIdent}}.CallOption{
-		{{$.HTTPIdent}}.Accept("text/event-stream"),
+		{{$.HTTPIdent}}.WithAccept("text/event-stream"),
 			{{- if .BodyHTTPBody}}
-			{{$.HTTPIdent}}.ContentType({{$.HTTPIdent}}.BodyContentType(in{{.BodyGetter}})),
+			{{$.HTTPIdent}}.WithContentType({{$.HTTPIdent}}.BodyContentType(in{{.BodyGetter}})),
 			{{- else if .BodyProtoJSON}}
-			{{$.HTTPIdent}}.ContentType("application/protojson"),
+			{{$.HTTPIdent}}.WithContentType("application/protojson"),
 			{{- else}}
-			{{$.HTTPIdent}}.ContentType("application/json"),
+			{{$.HTTPIdent}}.WithContentType("application/json"),
 		{{- end}}
-		{{$.HTTPIdent}}.Operation(Operation{{$svrType}}{{.OriginalName}}),
-		{{$.HTTPIdent}}.PathTemplate(pattern),
+		{{$.HTTPIdent}}.WithOperation(Operation{{$svrType}}{{.OriginalName}}),
+		{{$.HTTPIdent}}.WithPathTemplate(pattern),
 	}, opts...)
 		stream, err := c.cc.ServerSentEvent(ctx, "{{.Method}}", path, in{{.BodyGetter}}, opts...)
 	{{- else}}
 	opts = append([]{{$.HTTPIdent}}.CallOption{
-		{{$.HTTPIdent}}.Accept("text/event-stream"),
-		{{$.HTTPIdent}}.ContentType("application/protojson"),
-		{{$.HTTPIdent}}.Operation(Operation{{$svrType}}{{.OriginalName}}),
-		{{$.HTTPIdent}}.PathTemplate(pattern),
+		{{$.HTTPIdent}}.WithAccept("text/event-stream"),
+		{{$.HTTPIdent}}.WithContentType("application/protojson"),
+		{{$.HTTPIdent}}.WithOperation(Operation{{$svrType}}{{.OriginalName}}),
+		{{$.HTTPIdent}}.WithPathTemplate(pattern),
 	}, opts...)
 	stream, err := c.cc.ServerSentEvent(ctx, "{{.Method}}", path, nil, opts...)
 	{{- end}}
@@ -327,20 +327,20 @@ func (c *{{$svrType}}HTTPClientImpl) {{.Name}}(ctx {{$.ContextIdent}}.Context, i
 	}
 	{{- if .HasBody}}
 	opts = append([]{{$.HTTPIdent}}.CallOption{
-			{{$.HTTPIdent}}.Accept("application/json"),
+			{{$.HTTPIdent}}.WithAccept("application/json"),
 			{{- if .BodyHTTPBody}}
-			{{$.HTTPIdent}}.ContentType({{$.HTTPIdent}}.BodyContentType(in{{.BodyGetter}})),
+			{{$.HTTPIdent}}.WithContentType({{$.HTTPIdent}}.BodyContentType(in{{.BodyGetter}})),
 			{{- else}}
-			{{$.HTTPIdent}}.ContentType("application/json"),
+			{{$.HTTPIdent}}.WithContentType("application/json"),
 		{{- end}}
-		{{$.HTTPIdent}}.Operation(Operation{{$svrType}}{{.OriginalName}}),
-		{{$.HTTPIdent}}.PathTemplate(pattern),
+		{{$.HTTPIdent}}.WithOperation(Operation{{$svrType}}{{.OriginalName}}),
+		{{$.HTTPIdent}}.WithPathTemplate(pattern),
 	}, opts...)
 	{{- else}}
 	opts = append([]{{$.HTTPIdent}}.CallOption{
-			{{$.HTTPIdent}}.Accept("application/json"),
-		{{$.HTTPIdent}}.Operation(Operation{{$svrType}}{{.OriginalName}}),
-		{{$.HTTPIdent}}.PathTemplate(pattern),
+			{{$.HTTPIdent}}.WithAccept("application/json"),
+		{{$.HTTPIdent}}.WithOperation(Operation{{$svrType}}{{.OriginalName}}),
+		{{$.HTTPIdent}}.WithPathTemplate(pattern),
 	}, opts...)
 	{{- end}}
 	{{- if .ResponseBodyHTTPBody}}

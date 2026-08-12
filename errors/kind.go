@@ -10,8 +10,8 @@ package errors
 //
 // A Kind carries no transport vocabulary of its own. Each transport owns its
 // projection, so that this package stays free of protocol dependencies:
-// transport/http maps a Kind to an HTTP status, transport/grpc to a gRPC code,
-// and errors/protobuf to the wire message.
+// transport/http maps a Kind to an HTTP status, and transport/grpc to a gRPC
+// code.
 type Kind uint8
 
 // The Kind vocabulary. KindUnknown is the zero value so that an unset Kind

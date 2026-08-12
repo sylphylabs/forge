@@ -45,7 +45,7 @@ func do(r *Registry, s *registry.ServiceInstance) {
 	}()
 	go func() {
 		for {
-			res, nextErr := w.Next()
+			res, nextErr := w.Next(context.Background())
 			if nextErr != nil {
 				return
 			}
@@ -62,7 +62,7 @@ func do(r *Registry, s *registry.ServiceInstance) {
 	}
 
 	time.Sleep(time.Second * 10)
-	res, err := r.GetService(ctx, s.Name)
+	res, err := r.Instances(ctx, s.Name)
 	if err != nil {
 		log.Fatalf("Failed to get service %q: %v", s.Name, err)
 	}
@@ -80,7 +80,7 @@ func do(r *Registry, s *registry.ServiceInstance) {
 	cancel()
 	time.Sleep(time.Second * 10)
 
-	res, err = r.GetService(ctx, s.Name)
+	res, err = r.Instances(ctx, s.Name)
 	if err != nil {
 		log.Fatalf("Failed to get service %q after deregister: %v", s.Name, err)
 	}

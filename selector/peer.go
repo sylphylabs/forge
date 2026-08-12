@@ -6,11 +6,11 @@ import (
 
 type peerKey struct{}
 
-// Peer contains the information of the peer for an RPC, such as the address
-// and authentication information.
+// Peer carries the node an RPC was routed to, letting the caller that
+// installed it observe which peer served the request.
 type Peer struct {
-	// node is the peer node.
-	Node Node
+	// Node is the picked node.
+	Node *Node
 }
 
 // NewPeerContext creates a new context with peer information attached.

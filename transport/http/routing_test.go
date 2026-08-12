@@ -142,7 +142,7 @@ func TestRouteMuxGoogleEscapedVariables(t *testing.T) {
 
 func TestRouteMuxTranscodingErrorsUseConfiguredEncoder(t *testing.T) {
 	var encoded error
-	srv := NewServer(ErrorEncoder(func(w http.ResponseWriter, _ *http.Request, err error) {
+	srv := NewServer(WithErrorEncoder(func(w http.ResponseWriter, _ *http.Request, err error) {
 		encoded = err
 		w.WriteHeader(StatusOf(forgeerrors.KindOf(err)))
 	}))
@@ -314,7 +314,7 @@ func TestRouteMuxMoreSpecificPatternWins(t *testing.T) {
 }
 
 func TestRouteMuxAllowsPathOverlapAcrossMethods(t *testing.T) {
-	srv := NewServer(MethodNotAllowedHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := NewServer(WithMethodNotAllowedHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
 	})))
 	route := srv.Route("/")
@@ -359,7 +359,7 @@ func TestRouteMuxPathPrefix(t *testing.T) {
 
 func TestRouteMuxPublishesCanonicalPatternAfterMatch(t *testing.T) {
 	var before, after, inHandler string
-	srv := NewServer(Filter(func(next http.Handler) http.Handler {
+	srv := NewServer(WithFilter(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			before = req.Pattern
 			next.ServeHTTP(w, req)
@@ -463,10 +463,10 @@ func TestRouteMuxDoesNotPublishPatternForHeaderRoute(t *testing.T) {
 
 func TestRouteMuxDoesNotPublishPatternForCustomFallbacks(t *testing.T) {
 	srv := NewServer(
-		NotFoundHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		WithNotFoundHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusTeapot)
 		})),
-		MethodNotAllowedHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		WithMethodNotAllowedHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusConflict)
 		})),
 	)

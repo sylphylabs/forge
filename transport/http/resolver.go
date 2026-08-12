@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 	"uuid"
 
@@ -92,14 +93,28 @@ type resolver struct {
 	subsetSize  int
 
 	insecure bool
+
+	ctx       context.Context
+	cancel    context.CancelFunc
+	closeOnce sync.Once
+	closeErr  error
 }
 
+// newResolver starts watching target through discovery and applies every
+// update to rebalancer until Close is called.
+//
+// The watch is rooted in context.Background and lives until Close: ctx bounds
+// only the construction itself, so a caller may cancel it once newResolver
+// returns — the usual `ctx, cancel := context.WithTimeout(...); defer cancel()`
+// around client construction — without tearing down discovery. In block mode
+// ctx is the deadline for the first successful update.
 func newResolver(ctx context.Context, discovery registry.Discovery, target *Target,
 	rebalancer selector.Rebalancer, block, insecure bool, subsetSize int,
 ) (*resolver, error) {
-	// this is new resolver
-	watcher, err := discovery.Watch(ctx, target.Endpoint)
+	watchCtx, cancel := context.WithCancel(context.Background())
+	watcher, err := discovery.Watch(watchCtx, target.Endpoint)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 	r := &resolver{
@@ -109,12 +124,21 @@ func newResolver(ctx context.Context, discovery registry.Discovery, target *Targ
 		insecure:    insecure,
 		selectorKey: uuid.NewV4().String(),
 		subsetSize:  subsetSize,
+		ctx:         watchCtx,
+		cancel:      cancel,
 	}
 	if block {
+		if err := ctx.Err(); err != nil {
+			log.Error("http client watch service reached context deadline", "target", target)
+			if closeErr := r.Close(); closeErr != nil {
+				log.Error("failed to stop http client watcher", "target", target, "error", closeErr)
+			}
+			return nil, err
+		}
 		done := make(chan error, 1)
 		go func() {
 			for {
-				services, err := watcher.Next()
+				services, err := watcher.Next(watchCtx)
 				if err != nil {
 					done <- err
 					return
@@ -128,36 +152,52 @@ func newResolver(ctx context.Context, discovery registry.Discovery, target *Targ
 		select {
 		case err := <-done:
 			if err != nil {
-				stopErr := watcher.Stop()
-				if stopErr != nil {
-					log.Error("failed to stop http client watcher", "target", target, "error", stopErr)
+				if closeErr := r.Close(); closeErr != nil {
+					log.Error("failed to stop http client watcher", "target", target, "error", closeErr)
 				}
 				return nil, err
 			}
 		case <-ctx.Done():
 			log.Error("http client watch service reached context deadline", "target", target)
-			stopErr := watcher.Stop()
-			if stopErr != nil {
-				log.Error("failed to stop http client watcher", "target", target, "error", stopErr)
+			if closeErr := r.Close(); closeErr != nil {
+				log.Error("failed to stop http client watcher", "target", target, "error", closeErr)
 			}
 			return nil, ctx.Err()
 		}
 	}
-	go func() {
-		for {
-			services, err := watcher.Next()
-			if err != nil {
-				if errors.Is(err, context.Canceled) {
-					return
-				}
-				log.Error("http client watch service got unexpected error", "target", target, "error", err)
-				time.Sleep(time.Second)
-				continue
-			}
-			r.update(services)
-		}
-	}()
+	go r.watch()
 	return r, nil
+}
+
+func (r *resolver) watch() {
+	for {
+		select {
+		case <-r.ctx.Done():
+			return
+		default:
+		}
+		services, err := r.watcher.Next(r.ctx)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+			log.Error("http client watch service got unexpected error", "target", r.target, "error", err)
+			select {
+			case <-r.ctx.Done():
+				return
+			case <-time.After(time.Second):
+			}
+			continue
+		}
+		// Next may have returned an update raced with Close; a canceled
+		// resolver must not apply it.
+		select {
+		case <-r.ctx.Done():
+			return
+		default:
+		}
+		r.update(services)
+	}
 }
 
 func (r *resolver) update(services []*registry.ServiceInstance) bool {
@@ -176,7 +216,7 @@ func (r *resolver) update(services []*registry.ServiceInstance) bool {
 	if r.subsetSize != 0 {
 		filtered = subset.Subset(r.selectorKey, filtered, r.subsetSize)
 	}
-	nodes := make([]selector.Node, 0, len(filtered))
+	nodes := make([]*selector.Node, 0, len(filtered))
 	for _, ins := range filtered {
 		ept, _ := endpoint.ParseEndpoint(ins.Endpoints, endpoint.Scheme(schemeHTTP, !r.insecure))
 		nodes = append(nodes, selector.NewNode(schemeHTTP, ept, ins))
@@ -190,6 +230,12 @@ func (r *resolver) update(services []*registry.ServiceInstance) bool {
 	return true
 }
 
+// Close terminates the watch goroutine and stops the watcher. It is
+// idempotent; every call reports the outcome of the first.
 func (r *resolver) Close() error {
-	return r.watcher.Stop()
+	r.closeOnce.Do(func() {
+		r.cancel()
+		r.closeErr = r.watcher.Stop()
+	})
+	return r.closeErr
 }

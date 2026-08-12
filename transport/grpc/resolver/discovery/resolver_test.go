@@ -28,7 +28,7 @@ type testWatch struct {
 	count uint
 }
 
-func (m *testWatch) Next() ([]*registry.ServiceInstance, error) {
+func (m *testWatch) Next(_ context.Context) ([]*registry.ServiceInstance, error) {
 	time.Sleep(time.Millisecond * 200)
 	if m.count > 1 {
 		return nil, nil
@@ -107,6 +107,39 @@ func TestWatchContextCancel(t *testing.T) {
 	}()
 	r.watch()
 	t.Log("watch goroutine exited after 2 second")
+}
+
+// stopCountWatch counts Stop calls, so a test can tell whether a repeated
+// Close reached the watcher again.
+type stopCountWatch struct {
+	stops int
+}
+
+func (m *stopCountWatch) Next(ctx context.Context) ([]*registry.ServiceInstance, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (m *stopCountWatch) Stop() error {
+	m.stops++
+	return nil
+}
+
+func TestCloseIdempotent(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	w := &stopCountWatch{}
+	r := &discoveryResolver{
+		w:      w,
+		cc:     &testClientConn{te: t},
+		ctx:    ctx,
+		cancel: cancel,
+	}
+	r.Close()
+	r.Close()
+	if w.stops != 1 {
+		t.Errorf("watcher stopped %d times, want 1", w.stops)
+	}
 }
 
 func TestParseAttributes(t *testing.T) {

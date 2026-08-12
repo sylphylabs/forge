@@ -16,11 +16,12 @@ const (
 	// kind, component, operation, args, and latency.
 	fixedAttrs = 5
 	// maxErrorAttrs is the most attributes errorAttrs can return: error_kind,
-	// reason, domain, trace_id, error, and stack.
-	maxErrorAttrs = 6
+	// reason, domain, trace_id, and error.
+	maxErrorAttrs = 5
 )
 
-// errorAttrs describes err for a log record.
+// errorAttrs describes err for a log record. It returns nil when err is nil:
+// a successful request carries no error attributes.
 //
 // A failure is logged by kind and reason rather than by a transport status
 // code: the kind is what the service decided, while a status code is a
@@ -29,7 +30,7 @@ const (
 // a redacted response diagnosable.
 func errorAttrs(err error) []slog.Attr {
 	if err == nil {
-		return []slog.Attr{slog.String("error_kind", errors.KindUnknown.String())}
+		return nil
 	}
 	e := errors.FromError(err)
 	attrs := []slog.Attr{
@@ -44,9 +45,6 @@ func errorAttrs(err error) []slog.Attr {
 	}
 	// The full error, including the cause chain that never crosses the wire.
 	attrs = append(attrs, slog.Any("error", err))
-	if _, stack := extractError(err); stack != "" {
-		attrs = append(attrs, slog.String("stack", stack))
-	}
 	return attrs
 }
 
@@ -130,21 +128,14 @@ func levelForError(err error) slog.Level {
 	return slog.LevelInfo
 }
 
-// extractArgs returns the string of the req
+// extractArgs describes req for a log record. Request contents are not
+// logged: a request routinely carries user data, and a log record must not
+// widen its exposure. The default is the request's Go type, which identifies
+// the message without disclosing it; a type opts in to logging content by
+// implementing [Redacter].
 func extractArgs(req any) string {
 	if redacter, ok := req.(Redacter); ok {
 		return redacter.Redact()
 	}
-	if stringer, ok := req.(fmt.Stringer); ok {
-		return stringer.String()
-	}
-	return fmt.Sprintf("%+v", req)
-}
-
-// extractError returns the level and stack to attach for err.
-func extractError(err error) (slog.Level, string) {
-	if err != nil {
-		return levelForError(err), fmt.Sprintf("%+v", err)
-	}
-	return levelForError(err), ""
+	return fmt.Sprintf("%T", req)
 }

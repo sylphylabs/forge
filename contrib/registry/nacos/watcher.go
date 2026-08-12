@@ -56,18 +56,24 @@ func newWatcher(ctx context.Context, cli naming_client.INamingClient, serviceNam
 	return w, e
 }
 
-func (w *watcher) Next() ([]*registry.ServiceInstance, error) {
+func (w *watcher) Next(ctx context.Context) ([]*registry.ServiceInstance, error) {
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-w.ctx.Done():
 		return nil, w.ctx.Err()
 	default:
 	}
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-w.ctx.Done():
 		return nil, w.ctx.Err()
 	case <-w.watchChan:
 	}
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-w.ctx.Done():
 		return nil, w.ctx.Err()
 	default:

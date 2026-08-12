@@ -17,7 +17,7 @@ import (
 
 func TestWrr3(t *testing.T) {
 	p2c := New()
-	var nodes []selector.Node
+	var nodes []*selector.Node
 	for i := 0; i < 3; i++ {
 		addr := fmt.Sprintf("127.0.0.%d:8080", i)
 		nodes = append(nodes, selector.NewNode(
@@ -53,11 +53,11 @@ func TestWrr3(t *testing.T) {
 			}
 			time.Sleep(time.Millisecond * 10)
 			done(context.Background(), selector.DoneInfo{})
-			if n.Address() == "127.0.0.0:8080" {
+			if n.Address == "127.0.0.0:8080" {
 				atomic.AddInt64(&count1, 1)
-			} else if n.Address() == "127.0.0.1:8080" {
+			} else if n.Address == "127.0.0.1:8080" {
 				atomic.AddInt64(&count2, 1)
-			} else if n.Address() == "127.0.0.2:8080" {
+			} else if n.Address == "127.0.0.2:8080" {
 				atomic.AddInt64(&count3, 1)
 			}
 		}()
@@ -84,7 +84,7 @@ func TestWrr3(t *testing.T) {
 }
 
 func TestEmpty(t *testing.T) {
-	b := &Balancer{}
+	b := &balancer{}
 	_, _, err := b.Pick(context.Background(), []selector.WeightedNode{})
 	if err == nil {
 		t.Errorf("expect %v, got %v", nil, err)
@@ -93,7 +93,7 @@ func TestEmpty(t *testing.T) {
 
 func TestOne(t *testing.T) {
 	p2c := New()
-	var nodes []selector.Node
+	var nodes []*selector.Node
 	for i := 0; i < 1; i++ {
 		addr := fmt.Sprintf("127.0.0.%d:8080", i)
 		nodes = append(nodes, selector.NewNode(
@@ -116,7 +116,7 @@ func TestOne(t *testing.T) {
 	if done == nil {
 		t.Errorf("expect %v, got %v", nil, done)
 	}
-	if !reflect.DeepEqual("127.0.0.0:8080", n.Address()) {
-		t.Errorf("expect %v, got %v", "127.0.0.0:8080", n.Address())
+	if !reflect.DeepEqual("127.0.0.0:8080", n.Address) {
+		t.Errorf("expect %v, got %v", "127.0.0.0:8080", n.Address)
 	}
 }

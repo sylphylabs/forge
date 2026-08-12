@@ -69,7 +69,7 @@ func mustClientNext(t *testing.T, next func(context.Context, any) (any, error), 
 // mechanics — attempt counting, backoff curves, rule tables — that are not
 // about the retry decision itself.
 func notSentErr() error {
-	return transport.MarkNotSent(errors.New(errors.KindUnavailable).WithReason("UNAVAILABLE").Msg("down"))
+	return transport.MarkNotSent(errors.Of(errors.KindUnavailable).WithReason("UNAVAILABLE").Msg("down"))
 }
 
 func failNTimes(n int, err error, calls *int) func(context.Context, any) (any, error) {
@@ -108,7 +108,7 @@ func TestRetryExhaustsAttempts(t *testing.T) {
 
 func TestRetryStopsOnNonRetryableError(t *testing.T) {
 	var calls int
-	cause := errors.New(errors.KindInvalidArgument).WithReason("INVALID").Msg("bad")
+	cause := errors.Of(errors.KindInvalidArgument).WithReason("INVALID").Msg("bad")
 	h := mustClientNext(t, failNTimes(99, cause, &calls), noSleep(nil))
 	if _, err := h(context.Background(), nil); !errors.Is(err, cause) {
 		t.Fatalf("want the error unchanged, got %v", err)
@@ -315,8 +315,8 @@ func TestExponentialJitterZeroValueWaitsNothing(t *testing.T) {
 
 func TestDefaultRetryable(t *testing.T) {
 	ctx := context.Background()
-	unavailable := errors.New(errors.KindUnavailable).WithReason("UNAVAILABLE").Msg("down")
-	timeout := errors.New(errors.KindDeadlineExceeded).WithReason("TIMEOUT").Msg("slow")
+	unavailable := errors.Of(errors.KindUnavailable).WithReason("UNAVAILABLE").Msg("down")
+	timeout := errors.Of(errors.KindDeadlineExceeded).WithReason("TIMEOUT").Msg("slow")
 	dialErr := &net.OpError{Op: "dial", Net: "tcp", Err: stderrors.New("connection refused")}
 	cases := []struct {
 		name string
@@ -329,8 +329,8 @@ func TestDefaultRetryable(t *testing.T) {
 		// Evidence alone suffices: work that never started cannot be
 		// duplicated by starting it, whatever the Kind or the declaration.
 		{"proven undelivered", ctx, transport.MarkNotSent(unavailable), true},
-		{"proven undelivered, non-transient kind", ctx, transport.MarkNotSent(errors.New(errors.KindInternal).WithReason("X").Msg("x")), true},
-		{"proven undelivered behind a wrap", ctx, errors.New(errors.KindInternal).WithReason("X").Msg("x").Wrap(transport.MarkNotSent(dialErr)), true},
+		{"proven undelivered, non-transient kind", ctx, transport.MarkNotSent(errors.Of(errors.KindInternal).WithReason("X").Msg("x")), true},
+		{"proven undelivered behind a wrap", ctx, errors.Of(errors.KindInternal).WithReason("X").Msg("x").Wrap(transport.MarkNotSent(dialErr)), true},
 
 		// Without evidence, an ambiguous failure needs the declaration,
 		// because a server may have executed the request already.
@@ -348,10 +348,10 @@ func TestDefaultRetryable(t *testing.T) {
 		{"local deadline", Idempotent(ctx), context.DeadlineExceeded, false},
 
 		// Kinds outside the declared set stay out even when declared.
-		{"bad request", Idempotent(ctx), errors.New(errors.KindInvalidArgument).WithReason("INVALID").Msg("bad"), false},
-		{"internal error", Idempotent(ctx), errors.New(errors.KindInternal).WithReason("BOOM").Msg("boom"), false},
-		{"too many requests", Idempotent(ctx), errors.New(errors.KindResourceExhausted).WithReason("RATELIMIT").Msg("limited"), false},
-		{"conflict", Idempotent(ctx), errors.New(errors.KindConflict).WithReason("CONFLICT").Msg("stale"), false},
+		{"bad request", Idempotent(ctx), errors.Of(errors.KindInvalidArgument).WithReason("INVALID").Msg("bad"), false},
+		{"internal error", Idempotent(ctx), errors.Of(errors.KindInternal).WithReason("BOOM").Msg("boom"), false},
+		{"too many requests", Idempotent(ctx), errors.Of(errors.KindResourceExhausted).WithReason("RATELIMIT").Msg("limited"), false},
+		{"conflict", Idempotent(ctx), errors.Of(errors.KindConflict).WithReason("CONFLICT").Msg("stale"), false},
 	}
 	for _, tc := range cases {
 		if got := DefaultRetryable(tc.ctx, tc.err); got != tc.want {
@@ -365,7 +365,7 @@ func TestDefaultRetryable(t *testing.T) {
 // failure retries once the caller declares the operation idempotent.
 func TestUndeclaredAmbiguousFailureIsNotRetried(t *testing.T) {
 	var calls int
-	cause := errors.New(errors.KindUnavailable).WithReason("UNAVAILABLE").Msg("down")
+	cause := errors.Of(errors.KindUnavailable).WithReason("UNAVAILABLE").Msg("down")
 	h := mustClientNext(t, failNTimes(99, cause, &calls), noSleep(nil))
 	if _, err := h(context.Background(), nil); !errors.Is(err, cause) {
 		t.Fatalf("want the error unchanged, got %v", err)
@@ -377,7 +377,7 @@ func TestUndeclaredAmbiguousFailureIsNotRetried(t *testing.T) {
 
 func TestDeclaredIdempotentFailureIsRetried(t *testing.T) {
 	var calls int
-	cause := errors.New(errors.KindUnavailable).WithReason("UNAVAILABLE").Msg("down")
+	cause := errors.Of(errors.KindUnavailable).WithReason("UNAVAILABLE").Msg("down")
 	h := mustClientNext(t, failNTimes(2, cause, &calls), noSleep(nil))
 	if _, err := h(Idempotent(context.Background()), nil); err != nil {
 		t.Fatalf("a declared operation must retry, got %v", err)
@@ -409,7 +409,7 @@ func TestIsIdempotent(t *testing.T) {
 
 func TestWithRetryableOverridesDefault(t *testing.T) {
 	var calls int
-	cause := errors.New(errors.KindInvalidArgument).WithReason("INVALID").Msg("bad") // not retryable by default
+	cause := errors.Of(errors.KindInvalidArgument).WithReason("INVALID").Msg("bad") // not retryable by default
 	h := mustClientNext(t, failNTimes(1, cause, &calls),
 		WithRetryable(func(_ context.Context, err error) bool { return errors.KindOf(err) == errors.KindInvalidArgument }),
 		noSleep(nil))

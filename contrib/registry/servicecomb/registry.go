@@ -65,7 +65,7 @@ func NewRegistry(client RegistryClient) *Registry {
 	return r
 }
 
-func (r *Registry) GetService(_ context.Context, serviceName string) ([]*registry.ServiceInstance, error) {
+func (r *Registry) Instances(_ context.Context, serviceName string) ([]*registry.ServiceInstance, error) {
 	instances, err := r.cli.FindMicroServiceInstances("", appID, serviceName, "")
 	if err != nil {
 		return nil, err

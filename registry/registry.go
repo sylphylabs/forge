@@ -17,8 +17,8 @@ type Registrar interface {
 
 // Discovery is service discovery.
 type Discovery interface {
-	// GetService return the service instances in memory according to the service name.
-	GetService(ctx context.Context, serviceName string) ([]*ServiceInstance, error)
+	// Instances returns the currently known instances of the named service.
+	Instances(ctx context.Context, serviceName string) ([]*ServiceInstance, error)
 	// Watch creates a watcher according to the service name.
 	Watch(ctx context.Context, serviceName string) (Watcher, error)
 }
@@ -28,8 +28,9 @@ type Watcher interface {
 	// Next returns services in the following two cases:
 	// 1.the first time to watch and the service instance list is not empty.
 	// 2.any service instance changes found.
-	// if the above two conditions are not met, it will block until context deadline exceeded or canceled
-	Next() ([]*ServiceInstance, error)
+	// if the above two conditions are not met, it will block until ctx is
+	// done or the watcher is stopped
+	Next(ctx context.Context) ([]*ServiceInstance, error)
 	// Stop close the watcher.
 	Stop() error
 }
@@ -55,32 +56,25 @@ func (i *ServiceInstance) String() string {
 	return fmt.Sprintf("%s-%s", i.Name, i.ID)
 }
 
-// Equal returns whether i and o are equivalent.
-func (i *ServiceInstance) Equal(o any) bool {
-	if o == nil {
-		return i == nil
-	}
-	t, ok := o.(*ServiceInstance)
-	if !ok {
-		return false
-	}
-	if i == nil || t == nil {
-		return i == t
+// Equal reports whether i and o are equivalent.
+func (i *ServiceInstance) Equal(o *ServiceInstance) bool {
+	if i == nil || o == nil {
+		return i == o
 	}
 
-	if i.ID != t.ID || i.Name != t.Name || i.Version != t.Version {
+	if i.ID != o.ID || i.Name != o.Name || i.Version != o.Version {
 		return false
 	}
-	if !maps.Equal(i.Metadata, t.Metadata) {
+	if !maps.Equal(i.Metadata, o.Metadata) {
 		return false
 	}
-	if len(i.Endpoints) != len(t.Endpoints) {
+	if len(i.Endpoints) != len(o.Endpoints) {
 		return false
 	}
 
 	iEndpoints := slices.Clone(i.Endpoints)
-	tEndpoints := slices.Clone(t.Endpoints)
+	oEndpoints := slices.Clone(o.Endpoints)
 	slices.Sort(iEndpoints)
-	slices.Sort(tEndpoints)
-	return slices.Equal(iEndpoints, tEndpoints)
+	slices.Sort(oEndpoints)
+	return slices.Equal(iEndpoints, oEndpoints)
 }

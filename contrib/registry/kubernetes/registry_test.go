@@ -125,7 +125,7 @@ func TestRegistry(t *testing.T) {
 
 	go func() {
 		for {
-			res, err1 := watch.Next()
+			res, err1 := watch.Next(context.Background())
 			if err1 != nil {
 				return
 			}
@@ -160,7 +160,7 @@ func TestRegistry(t *testing.T) {
 	}
 	time.Sleep(time.Second)
 
-	res, err := r.GetService(context.Background(), svrHello.Name)
+	res, err := r.Instances(context.Background(), svrHello.Name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestRegistry(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	res, err = r.GetService(context.Background(), svrHello.Name)
+	res, err = r.Instances(context.Background(), svrHello.Name)
 	if err != nil {
 		t.Fatal(err)
 	}

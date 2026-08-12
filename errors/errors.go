@@ -34,13 +34,17 @@ import (
 // Error is a Forge error.
 //
 // It is a plain Go value with no generated machinery embedded in it. Each
-// transport owns its own projection — errors/protobuf the wire message,
-// transport/http the Problem document, transport/grpc the status — leaving this
+// transport owns its own projection — transport/http the Problem document,
+// transport/grpc the status and its details — leaving this
 // package free of protocol dependencies and free to evolve independently.
 //
 // An Error is immutable once constructed. Every method that appears to modify
 // one returns a copy, so a package-level sentinel is safe to share across
 // goroutines.
+//
+// Every method tolerates a nil receiver: accessors return zero values, and
+// deriving methods treat nil as the zero-value error, so a typed-nil *Error
+// never panics.
 type Error struct {
 	kind   Kind
 	domain string
@@ -64,18 +68,26 @@ type Error struct {
 // carries.
 const Domain = "forge.sylphylabs.io"
 
+// SupportPackageIsVersion1 is referenced from generated *_errors.pb.go files
+// to assert that they are compiled against a runtime that supports them. When
+// a release changes what generated code requires, the constant it references
+// changes with it, so a stale pairing fails to compile instead of misbehaving.
+//
+// It should not be referenced from any other code.
+const SupportPackageIsVersion1 = true
+
 // MustDefine returns an immutable sentinel error, panicking when the
 // declaration is invalid. It is the constructor used by generated code;
-// hand-written code normally declares errors in Protobuf instead, or uses [New]
+// hand-written code normally declares errors in Protobuf instead, or uses [Of]
 // for failures that never leave the process.
 //
 // It panics rather than returning an error because a sentinel is package state
 // built during initialization: there is no caller yet to handle a failure, and
 // an invalid declaration is a programming error rather than a runtime
 // condition. Failing at init surfaces the mistake on the first run, instead of
-// letting an unidentifiable error reach the wire — where, with no domain or
-// reason, [Error.Is] would match it against unrelated errors by Kind alone.
-// The same reasoning already governs [encoding.RegisterCodec].
+// letting a sentinel reach the wire with an identity that [Error.Is] cannot
+// match anything against. The same reasoning already governs
+// [encoding.RegisterCodec].
 func MustDefine(kind Kind, domain, reason string) *Error {
 	switch {
 	case domain == "":
@@ -110,10 +122,10 @@ func isScreamingSnake(s string) bool {
 	return s != ""
 }
 
-// New returns an error of the given Kind. Use it for failures that are internal
+// Of returns an error of the given Kind. Use it for failures that are internal
 // to a process and therefore need no Protobuf declaration; contract errors
 // should be declared in Protobuf and generated.
-func New(kind Kind) *Error {
+func Of(kind Kind) *Error {
 	return &Error{kind: kind}
 }
 
@@ -171,22 +183,24 @@ func (e *Error) Unwrap() error {
 
 // Is reports whether target identifies the same failure as e.
 //
-// Identity is the domain and reason pair, and the Kind when no reason is set.
-// The message is deliberately excluded: it is descriptive and may be
-// interpolated per occurrence, so two reports of the same failure must match
-// each other even when their messages differ.
+// Identity is the complete domain and reason pair: two errors match exactly
+// when both carry the same non-empty domain and the same non-empty reason. An
+// error missing either half has no cross-instance identity and matches only
+// itself — the standard library compares values before calling this method —
+// so two anonymous errors of one Kind never match each other. Classifying by
+// Kind is [KindOf]'s job.
+//
+// Kind and message deliberately do not participate. The message is
+// descriptive and may be interpolated per occurrence, and the Kind is a
+// classification a transport boundary may recompute in transit, so neither
+// can be allowed to separate two reports of the same failure.
 func (e *Error) Is(target error) bool {
-	if e == nil {
-		return target == nil
-	}
 	t, ok := target.(*Error)
-	if !ok || t == nil {
+	if !ok || t == nil || e == nil {
 		return false
 	}
-	if e.reason == "" && t.reason == "" {
-		return e.kind == t.kind && e.domain == t.domain
-	}
-	return e.domain == t.domain && e.reason == t.reason
+	return e.domain != "" && e.reason != "" &&
+		e.domain == t.domain && e.reason == t.reason
 }
 
 // Kind returns the error's category.
@@ -255,9 +269,14 @@ func (e *Error) IsRemote() bool {
 }
 
 // clone returns a shallow copy with independently owned maps and slices.
+//
+// A nil receiver clones as the zero-value error. The accessors already treat a
+// typed-nil as that value — Kind returns KindUnknown, everything else its zero
+// — so the deriving methods built on clone stay consistent with them instead
+// of panicking.
 func (e *Error) clone() *Error {
 	if e == nil {
-		return nil
+		return new(Error)
 	}
 	c := *e
 	c.meta = maps.Clone(e.meta)
@@ -399,9 +418,9 @@ func FromError(err error) *Error {
 		if e == nil {
 			// A typed-nil *Error carries no information but must not be
 			// mistaken for the absence of an error.
-			return New(KindUnknown).Msg(err.Error())
+			return Of(KindUnknown).Msg(err.Error())
 		}
 		return e
 	}
-	return New(KindUnknown).Msg(err.Error()).Wrap(err)
+	return Of(KindUnknown).Msg(err.Error()).Wrap(err)
 }

@@ -11,6 +11,13 @@ option java_package = "com.github.sylphy.errors.v1";
 // Kind classifies a failure independently of any transport. It is the single
 // source of truth for an error's category: transports project a Kind onto their
 // own status vocabulary, never the reverse.
+//
+// The values are the annotation vocabulary for declaring contract errors on
+// enums. Each value is the KIND_-prefixed spelling of the wire name the Forge
+// runtime uses (KIND_NOT_FOUND names the kind that travels as "NOT_FOUND"):
+// the prefix is Protobuf enum scoping, not part of the name. There is no
+// Protobuf error envelope; HTTP carries errors as Problem Details and gRPC as
+// a status with standard details.
 enum Kind {
   KIND_UNSPECIFIED = 0;
   KIND_INVALID_ARGUMENT = 1;
@@ -28,36 +35,6 @@ enum Kind {
   KIND_UNIMPLEMENTED = 13;
   KIND_INTERNAL = 14;
   KIND_DATA_LOSS = 15;
-}
-
-// Violation is a single field-level failure within an aggregate error.
-message Violation {
-  // Field identifies what failed, as a path into the request message.
-  string field = 1;
-  // Description explains the failure in terms a caller can act on.
-  string description = 2;
-}
-
-// Status is the portable error representation used by Forge transports.
-message Status {
-  // Kind classifies the failure. Transports project it onto their own status
-  // vocabulary.
-  Kind kind = 1;
-  // Domain namespaces the reason, normally the Protobuf package that declared
-  // it.
-  string domain = 2;
-  // Reason is the stable machine-readable identifier for this failure.
-  string reason = 3;
-  // Message describes the failure for a human reader. It is not stable and
-  // must not be parsed.
-  string message = 4;
-  // Metadata carries additional structured context.
-  map<string, string> metadata = 5;
-  // TraceID correlates this failure with a distributed trace. It is the
-  // supported way to follow a failure across process boundaries.
-  string trace_id = 6;
-  // Violations carries per-field failures for an aggregate error.
-  repeated Violation violations = 7;
 }
 
 // default_kind declares the default classification for an error enum.

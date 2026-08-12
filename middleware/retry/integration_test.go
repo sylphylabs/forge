@@ -31,7 +31,7 @@ type flakyGreeter struct {
 
 func (s *flakyGreeter) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	if s.calls.Add(1) <= s.failures {
-		return nil, errors.New(errors.KindUnavailable).WithReason("FLAKY").Msg("transient failure")
+		return nil, errors.Of(errors.KindUnavailable).WithReason("FLAKY").Msg("transient failure")
 	}
 	return &pb.HelloReply{Message: fmt.Sprintf("Hello %s", in.Name)}, nil
 }
@@ -42,7 +42,7 @@ var fastPolicy = retry.Policy{Attempts: 3, BaseBackoff: time.Millisecond, MaxBac
 func TestGRPCClientRetries(t *testing.T) {
 	ctx := context.Background()
 	greeter := &flakyGreeter{failures: 2}
-	srv := transportgrpc.NewServer(transportgrpc.Address("127.0.0.1:0"))
+	srv := transportgrpc.NewServer(transportgrpc.WithAddress("127.0.0.1:0"))
 	pb.RegisterGreeterServer(srv, greeter)
 	endpoint, err := srv.Endpoint()
 	if err != nil {
@@ -58,8 +58,8 @@ func TestGRPCClientRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 	conn, err := transportgrpc.NewClient(ctx,
-		transportgrpc.WithEndpoint(endpoint.Host),
-		transportgrpc.WithMiddleware(m),
+		transportgrpc.WithTarget(endpoint.Host),
+		transportgrpc.WithClientMiddleware(m),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -113,8 +113,8 @@ func TestHTTPClientRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 	client, err := transporthttp.NewClient(ctx,
-		transporthttp.WithEndpoint(ts.Listener.Addr().String()),
-		transporthttp.WithMiddleware(m),
+		transporthttp.WithTarget(ts.Listener.Addr().String()),
+		transporthttp.WithClientMiddleware(m),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -160,8 +160,8 @@ func TestHTTPClientDoesNotRetryClientErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	client, err := transporthttp.NewClient(ctx,
-		transporthttp.WithEndpoint(ts.Listener.Addr().String()),
-		transporthttp.WithMiddleware(m),
+		transporthttp.WithTarget(ts.Listener.Addr().String()),
+		transporthttp.WithClientMiddleware(m),
 	)
 	if err != nil {
 		t.Fatal(err)

@@ -15,7 +15,7 @@ import (
 // Only the error's public data reaches the wire; a cause stays local.
 func TestOutgoingErrorDisclosesOnlyPublicData(t *testing.T) {
 	srv := NewServer()
-	secret := errors.New(errors.KindInternal).WithReason("DB_DOWN").
+	secret := errors.Of(errors.KindInternal).WithReason("DB_DOWN").
 		Msg("lookup failed").
 		Wrap(stderrors.New("dial tcp 10.0.0.1:5432: password=hunter2"))
 

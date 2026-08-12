@@ -2,29 +2,35 @@ package env
 
 import (
 	"context"
+	"sync"
 
 	"github.com/sylphylabs/forge/config"
 )
 
 var _ config.Watcher = (*watcher)(nil)
 
+// watcher reports no changes: the process environment is fixed at startup,
+// so Next blocks until the watcher is stopped or ctx is done.
 type watcher struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	exit chan struct{}
+	once sync.Once
 }
 
-func NewWatcher() (config.Watcher, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	return &watcher{ctx: ctx, cancel: cancel}, nil
+func newWatcher() *watcher {
+	return &watcher{exit: make(chan struct{})}
 }
 
-// Next will be blocked until the Stop method is called
-func (w *watcher) Next() ([]*config.KeyValue, error) {
-	<-w.ctx.Done()
-	return nil, w.ctx.Err()
+func (w *watcher) Next(ctx context.Context) ([]*config.KeyValue, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-w.exit:
+		return nil, context.Canceled
+	}
 }
 
+// Stop unblocks an in-flight Next. It is safe to call more than once.
 func (w *watcher) Stop() error {
-	w.cancel()
+	w.once.Do(func() { close(w.exit) })
 	return nil
 }

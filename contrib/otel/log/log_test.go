@@ -99,7 +99,7 @@ func TestNewHandlerComposesWithCoreLoggerOptions(t *testing.T) {
 
 	logger := klog.NewLogger(
 		NewHandler("helloworld", WithLoggerProvider(recorder)),
-		klog.WithFilter(klog.FilterKey("password")),
+		klog.WithFilter(klog.WithFilterKey("password")),
 	).With(slog.String("service.name", "helloworld"))
 	logger.InfoContext(ctx, "user created", "user_id", "42", "password", "secret")
 

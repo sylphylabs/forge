@@ -56,14 +56,14 @@ func TestEnvWithPrefix(t *testing.T) {
 		os.Setenv(k, v)
 	}
 
-	c := config.New(config.WithSource(
+	c, err := config.New(t.Context(), config.WithSource(
 		file.NewSource(path),
 		NewSource(prefix1, prefix2),
 	))
-
-	if err := c.Load(); err != nil {
+	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = c.Close() })
 
 	tests := []struct {
 		name   string
@@ -99,47 +99,12 @@ func TestEnvWithPrefix(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var err error
-			v := c.Value(test.path)
-			if v.Load() != nil {
-				var actual any
-				switch test.expect.(type) {
-				case int:
-					if actual, err = v.Int(); err == nil {
-						if !reflect.DeepEqual(test.expect.(int), int(actual.(int64))) {
-							t.Errorf("expect %v, actual %v", test.expect, actual)
-						}
-					}
-				case string:
-					if actual, err = v.String(); err == nil {
-						if !reflect.DeepEqual(test.expect.(string), actual.(string)) {
-							t.Errorf(`expect %v, actual %v`, test.expect, actual)
-						}
-					}
-				case bool:
-					if actual, err = v.Bool(); err == nil {
-						if !reflect.DeepEqual(test.expect.(bool), actual.(bool)) {
-							t.Errorf(`expect %v, actual %v`, test.expect, actual)
-						}
-					}
-				case float64:
-					if actual, err = v.Float(); err == nil {
-						if !reflect.DeepEqual(test.expect.(float64), actual.(float64)) {
-							t.Errorf(`expect %v, actual %v`, test.expect, actual)
-						}
-					}
-				default:
-					actual = v.Load()
-					if !reflect.DeepEqual(test.expect, actual) {
-						t.Logf("\nexpect: %#v\nactural: %#v", test.expect, actual)
-						t.Fail()
-					}
-				}
-				if err != nil {
-					t.Error(err)
-				}
-			} else {
-				t.Error("value path not found")
+			var actual any
+			if err := c.Value(test.path).Scan(&actual); err != nil {
+				t.Fatalf("scan %q: %v", test.path, err)
+			}
+			if !reflect.DeepEqual(test.expect, actual) {
+				t.Errorf("expect %#v, actual %#v", test.expect, actual)
 			}
 		})
 	}
@@ -170,14 +135,14 @@ func TestEnvWithoutPrefix(t *testing.T) {
 		os.Setenv(k, v)
 	}
 
-	c := config.New(config.WithSource(
+	c, err := config.New(t.Context(), config.WithSource(
 		NewSource(),
 		file.NewSource(path),
 	))
-
-	if err := c.Load(); err != nil {
+	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = c.Close() })
 
 	tests := []struct {
 		name   string
@@ -213,47 +178,12 @@ func TestEnvWithoutPrefix(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var err error
-			v := c.Value(test.path)
-			if v.Load() != nil {
-				var actual any
-				switch test.expect.(type) {
-				case int:
-					if actual, err = v.Int(); err == nil {
-						if !reflect.DeepEqual(test.expect.(int), int(actual.(int64))) {
-							t.Errorf("expect %v, actual %v", test.expect, actual)
-						}
-					}
-				case string:
-					if actual, err = v.String(); err == nil {
-						if !reflect.DeepEqual(test.expect.(string), actual.(string)) {
-							t.Errorf(`expect %v, actual %v`, test.expect, actual)
-						}
-					}
-				case bool:
-					if actual, err = v.Bool(); err == nil {
-						if !reflect.DeepEqual(test.expect.(bool), actual.(bool)) {
-							t.Errorf(`expect %v, actual %v`, test.expect, actual)
-						}
-					}
-				case float64:
-					if actual, err = v.Float(); err == nil {
-						if !reflect.DeepEqual(test.expect.(float64), actual.(float64)) {
-							t.Errorf(`expect %v, actual %v`, test.expect, actual)
-						}
-					}
-				default:
-					actual = v.Load()
-					if !reflect.DeepEqual(test.expect, actual) {
-						t.Logf("\nexpect: %#v\nactural: %#v", test.expect, actual)
-						t.Fail()
-					}
-				}
-				if err != nil {
-					t.Error(err)
-				}
-			} else {
-				t.Error("value path not found")
+			var actual any
+			if err := c.Value(test.path).Scan(&actual); err != nil {
+				t.Fatalf("scan %q: %v", test.path, err)
+			}
+			if !reflect.DeepEqual(test.expect, actual) {
+				t.Errorf("expect %#v, actual %#v", test.expect, actual)
 			}
 		})
 	}
@@ -421,7 +351,7 @@ func Test_matchPrefix(t *testing.T) {
 func Test_env_watch(t *testing.T) {
 	prefixes := []string{"BAR", "FOO"}
 	source := NewSource(prefixes...)
-	w, err := source.Watch()
+	w, err := source.Watch(t.Context())
 	if err != nil {
 		t.Errorf("expect no err, got %v", err)
 	}

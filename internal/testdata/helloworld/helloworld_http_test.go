@@ -37,7 +37,7 @@ func TestGeneratedUnaryMiddlewareIsPrecomposed(t *testing.T) {
 		}
 	}
 
-	srv := forgehttp.NewServer(forgehttp.Timeout(0))
+	srv := forgehttp.NewServer(forgehttp.WithTimeout(0))
 	service, err := WrapGreeterHTTPServer(middlewareGreeter{t: t}, GreeterMiddleware{
 		Methods: GreeterMethodMiddleware{SayHello: []middleware.UnaryMiddleware{m}},
 	})
@@ -59,5 +59,49 @@ func TestGeneratedUnaryMiddlewareIsPrecomposed(t *testing.T) {
 	}
 	if got := calls.Load(); got != 2 {
 		t.Fatalf("middleware calls = %d, want 2", got)
+	}
+}
+
+type orderGreeter struct{ order *[]string }
+
+func (g orderGreeter) SayHello(_ context.Context, req *HelloRequest) (*HelloReply, error) {
+	*g.order = append(*g.order, "handler")
+	return &HelloReply{Message: req.GetName()}, nil
+}
+
+// Server-wide middleware runs outside (before) the generated per-service plan.
+func TestServerWideMiddlewareRunsOutsideGeneratedPlan(t *testing.T) {
+	var order []string
+	record := func(name string) middleware.UnaryMiddleware {
+		return func(next middleware.UnaryHandler) middleware.UnaryHandler {
+			return func(ctx context.Context, req any) (any, error) {
+				order = append(order, name)
+				return next(ctx, req)
+			}
+		}
+	}
+
+	srv := forgehttp.NewServer(forgehttp.WithTimeout(0), forgehttp.WithMiddleware(record("server-wide")))
+	service, err := WrapGreeterHTTPServer(orderGreeter{order: &order}, GreeterMiddleware{
+		Unary: []middleware.UnaryMiddleware{record("generated")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	RegisterGreeterHTTPServer(srv, service)
+
+	response := httptest.NewRecorder()
+	srv.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/helloworld/forge", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %q", response.Code, response.Body.String())
+	}
+	want := []string{"server-wide", "generated", "handler"}
+	if len(order) != len(want) {
+		t.Fatalf("order = %v, want %v", order, want)
+	}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("order = %v, want %v", order, want)
+		}
 	}
 }

@@ -13,6 +13,7 @@ import (
 )
 
 func TestConfig_Load(t *testing.T) {
+	requireNacos(t)
 	sc := []constant.ServerConfig{
 		*constant.NewServerConfig("127.0.0.1", 8848),
 	}
@@ -107,7 +108,7 @@ func TestConfig_Load(t *testing.T) {
 				defer test.deferFunc(t)
 			}
 			s := test.fields.source
-			configs, lErr := s.Load()
+			configs, lErr := s.Load(t.Context())
 			if (lErr != nil) != test.wantErr {
 				t.Errorf("Load error = %v, wantErr %v", lErr, test.wantErr)
 				t.Errorf("Load configs = %v", configs)
@@ -121,6 +122,7 @@ func TestConfig_Load(t *testing.T) {
 }
 
 func TestConfig_Watch(t *testing.T) {
+	requireNacos(t)
 	sc := []constant.ServerConfig{
 		*constant.NewServerConfig("127.0.0.1", 8848),
 	}
@@ -184,7 +186,7 @@ func TestConfig_Watch(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			s := test.fields.source
-			watch, wErr := s.Watch()
+			watch, wErr := s.Watch(t.Context())
 			if wErr != nil {
 				t.Error(wErr)
 				return
@@ -195,7 +197,7 @@ func TestConfig_Watch(t *testing.T) {
 			if test.deferFunc != nil {
 				defer test.deferFunc(t, watch)
 			}
-			want, nErr := watch.Next()
+			want, nErr := watch.Next(t.Context())
 			if (nErr != nil) != test.wantErr {
 				t.Errorf("Watch error = %v, wantErr %v", nErr, test.wantErr)
 				return

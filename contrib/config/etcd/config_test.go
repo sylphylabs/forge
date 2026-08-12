@@ -12,6 +12,7 @@ import (
 const testKey = "/forge/test/config"
 
 func TestConfig(t *testing.T) {
+	requireEtcd(t)
 	client, err := clientv3.New(clientv3.Config{
 		Endpoints:   []string{"127.0.0.1:2379"},
 		DialTimeout: time.Second,
@@ -31,7 +32,7 @@ func TestConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	kvs, err := source.Load()
+	kvs, err := source.Load(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +41,7 @@ func TestConfig(t *testing.T) {
 		t.Fatal("config error")
 	}
 
-	w, err := source.Watch()
+	w, err := source.Watch(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +53,7 @@ func TestConfig(t *testing.T) {
 		t.Error(err)
 	}
 
-	if kvs, err = w.Next(); err != nil {
+	if kvs, err = w.Next(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -66,6 +67,7 @@ func TestConfig(t *testing.T) {
 }
 
 func TestExtToFormat(t *testing.T) {
+	requireEtcd(t)
 	client, err := clientv3.New(clientv3.Config{
 		Endpoints:   []string{"127.0.0.1:2379"},
 		DialTimeout: time.Second,
@@ -90,7 +92,7 @@ func TestExtToFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	kvs, err := source.Load()
+	kvs, err := source.Load(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

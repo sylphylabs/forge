@@ -51,11 +51,13 @@ func (w *Watcher) Put(svcIns *registry.ServiceInstance) {
 	w.ch <- svcIns
 }
 
-func (w *Watcher) Next() ([]*registry.ServiceInstance, error) {
-	svcInstances := make([]*registry.ServiceInstance, 0, 1)
-	svcIns := <-w.ch
-	svcInstances = append(svcInstances, svcIns)
-	return svcInstances, nil
+func (w *Watcher) Next(ctx context.Context) ([]*registry.ServiceInstance, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case svcIns := <-w.ch:
+		return []*registry.ServiceInstance{svcIns}, nil
+	}
 }
 
 func (w *Watcher) Stop() error {

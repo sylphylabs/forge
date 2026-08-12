@@ -32,12 +32,12 @@ func TestPrePickDistinctAndUniform(t *testing.T) {
 		indices[node] = i
 	}
 
-	balancer := &Balancer{}
+	balancer := &balancer{}
 	counts := make([]int, nodeCount)
 	for range iterations {
 		a, b := balancer.prePick(nodes)
 		if a == b {
-			t.Fatalf("prePick returned the same node %q twice", a.Address())
+			t.Fatalf("prePick returned the same node %q twice", a.Raw().Address)
 		}
 		counts[indices[a]]++
 		counts[indices[b]]++
@@ -54,7 +54,7 @@ func TestPrePickDistinctAndUniform(t *testing.T) {
 
 func TestPrePickConcurrent(t *testing.T) {
 	nodes := p2cWeightedNodes(10)
-	balancer := &Balancer{}
+	balancer := &balancer{}
 	var duplicate atomic.Bool
 	var wg sync.WaitGroup
 	for range 16 {

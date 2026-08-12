@@ -47,8 +47,13 @@ func Client(opts ...Option) middleware.UnaryMiddleware {
 	}
 	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (any, error) {
-			info, _ := transport.FromClientContext(ctx)
-			breaker := opt.group.Get(info.Operation())
+			// Outside a client transport context there is no operation to key
+			// on; the empty operation shares one breaker across such calls.
+			var operation string
+			if info, ok := transport.FromClientContext(ctx); ok {
+				operation = info.Operation()
+			}
+			breaker := opt.group.Get(operation)
 			if err := breaker.Allow(); err != nil {
 				// rejected
 				// NOTE: when client reject requests locally,

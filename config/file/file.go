@@ -1,6 +1,9 @@
+// Package file sources configuration from a file or every non-hidden file in
+// a directory, inferring each payload's format from the file extension.
 package file
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -15,7 +18,8 @@ type file struct {
 	path string
 }
 
-// NewSource new a file source.
+// NewSource returns a source that loads path: one file, or every non-hidden
+// file in the directory it names.
 func NewSource(path string) config.Source {
 	return &file{path: path}
 }
@@ -64,7 +68,7 @@ func skipFile(name string) bool {
 	return strings.HasPrefix(name, ".")
 }
 
-func (f *file) Load() (kvs []*config.KeyValue, err error) {
+func (f *file) Load(context.Context) (kvs []*config.KeyValue, err error) {
 	fi, err := os.Stat(f.path)
 	if err != nil {
 		return nil, err
@@ -79,6 +83,6 @@ func (f *file) Load() (kvs []*config.KeyValue, err error) {
 	return []*config.KeyValue{kv}, nil
 }
 
-func (f *file) Watch() (config.Watcher, error) {
+func (f *file) Watch(context.Context) (config.Watcher, error) {
 	return newWatcher(f)
 }

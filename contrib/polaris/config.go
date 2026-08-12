@@ -39,7 +39,7 @@ type source struct {
 }
 
 // Load return the config values
-func (s *source) Load() ([]*config.KeyValue, error) {
+func (s *source) Load(context.Context) ([]*config.KeyValue, error) {
 	kvs := make([]*config.KeyValue, 0, len(s.options.files))
 	for _, file := range s.options.files {
 		configFile, err := s.client.FetchConfigFile(&polaris.GetConfigFileRequest{
@@ -64,7 +64,7 @@ func (s *source) Load() ([]*config.KeyValue, error) {
 }
 
 // Watch return the watcher
-func (s *source) Watch() (config.Watcher, error) {
+func (s *source) Watch(context.Context) (config.Watcher, error) {
 	return newConfigWatcher(s.options.configFile), nil
 }
 
@@ -101,8 +101,17 @@ func newConfigWatcher(configFile []polaris.ConfigFile) *ConfigWatcher {
 	return w
 }
 
-func (w *ConfigWatcher) Next() ([]*config.KeyValue, error) {
-	if event, ok := <-w.event; ok {
+func (w *ConfigWatcher) Next(ctx context.Context) ([]*config.KeyValue, error) {
+	var (
+		event model.ConfigFileChangeEvent
+		ok    bool
+	)
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case event, ok = <-w.event:
+	}
+	if ok {
 		m := make(map[string]*config.KeyValue)
 		for _, file := range w.cfg {
 			m[file.Key] = file

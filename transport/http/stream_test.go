@@ -86,7 +86,7 @@ func TestServerSentEventStreamRedactsTerminalError(t *testing.T) {
 
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	client, err := NewClient(t.Context(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	client, err := NewClient(t.Context(), WithTarget(ts.URL), WithRequestTimeout(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestWebSocketStreamRedactsAndRestoresTerminalError(t *testing.T) {
 
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	client, err := NewClient(t.Context(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	client, err := NewClient(t.Context(), WithTarget(ts.URL), WithRequestTimeout(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestServerSentEventStreamUsesAcceptCodec(t *testing.T) {
 
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	client, err := NewClient(context.Background(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	client, err := NewClient(context.Background(), WithTarget(ts.URL), WithRequestTimeout(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,8 +173,8 @@ func TestServerSentEventStreamUsesAcceptCodec(t *testing.T) {
 		http.MethodGet,
 		"/events",
 		nil,
-		Accept("text/event-stream, application/x-stream-test"),
-		ContentType("application/x-stream-test"),
+		WithAccept("text/event-stream, application/x-stream-test"),
+		WithContentType("application/x-stream-test"),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -206,9 +206,9 @@ func TestServerSentEventStreamUsesClientMiddleware(t *testing.T) {
 	defer ts.Close()
 	client, err := NewClient(
 		context.Background(),
-		WithEndpoint(ts.URL),
-		WithTimeout(time.Second),
-		WithMiddleware(func(handler middleware.UnaryHandler) middleware.UnaryHandler {
+		WithTarget(ts.URL),
+		WithRequestTimeout(time.Second),
+		WithClientMiddleware(func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 			return func(ctx context.Context, req any) (any, error) {
 				tr, ok := transportpkg.FromClientContext(ctx)
 				if !ok {
@@ -223,7 +223,7 @@ func TestServerSentEventStreamUsesClientMiddleware(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stream, err := client.ServerSentEvent(context.Background(), http.MethodGet, "/events", nil, Accept("text/event-stream"))
+	stream, err := client.ServerSentEvent(context.Background(), http.MethodGet, "/events", nil, WithAccept("text/event-stream"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +277,7 @@ func TestClientStreamSendCapabilityIsDiscoverableByAssertion(t *testing.T) {
 
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	client, err := NewClient(t.Context(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	client, err := NewClient(t.Context(), WithTarget(ts.URL), WithRequestTimeout(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,12 +330,12 @@ func TestWebSocketStreamBindsPathQueryAndExchangesMessages(t *testing.T) {
 
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	client, err := NewClient(context.Background(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	client, err := NewClient(context.Background(), WithTarget(ts.URL), WithRequestTimeout(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	stream, err := client.WebSocket(context.Background(), "/ws/forge?sub.naming=go", Accept("application/protojson"))
+	stream, err := client.WebSocket(context.Background(), "/ws/forge?sub.naming=go", WithAccept("application/protojson"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,12 +385,12 @@ func TestWebSocketStreamBindsNamedBodyField(t *testing.T) {
 
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	client, err := NewClient(context.Background(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	client, err := NewClient(context.Background(), WithTarget(ts.URL), WithRequestTimeout(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	stream, err := client.WebSocket(context.Background(), "/ws/forge", Accept("application/protojson"))
+	stream, err := client.WebSocket(context.Background(), "/ws/forge", WithAccept("application/protojson"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -462,15 +462,15 @@ func TestWebSocketStreamUsesContentTypeCodec(t *testing.T) {
 
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	client, err := NewClient(context.Background(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	client, err := NewClient(context.Background(), WithTarget(ts.URL), WithRequestTimeout(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
 	stream, err := client.WebSocket(
 		context.Background(),
 		"/ws",
-		Accept("application/x-stream-test"),
-		ContentType("application/x-stream-test"),
+		WithAccept("application/x-stream-test"),
+		WithContentType("application/x-stream-test"),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -503,11 +503,11 @@ func TestWebSocketStreamCloseSendPreventsSend(t *testing.T) {
 
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	client, err := NewClient(context.Background(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	client, err := NewClient(context.Background(), WithTarget(ts.URL), WithRequestTimeout(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
-	stream, err := client.WebSocket(context.Background(), "/ws", Accept("application/protojson"))
+	stream, err := client.WebSocket(context.Background(), "/ws", WithAccept("application/protojson"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -544,9 +544,9 @@ func TestWebSocketStreamUsesClientMiddleware(t *testing.T) {
 	defer ts.Close()
 	client, err := NewClient(
 		context.Background(),
-		WithEndpoint(ts.URL),
-		WithTimeout(time.Second),
-		WithMiddleware(func(handler middleware.UnaryHandler) middleware.UnaryHandler {
+		WithTarget(ts.URL),
+		WithRequestTimeout(time.Second),
+		WithClientMiddleware(func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 			return func(ctx context.Context, req any) (any, error) {
 				tr, ok := transportpkg.FromClientContext(ctx)
 				if !ok {
@@ -591,7 +591,7 @@ func TestWebSocketStreamNormalEOFReportsSelectorSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 	done := make(chan selector.DoneInfo, 1)
-	client, err := NewClient(context.Background(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	client, err := NewClient(context.Background(), WithTarget(ts.URL), WithRequestTimeout(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -601,7 +601,7 @@ func TestWebSocketStreamNormalEOFReportsSelectorSuccess(t *testing.T) {
 		done: done,
 	}
 
-	stream, err := client.WebSocket(context.Background(), "/ws", Accept("application/protojson"))
+	stream, err := client.WebSocket(context.Background(), "/ws", WithAccept("application/protojson"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -645,12 +645,12 @@ func TestWebSocketStreamSetReadDeadline(t *testing.T) {
 
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	client, err := NewClient(context.Background(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	client, err := NewClient(context.Background(), WithTarget(ts.URL), WithRequestTimeout(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Open the stream but never send, so the server-side Recv hits its read deadline.
-	if _, err = client.WebSocket(context.Background(), "/ws", Accept("application/protojson")); err != nil {
+	if _, err = client.WebSocket(context.Background(), "/ws", WithAccept("application/protojson")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -682,11 +682,11 @@ func TestWebSocketStreamSetWriteDeadline(t *testing.T) {
 
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	client, err := NewClient(context.Background(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	client, err := NewClient(context.Background(), WithTarget(ts.URL), WithRequestTimeout(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
-	stream, err := client.WebSocket(context.Background(), "/ws", Accept("application/protojson"))
+	stream, err := client.WebSocket(context.Background(), "/ws", WithAccept("application/protojson"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -789,7 +789,7 @@ func TestServerStreamDetachesServerTimeout(t *testing.T) {
 
 func TestServerSentEventStreamSurvivesServerTimeout(t *testing.T) {
 	serverTimedOut := make(chan struct{})
-	srv := NewServer(Timeout(10 * time.Millisecond))
+	srv := NewServer(WithTimeout(10 * time.Millisecond))
 	srv.Route("/").GET("/events", func(ctx Context) error {
 		stream := NewServerSentEventServerStream(ctx)
 		<-ctx.Request().Context().Done()
@@ -805,7 +805,7 @@ func TestServerSentEventStreamSurvivesServerTimeout(t *testing.T) {
 
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	client, err := NewClient(t.Context(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	client, err := NewClient(t.Context(), WithTarget(ts.URL), WithRequestTimeout(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -828,7 +828,7 @@ func TestServerSentEventStreamSurvivesServerTimeout(t *testing.T) {
 
 func TestWebSocketStreamSurvivesServerTimeout(t *testing.T) {
 	serverTimedOut := make(chan struct{})
-	srv := NewServer(Timeout(10 * time.Millisecond))
+	srv := NewServer(WithTimeout(10 * time.Millisecond))
 	srv.Route("/").GET("/ws", func(ctx Context) error {
 		stream, err := NewWebSocketServerStream(ctx)
 		if err != nil {
@@ -847,7 +847,7 @@ func TestWebSocketStreamSurvivesServerTimeout(t *testing.T) {
 
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
-	client, err := NewClient(t.Context(), WithEndpoint(ts.URL), WithTimeout(time.Second))
+	client, err := NewClient(t.Context(), WithTarget(ts.URL), WithRequestTimeout(time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -882,14 +882,14 @@ func (b *closeCountingBody) Close() error {
 }
 
 type streamTestSelector struct {
-	node selector.Node
+	node *selector.Node
 	done chan selector.DoneInfo
 }
 
-func (s *streamTestSelector) Select(context.Context, ...selector.SelectOption) (selector.Node, selector.DoneFunc, error) {
+func (s *streamTestSelector) Select(context.Context, ...selector.SelectOption) (*selector.Node, selector.DoneFunc, error) {
 	return s.node, func(_ context.Context, di selector.DoneInfo) {
 		s.done <- di
 	}, nil
 }
 
-func (*streamTestSelector) Apply([]selector.Node) {}
+func (*streamTestSelector) Apply([]*selector.Node) {}

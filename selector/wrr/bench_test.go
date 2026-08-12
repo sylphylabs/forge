@@ -11,10 +11,7 @@ import (
 func benchmarkWRRNodes(count, offset int) []selector.WeightedNode {
 	nodes := make([]selector.WeightedNode, count)
 	for i := range count {
-		nodes[i] = &mockWeightedNode{
-			address: fmt.Sprintf("node-%d", offset+i),
-			weight:  float64(1 + i%10),
-		}
+		nodes[i] = newMockWeightedNode(fmt.Sprintf("node-%d", offset+i), float64(1+i%10))
 	}
 	return nodes
 }
@@ -23,7 +20,7 @@ func BenchmarkPickWorkloads(b *testing.B) {
 	ctx := context.Background()
 	for _, count := range []int{1, 5, 10, 100} {
 		b.Run(fmt.Sprintf("stable/%d", count), func(b *testing.B) {
-			balancer := &Balancer{currentWeight: make(map[string]float64)}
+			balancer := newBalancer()
 			nodes := benchmarkWRRNodes(count, 0)
 			_, _, _ = balancer.Pick(ctx, nodes)
 			b.ReportAllocs()
@@ -37,7 +34,7 @@ func BenchmarkPickWorkloads(b *testing.B) {
 			nodes := benchmarkWRRNodes(count, 0)
 			b.ReportAllocs()
 			for b.Loop() {
-				balancer := &Balancer{currentWeight: make(map[string]float64)}
+				balancer := newBalancer()
 				for size := 1; size <= count; size++ {
 					_, _, _ = balancer.Pick(ctx, nodes[:size])
 				}
@@ -49,7 +46,7 @@ func BenchmarkPickWorkloads(b *testing.B) {
 			reduced := full[:max(1, count/2)]
 			b.ReportAllocs()
 			for b.Loop() {
-				balancer := &Balancer{currentWeight: make(map[string]float64)}
+				balancer := newBalancer()
 				_, _, _ = balancer.Pick(ctx, full)
 				_, _, _ = balancer.Pick(ctx, reduced)
 			}
@@ -60,7 +57,7 @@ func BenchmarkPickWorkloads(b *testing.B) {
 			second := benchmarkWRRNodes(count, count)
 			b.ReportAllocs()
 			for b.Loop() {
-				balancer := &Balancer{currentWeight: make(map[string]float64)}
+				balancer := newBalancer()
 				_, _, _ = balancer.Pick(ctx, first)
 				_, _, _ = balancer.Pick(ctx, second)
 			}
@@ -69,7 +66,7 @@ func BenchmarkPickWorkloads(b *testing.B) {
 }
 
 func BenchmarkPickParallel(b *testing.B) {
-	balancer := &Balancer{currentWeight: make(map[string]float64)}
+	balancer := newBalancer()
 	nodes := benchmarkWRRNodes(10, 0)
 	ctx := context.Background()
 	b.ReportAllocs()

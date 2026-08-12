@@ -25,7 +25,7 @@ type AppInfo interface {
 	Name() string
 	Version() string
 	Metadata() map[string]string
-	Endpoint() []string
+	Endpoints() []string
 }
 
 var _ transport.Healthzer = (*App)(nil)
@@ -49,7 +49,6 @@ type App struct {
 func New(opts ...Option) *App {
 	o := options{
 		ctx:              context.Background(),
-		sigs:             []os.Signal{syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGINT},
 		registrarTimeout: 10 * time.Second,
 		stopTimeout:      10 * time.Second,
 		afterStopTimeout: 10 * time.Second,
@@ -57,6 +56,9 @@ func New(opts ...Option) *App {
 	o.id = uuid.New().String()
 	for _, opt := range opts {
 		opt(&o)
+	}
+	if o.sigs == nil {
+		o.sigs = []os.Signal{syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGINT}
 	}
 	o.metadata = maps.Clone(o.metadata)
 	if o.logger != nil {
@@ -82,8 +84,8 @@ func (a *App) Version() string { return a.opts.version }
 // Metadata returns service metadata.
 func (a *App) Metadata() map[string]string { return maps.Clone(a.opts.metadata) }
 
-// Endpoint returns endpoints.
-func (a *App) Endpoint() []string {
+// Endpoints returns endpoints.
+func (a *App) Endpoints() []string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.endpoints == nil && a.instance != nil {
@@ -92,7 +94,16 @@ func (a *App) Endpoint() []string {
 	return slices.Clone(a.endpoints)
 }
 
-// Run executes all OnStart hooks registered with the application's Lifecycle.
+// Run starts the application and blocks until it stops. It builds the
+// registry instance, runs the BeforeStart hooks, starts every configured
+// server, registers the instance with the registrar when one is configured,
+// and then runs the AfterStart hooks. It returns when the application stops —
+// because [App.Stop] was called, an exit signal from the [WithSignal] option
+// arrived, or a server or hook failed. On the way out it runs the BeforeStop
+// hooks, deregisters the instance, shuts the servers down within
+// [WithStopTimeout], and finally runs the AfterStop hooks within
+// [WithAfterStopTimeout]. The returned error joins every failure observed along
+// the way.
 func (a *App) Run() error {
 	sctx := NewContext(a.ctx, a)
 	eg, ctx := errgroup.WithContext(sctx)

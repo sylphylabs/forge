@@ -13,7 +13,7 @@ import (
 
 func TestWrr(t *testing.T) {
 	wrr := New()
-	nodes := make([]selector.Node, 0, 2)
+	nodes := make([]*selector.Node, 0, 2)
 	nodes = append(nodes, selector.NewNode(
 		"http",
 		"127.0.0.1:8080",
@@ -44,9 +44,9 @@ func TestWrr(t *testing.T) {
 			t.Errorf("expect node, got nil")
 		}
 		done(context.Background(), selector.DoneInfo{})
-		if n.Address() == "127.0.0.1:8080" {
+		if n.Address == "127.0.0.1:8080" {
 			count1++
-		} else if n.Address() == "127.0.0.1:9090" {
+		} else if n.Address == "127.0.0.1:9090" {
 			count2++
 		}
 	}
@@ -60,13 +60,13 @@ func TestWrr(t *testing.T) {
 
 // TestCurrentWeightCleanup tests that stale entries in currentWeight map are cleaned up
 func TestCurrentWeightCleanup(t *testing.T) {
-	balancer := &Balancer{currentWeight: make(map[string]float64)}
+	balancer := newBalancer()
 
 	// Create initial nodes
 	nodes1 := []selector.WeightedNode{
-		&mockWeightedNode{address: "node1", weight: 10},
-		&mockWeightedNode{address: "node2", weight: 20},
-		&mockWeightedNode{address: "node3", weight: 30},
+		newMockWeightedNode("node1", 10),
+		newMockWeightedNode("node2", 20),
+		newMockWeightedNode("node3", 30),
 	}
 
 	// Pick from initial nodes to populate currentWeight
@@ -84,8 +84,8 @@ func TestCurrentWeightCleanup(t *testing.T) {
 
 	// Change to different set of nodes (simulating service discovery update)
 	nodes2 := []selector.WeightedNode{
-		&mockWeightedNode{address: "node2", weight: 20}, // only node2 remains
-		&mockWeightedNode{address: "node4", weight: 40}, // node4 is new
+		newMockWeightedNode("node2", 20), // only node2 remains
+		newMockWeightedNode("node4", 40), // node4 is new
 	}
 
 	// Pick from new nodes
@@ -115,7 +115,7 @@ func TestCurrentWeightCleanup(t *testing.T) {
 }
 
 // addrSet returns the set of addresses currently tracked in currentWeight.
-func addrSet(b *Balancer) map[string]struct{} {
+func addrSet(b *balancer) map[string]struct{} {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	s := make(map[string]struct{}, len(b.currentWeight))
@@ -127,7 +127,7 @@ func addrSet(b *Balancer) map[string]struct{} {
 
 // assertTracked checks that currentWeight tracks exactly the given addresses,
 // i.e. no stale entries linger and the map never grows beyond the live node set.
-func assertTracked(t *testing.T, b *Balancer, want ...string) {
+func assertTracked(t *testing.T, b *balancer, want ...string) {
 	t.Helper()
 	got := addrSet(b)
 	if len(got) != len(want) {
@@ -145,22 +145,22 @@ func assertTracked(t *testing.T, b *Balancer, want ...string) {
 // same-length swap and a partial overlap) drops entries for nodes that disappeared.
 func TestCleanupOnlyWhenNodesChange(t *testing.T) {
 	ctx := context.Background()
-	balancer := &Balancer{currentWeight: make(map[string]float64)}
+	balancer := newBalancer()
 
 	nodes1 := []selector.WeightedNode{
-		&mockWeightedNode{address: "node1", weight: 10},
-		&mockWeightedNode{address: "node2", weight: 20},
+		newMockWeightedNode("node1", 10),
+		newMockWeightedNode("node2", 20),
 	}
 	// nodes2 is a full swap of nodes1 with the same length - the trickiest case
 	// for length-based staleness detection.
 	nodes2 := []selector.WeightedNode{
-		&mockWeightedNode{address: "node3", weight: 30},
-		&mockWeightedNode{address: "node4", weight: 40},
+		newMockWeightedNode("node3", 30),
+		newMockWeightedNode("node4", 40),
 	}
 	// nodes3 keeps node3 but replaces node4 with node5 (same length, partial overlap).
 	nodes3 := []selector.WeightedNode{
-		&mockWeightedNode{address: "node3", weight: 30},
-		&mockWeightedNode{address: "node5", weight: 50},
+		newMockWeightedNode("node3", 30),
+		newMockWeightedNode("node5", 50),
 	}
 
 	pick := func(nodes []selector.WeightedNode) {
@@ -191,25 +191,23 @@ func TestCleanupOnlyWhenNodesChange(t *testing.T) {
 
 // mockWeightedNode is a mock implementation for testing
 type mockWeightedNode struct {
-	address string
-	weight  float64
+	node   *selector.Node
+	weight float64
 }
 
-func (m *mockWeightedNode) Raw() selector.Node { return nil }
-func (m *mockWeightedNode) Weight() float64    { return m.weight }
-func (m *mockWeightedNode) Address() string    { return m.address }
+func newMockWeightedNode(address string, weight float64) *mockWeightedNode {
+	return &mockWeightedNode{node: &selector.Node{Scheme: "http", Address: address}, weight: weight}
+}
+
+func (m *mockWeightedNode) Raw() *selector.Node { return m.node }
+func (m *mockWeightedNode) Weight() float64     { return m.weight }
 func (m *mockWeightedNode) Pick() selector.DoneFunc {
 	return func(context.Context, selector.DoneInfo) {}
 }
-func (m *mockWeightedNode) PickElapsed() time.Duration  { return 0 }
-func (m *mockWeightedNode) Scheme() string              { return "http" }
-func (m *mockWeightedNode) ServiceName() string         { return "test" }
-func (m *mockWeightedNode) InitialWeight() *int64       { return nil }
-func (m *mockWeightedNode) Version() string             { return "v1.0.0" }
-func (m *mockWeightedNode) Metadata() map[string]string { return nil }
+func (m *mockWeightedNode) PickElapsed() time.Duration { return 0 }
 
 func TestEmpty(t *testing.T) {
-	b := &Balancer{}
+	b := newBalancer()
 	_, _, err := b.Pick(context.Background(), []selector.WeightedNode{})
 	if err == nil {
 		t.Errorf("expect no error, got %v", err)
@@ -219,15 +217,15 @@ func TestEmpty(t *testing.T) {
 // BenchmarkPickWithSameNodes benchmarks Pick() calls with the same node set
 // This demonstrates the performance improvement where cleanup only happens on node changes
 func BenchmarkPickWithSameNodes(b *testing.B) {
-	balancer := &Balancer{currentWeight: make(map[string]float64)}
+	balancer := newBalancer()
 
 	// Create a fixed set of nodes
 	nodes := []selector.WeightedNode{
-		&mockWeightedNode{address: "node1", weight: 10},
-		&mockWeightedNode{address: "node2", weight: 20},
-		&mockWeightedNode{address: "node3", weight: 30},
-		&mockWeightedNode{address: "node4", weight: 40},
-		&mockWeightedNode{address: "node5", weight: 50},
+		newMockWeightedNode("node1", 10),
+		newMockWeightedNode("node2", 20),
+		newMockWeightedNode("node3", 30),
+		newMockWeightedNode("node4", 40),
+		newMockWeightedNode("node5", 50),
 	}
 
 	ctx := context.Background()
@@ -248,17 +246,17 @@ func BenchmarkPickWithSameNodes(b *testing.B) {
 // BenchmarkPickWithChangingNodes benchmarks Pick() calls with changing node sets
 // This shows the overhead when nodes actually change (expected to be slower)
 func BenchmarkPickWithChangingNodes(b *testing.B) {
-	balancer := &Balancer{currentWeight: make(map[string]float64)}
+	balancer := newBalancer()
 
 	// Create alternating sets of nodes to simulate node changes
 	nodes1 := []selector.WeightedNode{
-		&mockWeightedNode{address: "node1", weight: 10},
-		&mockWeightedNode{address: "node2", weight: 20},
+		newMockWeightedNode("node1", 10),
+		newMockWeightedNode("node2", 20),
 	}
 
 	nodes2 := []selector.WeightedNode{
-		&mockWeightedNode{address: "node3", weight: 30},
-		&mockWeightedNode{address: "node4", weight: 40},
+		newMockWeightedNode("node3", 30),
+		newMockWeightedNode("node4", 40),
 	}
 
 	ctx := context.Background()

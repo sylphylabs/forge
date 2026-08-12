@@ -76,9 +76,9 @@ func (c *GreeterHTTPClientImpl) SayHello(ctx context.Context, in *HelloRequest, 
 		return nil, err
 	}
 	opts = append([]http.CallOption{
-		http.Accept("application/json"),
-		http.Operation(OperationGreeterSayHello),
-		http.PathTemplate(pattern),
+		http.WithAccept("application/json"),
+		http.WithOperation(OperationGreeterSayHello),
+		http.WithPathTemplate(pattern),
 	}, opts...)
 	err = c.cc.Invoke(ctx, "GET", path, nil, transcoding.NewProtoJSON(&out), opts...)
 	if err != nil {

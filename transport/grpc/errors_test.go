@@ -101,7 +101,7 @@ func TestTraceUsesRequestInfoWithoutConsumingMetadata(t *testing.T) {
 }
 
 func TestStatusDoesNotAttachEmptyRetryInfo(t *testing.T) {
-	gs := StatusFrom(errors.PublicOf(errors.New(errors.KindUnavailable)))
+	gs := StatusFrom(errors.PublicOf(errors.Of(errors.KindUnavailable)))
 	for _, detail := range gs.Details() {
 		if _, ok := detail.(*errdetails.RetryInfo); ok {
 			t.Error("status attached RetryInfo without a retry_delay")
@@ -188,7 +188,7 @@ func TestViolationsSurviveTheWire(t *testing.T) {
 // combines it with its own idempotence declaration; this test covers the half
 // the transport is responsible for.
 func TestKindSurvivesTheWire(t *testing.T) {
-	transient := errors.New(errors.KindUnavailable).WithReason("BACKEND_DOWN")
+	transient := errors.Of(errors.KindUnavailable).WithReason("BACKEND_DOWN")
 	received, _ := ErrorFrom(StatusFrom(errors.PublicOf(transient)).Err())
 	if got := errors.KindOf(received); got != errors.KindUnavailable {
 		t.Errorf("KindOf(received) = %v, want KindUnavailable", got)

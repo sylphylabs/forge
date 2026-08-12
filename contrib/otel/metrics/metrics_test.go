@@ -269,7 +269,7 @@ func TestHTTPServerForgeRouteIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewHTTPServerFilter() failed: %v", err)
 			}
-			server := forgehttp.NewServer(forgehttp.Filter(filter))
+			server := forgehttp.NewServer(forgehttp.WithFilter(filter))
 			router := server.Route("/")
 			router.GET("/v1/{message.name=publishers/*/books/*}", func(ctx forgehttp.Context) error {
 				return ctx.String(http.StatusOK, "ok")
@@ -907,7 +907,7 @@ func TestHTTPClientDiscoveryDirectDoUsesConfiguredAuthority(t *testing.T) {
 	var receivedAuthority string
 	client, err := forgehttp.NewClient(
 		t.Context(),
-		forgehttp.WithEndpoint("discovery:///catalog.service"),
+		forgehttp.WithTarget("discovery:///catalog.service"),
 		forgehttp.WithDiscovery(staticDiscovery{instances: []*registry.ServiceInstance{{
 			ID:        "node-1",
 			Name:      "catalog.service",
@@ -997,7 +997,7 @@ func TestHTTPClientDiscoveryUsesLogicalAuthorityAcrossRedirect(t *testing.T) {
 	}}}
 	client, err := forgehttp.NewClient(
 		t.Context(),
-		forgehttp.WithEndpoint("discovery:///catalog.service"),
+		forgehttp.WithTarget("discovery:///catalog.service"),
 		forgehttp.WithDiscovery(discovery),
 		forgehttp.WithBlock(),
 		forgehttp.WithTransport(base),
@@ -1605,7 +1605,7 @@ type staticDiscovery struct {
 	instances []*registry.ServiceInstance
 }
 
-func (discovery staticDiscovery) GetService(context.Context, string) ([]*registry.ServiceInstance, error) {
+func (discovery staticDiscovery) Instances(context.Context, string) ([]*registry.ServiceInstance, error) {
 	return discovery.instances, nil
 }
 
@@ -1621,13 +1621,17 @@ type staticWatcher struct {
 	delivered bool
 }
 
-func (watcher *staticWatcher) Next() ([]*registry.ServiceInstance, error) {
+func (watcher *staticWatcher) Next(ctx context.Context) ([]*registry.ServiceInstance, error) {
 	if !watcher.delivered {
 		watcher.delivered = true
 		return watcher.instances, nil
 	}
-	<-watcher.ctx.Done()
-	return nil, watcher.ctx.Err()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-watcher.ctx.Done():
+		return nil, watcher.ctx.Err()
+	}
 }
 
 func (watcher *staticWatcher) Stop() error {

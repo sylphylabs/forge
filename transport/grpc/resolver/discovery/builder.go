@@ -15,12 +15,18 @@ import (
 
 const name = "discovery"
 
+// DefaultWatchTimeout bounds how long Build waits for the registry to create
+// a watcher. Creating a watch is a one-time setup exchange with the registry,
+// not an RPC, so it carries its own budget; override it with [WithTimeout].
+const DefaultWatchTimeout = 10 * time.Second
+
 var ErrWatcherCreateTimeout = errors.New("discovery create watcher overtime")
 
 // Option is builder option.
 type Option func(o *builder)
 
-// WithTimeout with timeout option.
+// WithTimeout sets how long Build waits for the registry to create a watcher.
+// Zero or below means Build waits without a deadline.
 func WithTimeout(timeout time.Duration) Option {
 	return func(b *builder) {
 		b.timeout = timeout
@@ -66,7 +72,7 @@ type builder struct {
 func NewBuilder(d registry.Discovery, opts ...Option) resolver.Builder {
 	b := &builder{
 		discoverer: d,
-		timeout:    time.Second * 10,
+		timeout:    DefaultWatchTimeout,
 		insecure:   false,
 		subsetSize: 25,
 	}
@@ -77,39 +83,46 @@ func NewBuilder(d registry.Discovery, opts ...Option) resolver.Builder {
 }
 
 func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
-	watchRes := &struct {
-		err error
-		w   registry.Watcher
-	}{}
-
-	done := make(chan struct{}, 1)
+	// w and err are written before done closes and read only after it closes,
+	// on every path, so the goroutine and Build never touch them concurrently.
+	var (
+		w        registry.Watcher
+		watchErr error
+	)
+	done := make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		w, err := b.discoverer.Watch(ctx, strings.TrimPrefix(target.URL.Path, "/"))
-		watchRes.w = w
-		watchRes.err = err
+		w, watchErr = b.discoverer.Watch(ctx, strings.TrimPrefix(target.URL.Path, "/"))
 		close(done)
 	}()
 
-	var err error
 	if b.timeout > 0 {
+		timer := time.NewTimer(b.timeout)
+		defer timer.Stop()
 		select {
 		case <-done:
-			err = watchRes.err
-		case <-time.After(b.timeout):
-			err = ErrWatcherCreateTimeout
+		case <-timer.C:
+			// Watch may still succeed after the deadline; nobody will use that
+			// watcher, so cancel it and stop it once it materializes.
+			cancel()
+			go func() {
+				<-done
+				if w != nil {
+					_ = w.Stop()
+				}
+			}()
+			return nil, ErrWatcherCreateTimeout
 		}
 	} else {
 		<-done
-		err = watchRes.err
 	}
-	if err != nil {
+	if watchErr != nil {
 		cancel()
-		return nil, err
+		return nil, watchErr
 	}
 
 	r := &discoveryResolver{
-		w:               watchRes.w,
+		w:               w,
 		cc:              cc,
 		ctx:             ctx,
 		cancel:          cancel,

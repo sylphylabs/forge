@@ -48,6 +48,44 @@ func TestNilErrorHandling(t *testing.T) {
 	}
 }
 
+// The deriving methods share the accessors' contract: a typed-nil receiver is
+// the zero-value error, so deriving from one yields a usable KindUnknown error
+// rather than a panic.
+func TestDerivingFromTypedNil(t *testing.T) {
+	var typed *Error
+
+	tests := []struct {
+		name    string
+		derived *Error
+	}{
+		{"Msg", typed.Msg("boom")},
+		{"Msgf", typed.Msgf("boom %d", 1)},
+		{"Wrap", typed.Wrap(&causeError{msg: "cause"})},
+		{"Meta", typed.Meta("k", "v")},
+		{"WithMetadata", typed.WithMetadata(map[string]string{"k": "v"})},
+		{"WithTraceID", typed.WithTraceID("a1b2c3")},
+		{"WithReason", typed.WithReason("GONE")},
+		{"WithDomain", typed.WithDomain("test.v1")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.derived == nil {
+				t.Fatal("deriving from a typed-nil returned nil")
+			}
+			if got := tt.derived.Kind(); got != KindUnknown {
+				t.Errorf("kind = %v, want KindUnknown", got)
+			}
+		})
+	}
+
+	if got := typed.Msg("boom").Message(); got != "boom" {
+		t.Errorf("message = %q, want it set on the derived copy", got)
+	}
+	if typed.Wrap(nil) != typed {
+		t.Error("Wrap(nil) on a typed-nil is not a no-op")
+	}
+}
+
 // A sentinel is shared package state. Deriving from one must never change it.
 func TestSentinelIsImmutable(t *testing.T) {
 	base := MustDefine(KindNotFound, "test.v1", "THING_NOT_FOUND")
@@ -120,6 +158,85 @@ func TestIsDoesNotUnwrapTarget(t *testing.T) {
 	wrappedTarget := fmt.Errorf("target context: %w", errSentinel)
 	if stderrors.Is(errSentinel, wrappedTarget) {
 		t.Error("Error.Is traversed the target error chain")
+	}
+}
+
+// Identity is the complete domain and reason pair. An error missing either
+// half has none, so it matches only itself; two anonymous errors of one Kind
+// are two unrelated failures, and matching them would make every internal
+// error in a process compare equal. Classifying by Kind is KindOf's job.
+func TestIsRequiresACompleteIdentity(t *testing.T) {
+	tests := []struct {
+		name string
+		a, b *Error
+		want bool
+	}{
+		{
+			name: "same kind no reason",
+			a:    Of(KindInternal),
+			b:    Of(KindInternal),
+			want: false,
+		},
+		{
+			name: "same reason different kind",
+			a:    MustDefine(KindNotFound, "test.v1", "GONE"),
+			b:    MustDefine(KindUnavailable, "test.v1", "GONE"),
+			want: true,
+		},
+		{
+			name: "same reason no domain",
+			a:    Of(KindInternal).WithReason("CACHE_CORRUPT"),
+			b:    Of(KindInternal).WithReason("CACHE_CORRUPT"),
+			want: false,
+		},
+		{
+			name: "same domain no reason",
+			a:    Of(KindInternal).WithDomain("test.v1"),
+			b:    Of(KindInternal).WithDomain("test.v1"),
+			want: false,
+		},
+		{
+			name: "complete identity with domain and reason",
+			a:    Of(KindInternal).WithDomain("test.v1").WithReason("CACHE_CORRUPT"),
+			b:    Of(KindUnknown).WithDomain("test.v1").WithReason("CACHE_CORRUPT"),
+			want: true,
+		},
+		{
+			name: "sentinel derivation",
+			a:    errSentinel.Msg("x"),
+			b:    errSentinel,
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := stderrors.Is(tt.a, tt.b); got != tt.want {
+				t.Errorf("Is(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
+// The standard library compares values before calling Is, so an anonymous
+// error still matches itself even though it has no cross-instance identity.
+func TestIsMatchesAnonymousErrorBySameValue(t *testing.T) {
+	anon := Of(KindInternal)
+	if !stderrors.Is(fmt.Errorf("ctx: %w", anon), anon) {
+		t.Error("an anonymous error does not match its own value")
+	}
+}
+
+// Two reports of the same identity match regardless of which Kind either
+// carries: a transport boundary may reclassify the Kind in transit, and that
+// must not break sentinel matching.
+func TestIsIgnoresKind(t *testing.T) {
+	reclassified := FromPublic(Public{
+		Kind:   KindUnavailable, // a proxy rewrote the status line
+		Domain: errSentinel.Domain(),
+		Reason: errSentinel.Reason(),
+	})
+	if !stderrors.Is(reclassified, errSentinel) {
+		t.Error("a reclassified error no longer matches its sentinel")
 	}
 }
 
@@ -202,7 +319,7 @@ func TestErrorStringIncludesCause(t *testing.T) {
 
 func TestErrorStringDoesNotRepeatIdenticalMessageAndCause(t *testing.T) {
 	cause := &causeError{msg: "same detail"}
-	e := New(KindUnknown).Msg(cause.Error()).Wrap(cause)
+	e := Of(KindUnknown).Msg(cause.Error()).Wrap(cause)
 	if got := e.Error(); strings.Count(got, cause.Error()) != 1 {
 		t.Errorf("Error() duplicated an identical message and cause: %q", got)
 	}

@@ -18,7 +18,7 @@ import (
 func TestWithEndpoint(t *testing.T) {
 	o := &clientOptions{}
 	v := "abc"
-	WithEndpoint(v)(o)
+	WithTarget(v)(o)
 	if !reflect.DeepEqual(v, o.endpoint) {
 		t.Errorf("expect %v but got %v", v, o.endpoint)
 	}
@@ -27,7 +27,7 @@ func TestWithEndpoint(t *testing.T) {
 func TestWithTimeout(t *testing.T) {
 	o := &clientOptions{}
 	v := time.Duration(123)
-	WithTimeout(v)(o)
+	WithRequestTimeout(v)(o)
 	if !reflect.DeepEqual(v, o.timeout) {
 		t.Errorf("expect %v but got %v", v, o.timeout)
 	}
@@ -38,7 +38,7 @@ func TestWithMiddleware(t *testing.T) {
 	v := []middleware.UnaryMiddleware{
 		func(middleware.UnaryHandler) middleware.UnaryHandler { return nil },
 	}
-	WithMiddleware(v...)(o)
+	WithClientMiddleware(v...)(o)
 	if !reflect.DeepEqual(v, o.middleware) {
 		t.Errorf("expect %v but got %v", v, o.middleware)
 	}
@@ -49,7 +49,7 @@ func TestWithStreamMiddleware(t *testing.T) {
 	v := []middleware.UnaryMiddleware{
 		func(middleware.UnaryHandler) middleware.UnaryHandler { return nil },
 	}
-	WithStreamMiddleware(v...)(o)
+	WithClientStreamMiddleware(v...)(o)
 	if !reflect.DeepEqual(v, o.streamMiddleware) {
 		t.Errorf("expect %v but got %v", v, o.streamInts)
 	}
@@ -57,7 +57,7 @@ func TestWithStreamMiddleware(t *testing.T) {
 
 type mockRegistry struct{}
 
-func (m *mockRegistry) GetService(_ context.Context, _ string) ([]*registry.ServiceInstance, error) {
+func (m *mockRegistry) Instances(_ context.Context, _ string) ([]*registry.ServiceInstance, error) {
 	return nil, nil
 }
 
@@ -77,7 +77,7 @@ func TestWithDiscovery(t *testing.T) {
 func TestWithTLSConfig(t *testing.T) {
 	o := &clientOptions{}
 	v := &tls.Config{}
-	WithTLSConfig(v)(o)
+	WithClientTLSConfig(v)(o)
 	if !reflect.DeepEqual(v, o.tlsConf) {
 		t.Errorf("expect %v but got %v", v, o.tlsConf)
 	}
@@ -146,7 +146,7 @@ func TestWithUnaryInterceptor(t *testing.T) {
 			return nil
 		},
 	}
-	WithUnaryInterceptor(v...)(o)
+	WithUnaryClientInterceptor(v...)(o)
 	if !reflect.DeepEqual(v, o.ints) {
 		t.Errorf("expect %v but got %v", v, o.ints)
 	}
@@ -157,7 +157,7 @@ func TestWithOptions(t *testing.T) {
 	v := []grpc.DialOption{
 		grpc.EmptyDialOption{},
 	}
-	WithOptions(v...)(o)
+	WithDialOptions(v...)(o)
 	if !reflect.DeepEqual(v, o.grpcOpts) {
 		t.Errorf("expect %v but got %v", v, o.grpcOpts)
 	}
@@ -178,7 +178,7 @@ func TestNewClientOptions(t *testing.T) {
 	v := []grpc.DialOption{
 		grpc.EmptyDialOption{},
 	}
-	WithOptions(v...)(o)
+	WithDialOptions(v...)(o)
 	if !reflect.DeepEqual(v, o.grpcOpts) {
 		t.Errorf("expect %v but got %v", v, o.grpcOpts)
 	}
@@ -188,10 +188,10 @@ func TestNewClient(t *testing.T) {
 	conn, err := NewClient(
 		context.Background(),
 		WithDiscovery(&mockRegistry{}),
-		WithTimeout(10*time.Second),
-		WithEndpoint("abc"),
-		WithMiddleware(EmptyMiddleware()),
-		WithStreamMiddleware(EmptyMiddleware()),
+		WithRequestTimeout(10*time.Second),
+		WithTarget("abc"),
+		WithClientMiddleware(EmptyMiddleware()),
+		WithClientStreamMiddleware(EmptyMiddleware()),
 	)
 	if err != nil {
 		t.Fatal(err)

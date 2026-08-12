@@ -74,7 +74,7 @@ func TestParseTarget(t *testing.T) {
 
 type mockRebalancer struct{}
 
-func (m *mockRebalancer) Apply(_ []selector.Node) {}
+func (m *mockRebalancer) Apply(_ []*selector.Node) {}
 
 type mockDiscoveries struct {
 	isSecure bool
@@ -82,22 +82,20 @@ type mockDiscoveries struct {
 	stopErr  bool
 }
 
-func (d *mockDiscoveries) GetService(_ context.Context, _ string) ([]*registry.ServiceInstance, error) {
+func (d *mockDiscoveries) Instances(_ context.Context, _ string) ([]*registry.ServiceInstance, error) {
 	return nil, nil
 }
 
 const errServiceName = "needErr"
 
-func (d *mockDiscoveries) Watch(ctx context.Context, serviceName string) (registry.Watcher, error) {
+func (d *mockDiscoveries) Watch(_ context.Context, serviceName string) (registry.Watcher, error) {
 	if serviceName == errServiceName {
 		return nil, errors.New("mock test service name watch err")
 	}
-	return &mockWatch{ctx: ctx, isSecure: d.isSecure, nextErr: d.nextErr, stopErr: d.stopErr}, nil
+	return &mockWatch{isSecure: d.isSecure, nextErr: d.nextErr, stopErr: d.stopErr}, nil
 }
 
 type mockWatch struct {
-	ctx context.Context
-
 	isSecure bool
 	count    int
 
@@ -107,10 +105,10 @@ type mockWatch struct {
 	lock sync.Mutex
 }
 
-func (m *mockWatch) Next() ([]*registry.ServiceInstance, error) {
+func (m *mockWatch) Next(ctx context.Context) ([]*registry.ServiceInstance, error) {
 	select {
-	case <-m.ctx.Done():
-		return nil, m.ctx.Err()
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	default:
 	}
 	m.lock.Lock()
@@ -216,4 +214,44 @@ func TestResolver(t *testing.T) {
 	}
 
 	time.Sleep(100 * time.Millisecond)
+}
+
+// TestResolverCloseStopsWatch proves Close terminates the watch goroutine even
+// when the watcher fails with an error other than context.Canceled, instead of
+// leaving it retrying forever.
+func TestResolverCloseStopsWatch(t *testing.T) {
+	ta, err := parseTarget("discovery://helloworld", true)
+	if err != nil {
+		t.Fatalf("parse err %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	r := &resolver{
+		target:      ta,
+		watcher:     &mockWatch{nextErr: true},
+		rebalancer:  &mockRebalancer{},
+		selectorKey: "test",
+		subsetSize:  25,
+		ctx:         ctx,
+		cancel:      cancel,
+	}
+	exited := make(chan struct{})
+	go func() {
+		r.watch()
+		close(exited)
+	}()
+
+	if err := r.Close(); err != nil {
+		t.Errorf("Close() error = %v", err)
+	}
+	select {
+	case <-exited:
+	case <-time.After(2 * time.Second):
+		t.Fatal("watch goroutine still running after Close")
+	}
+
+	// Close is idempotent: a second call is a no-op reporting the first outcome.
+	if err := r.Close(); err != nil {
+		t.Errorf("second Close() error = %v", err)
+	}
 }

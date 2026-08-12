@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	internalratelimit "github.com/sylphylabs/forge/internal/ratelimit"
+	"github.com/sylphylabs/forge/middleware"
 )
 
 type (
@@ -59,4 +62,75 @@ func TestServer(t *testing.T) {
 	if rlrm.reached {
 		t.Error("The ratelimit must not run the done function and should be denied.")
 	}
+}
+
+func TestServerPanicReleasesInFlight(t *testing.T) {
+	limiter := internalratelimit.NewLimiter()
+	next := func(context.Context, any) (any, error) {
+		panic("handler panic")
+	}
+	handler := Server(WithLimiter(limiter))(next)
+
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("panic must propagate through the middleware")
+			}
+		}()
+		_, _ = handler(context.Background(), nil)
+	}()
+
+	if got := limiter.Stat().InFlight; got != 0 {
+		t.Errorf("InFlight = %d after panic, want 0", got)
+	}
+}
+
+func TestServerStreamPanicReleasesInFlight(t *testing.T) {
+	limiter := internalratelimit.NewLimiter()
+	handler := ServerStream(WithLimiter(limiter))(func(any, middleware.ServerStream) error {
+		panic("handler panic")
+	})
+
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("panic must propagate through the middleware")
+			}
+		}()
+		_ = handler(nil, &testStream{ctx: context.Background()})
+	}()
+
+	if got := limiter.Stat().InFlight; got != 0 {
+		t.Errorf("InFlight = %d after panic, want 0", got)
+	}
+}
+
+func TestPerMessageServerStreamPanicReleasesInFlight(t *testing.T) {
+	limiter := internalratelimit.NewLimiter()
+	handler := PerMessageServerStream(WithLimiter(limiter))(func(_ any, stream middleware.ServerStream) error {
+		return stream.RecvMsg(new(string))
+	})
+
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Fatal("panic must propagate through the middleware")
+			}
+		}()
+		_ = handler(nil, &panickingStream{testStream: testStream{ctx: context.Background()}})
+	}()
+
+	if got := limiter.Stat().InFlight; got != 0 {
+		t.Errorf("InFlight = %d after panic, want 0", got)
+	}
+}
+
+// panickingStream panics on RecvMsg, standing in for a transport failure that
+// unwinds through the per-message limiter.
+type panickingStream struct {
+	testStream
+}
+
+func (*panickingStream) RecvMsg(any) error {
+	panic("recv panic")
 }

@@ -97,22 +97,80 @@ func TestUnknownKindKeepsIdentity(t *testing.T) {
 	}
 }
 
-// A stale intermediary can serve an old body under a new status. Believing the
-// body would let a caller match a 503 against a NotFound sentinel and stop
-// retrying a failure that was only transient.
-func TestStatusContradictingBodyIsRejected(t *testing.T) {
+// A stale intermediary can serve an old body under a new status, and a proxy
+// can rewrite a status under a fresh body. The status line wins the
+// classification either way — a caller keeps retrying a 503 — but the
+// document's identity and diagnostics are kept: they are the only reason,
+// metadata, and trace the peer sent.
+func TestStatusContradictingBodyIsReclassified(t *testing.T) {
 	res := &http.Response{
 		Header:     http.Header{"Content-Type": []string{ProblemContentType}},
 		StatusCode: http.StatusServiceUnavailable,
 		Body: io.NopCloser(bytes.NewBufferString(
-			`{"kind":"NOT_FOUND","domain":"test.v1","reason":"GONE"}`)),
+			`{"kind":"NOT_FOUND","domain":"test.v1","reason":"GONE","trace_id":"a1b2c3"}`)),
 	}
 	got := DefaultErrorDecoder(context.Background(), res)
 	if errors.KindOf(got) != errors.KindUnavailable {
 		t.Errorf("kind = %v, want the status line to win", errors.KindOf(got))
 	}
-	if errors.Is(got, problemSentinel) {
-		t.Error("a contradicting body matched a sentinel; a caller would stop retrying")
+	if errors.ReasonOf(got) != "GONE" {
+		t.Errorf("reason = %q, want it kept", errors.ReasonOf(got))
+	}
+	if got := errors.FromError(got).TraceID(); got != "a1b2c3" {
+		t.Errorf("trace_id = %q, want it kept", got)
+	}
+}
+
+// A proxy that rewrites a status it does not know — 499 and 412 are the usual
+// victims, flattened to 400 — must not cost the caller the document's reason,
+// metadata, and trace. The status line reclassifies the failure; everything
+// the peer said about it survives.
+func TestProxyStatusRewriteKeepsDiagnostics(t *testing.T) {
+	tests := []struct {
+		name     string
+		kind     errors.Kind
+		rewrite  int
+		wantKind errors.Kind
+	}{
+		{"499 to 400", errors.KindCanceled, http.StatusBadRequest, errors.KindInvalidArgument},
+		{"412 to 400", errors.KindFailedPrecondition, http.StatusBadRequest, errors.KindInvalidArgument},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sent := errors.MustDefine(tt.kind, "test.v1", "GONE").
+				Msg("gone").
+				Meta("tenant", "acme").
+				WithTraceID("a1b2c3")
+			req := httptest.NewRequest(http.MethodGet, "/x", nil)
+			w := httptest.NewRecorder()
+			DefaultErrorEncoder(w, req, sent)
+			if w.Code == tt.rewrite {
+				t.Fatalf("status %d does not exercise a rewrite", w.Code)
+			}
+
+			// The proxy rewrote the status line; the body is untouched.
+			res := &http.Response{
+				Header:     http.Header{"Content-Type": []string{ProblemContentType}},
+				StatusCode: tt.rewrite,
+				Body:       io.NopCloser(bytes.NewReader(w.Body.Bytes())),
+			}
+			got := errors.FromError(DefaultErrorDecoder(context.Background(), res))
+			if got.Kind() != tt.wantKind {
+				t.Errorf("kind = %v, want %v from the rewritten status", got.Kind(), tt.wantKind)
+			}
+			if got.Reason() != "GONE" || got.Domain() != "test.v1" {
+				t.Errorf("identity = %q/%q, want it kept", got.Domain(), got.Reason())
+			}
+			if !errors.Is(got, sent) {
+				t.Error("the rewritten response no longer matches its sentinel")
+			}
+			if got.Metadata()["tenant"] != "acme" {
+				t.Errorf("metadata = %v, want it kept", got.Metadata())
+			}
+			if got.TraceID() != "a1b2c3" {
+				t.Errorf("trace_id = %q, want it kept", got.TraceID())
+			}
+		})
 	}
 }
 
@@ -166,19 +224,26 @@ func TestOversizedBodyIsRejected(t *testing.T) {
 }
 
 // A stream frame arrives without a status: the response status was sent when
-// the stream opened, long before the failure. There is therefore nothing for
-// the body to contradict, and rejecting it would discard every stream error.
+// the stream opened, long before the failure. There is therefore nothing to
+// reclassify by, and the body's kind is taken at its word.
 func TestNoStatusAcceptsAnyKind(t *testing.T) {
 	body := []byte(`{"kind":"NOT_FOUND","domain":"test.v1","reason":"GONE"}`)
 
-	// With a status that disagrees, the body is rejected.
-	if _, ok := unmarshalProblem(ProblemContentType, body, http.StatusInternalServerError); ok {
-		t.Error("a contradicting status accepted the body")
+	// With a status that disagrees, the status line reclassifies.
+	got, ok := unmarshalProblem(ProblemContentType, body, http.StatusInternalServerError)
+	if !ok {
+		t.Fatal("a contradicted document was rejected")
+	}
+	if got.Kind() != errors.KindInternal {
+		t.Errorf("kind = %v, want the status line to win", got.Kind())
 	}
 	// With no status, there is nothing to contradict.
-	got, ok := unmarshalProblem(ProblemContentType, body, NoStatus)
+	got, ok = unmarshalProblem(ProblemContentType, body, NoStatus)
 	if !ok {
 		t.Fatal("a stream frame was rejected for having no status")
+	}
+	if got.Kind() != errors.KindNotFound {
+		t.Errorf("kind = %v, want the body believed", got.Kind())
 	}
 	if !errors.Is(got, problemSentinel) {
 		t.Errorf("stream frame lost its identity: %v", got)

@@ -195,8 +195,8 @@ func (r *Registry) Deregister(_ context.Context, serviceInstance *registry.Servi
 	return nil
 }
 
-// GetService return the service instances in memory according to the service name.
-func (r *Registry) GetService(_ context.Context, serviceName string) ([]*registry.ServiceInstance, error) {
+// Instances returns the currently known instances of the named service.
+func (r *Registry) Instances(_ context.Context, serviceName string) ([]*registry.ServiceInstance, error) {
 	// get all instances
 	instancesResponse, err := r.consumer.GetAllInstances(&polaris.GetAllInstancesRequest{
 		GetAllInstancesRequest: model.GetAllInstancesRequest{
@@ -270,8 +270,9 @@ func newWatcher(ctx context.Context, namespace string, serviceName string, consu
 // Next returns services in the following two cases:
 // 1.the first time to watch and the service instance list is not empty.
 // 2.any service instance changes found.
-// if the above two conditions are not met, it will block until context deadline exceeded or canceled
-func (w *Watcher) Next() ([]*registry.ServiceInstance, error) {
+// if the above two conditions are not met, it will block until ctx is done
+// or the watcher is stopped
+func (w *Watcher) Next(ctx context.Context) ([]*registry.ServiceInstance, error) {
 	if !w.first {
 		w.first = true
 		if len(w.ServiceInstances) > 0 {
@@ -279,6 +280,8 @@ func (w *Watcher) Next() ([]*registry.ServiceInstance, error) {
 		}
 	}
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-w.Ctx.Done():
 		return nil, w.Ctx.Err()
 	case event := <-w.Channel:

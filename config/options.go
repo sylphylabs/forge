@@ -9,16 +9,20 @@ import (
 	"github.com/sylphylabs/forge/encoding"
 )
 
-// Decoder is config decoder.
+// Decoder turns one raw source payload into a fragment of the config tree.
+// A payload with a Format is deserialized by that format's codec; one without
+// is stored under its (dot-expanded) key as-is.
 type Decoder func(*KeyValue, map[string]any) error
 
-// Resolver resolve placeholder in config.
+// Resolver post-processes the merged config tree, typically expanding
+// ${key:default} placeholders in string values.
 type Resolver func(map[string]any) error
 
-// Merge is config merge func.
+// Merge combines a newly decoded source fragment (src) into the accumulated
+// tree (dst). Later sources win where keys collide.
 type Merge func(dst, src any) error
 
-// Option is config option.
+// Option configures [New].
 type Option func(*options)
 
 type options struct {
@@ -33,40 +37,44 @@ const (
 	boolFalseValue = "false"
 )
 
-// WithSource with config source.
+// WithSource appends config sources. Every application of the option adds to
+// the sources earlier applications contributed.
 func WithSource(s ...Source) Option {
 	return func(o *options) {
-		o.sources = s
+		o.sources = append(o.sources, s...)
 	}
 }
 
-// WithDecoder with config decoder.
-// DefaultDecoder behavior:
-// If KeyValue.Format is non-empty, then KeyValue.Value will be deserialized into map[string]interface{}
-// and stored in the config cache(map[string]interface{})
-// if KeyValue.Format is empty,{KeyValue.Key : KeyValue.Value} will be stored in config cache(map[string]interface{})
+// WithDecoder replaces the decoder that turns raw source payloads into
+// config tree fragments. The default deserializes payloads through the codec
+// registered for their Format and stores formatless payloads under their
+// dot-expanded key.
 func WithDecoder(d Decoder) Option {
 	return func(o *options) {
 		o.decoder = d
 	}
 }
 
-// WithResolveActualTypes with config resolver.
-// bool input will enable conversion of config to data types
+// WithResolveActualTypes installs a resolver that, when enabled, converts
+// placeholder expansions to their apparent Go type (bool, int64, float64)
+// instead of leaving every expansion a string.
 func WithResolveActualTypes(enableConvertToType bool) Option {
 	return func(o *options) {
 		o.resolver = newActualTypesResolver(enableConvertToType)
 	}
 }
 
-// WithResolver with config resolver.
+// WithResolver replaces the resolver applied to the merged config tree. The
+// default expands ${key:default} placeholders in string values.
 func WithResolver(r Resolver) Option {
 	return func(o *options) {
 		o.resolver = r
 	}
 }
 
-// WithMergeFunc with config merge func.
+// WithMergeFunc replaces the function that combines decoded source fragments
+// into the accumulated tree. The default deep-merges maps, later sources
+// winning where keys collide.
 func WithMergeFunc(m Merge) Option {
 	return func(o *options) {
 		o.merge = m

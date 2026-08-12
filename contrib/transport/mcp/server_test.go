@@ -9,7 +9,7 @@ import (
 func TestServer(t *testing.T) {
 	var (
 		ctx = context.Background()
-		srv = NewServer("test", "v1.0.0", Address(":0"))
+		srv = NewServer("test", "v1.0.0", WithAddress(":0"))
 	)
 	go func() {
 		if err := srv.Start(ctx); err != nil {

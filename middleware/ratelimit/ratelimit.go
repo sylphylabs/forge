@@ -79,10 +79,10 @@ func Server(opts ...Option) middleware.UnaryMiddleware {
 				// rejected
 				return nil, ErrLimitExceed
 			}
-			// allowed
-			reply, err = handler(ctx, req)
-			done(DoneInfo{Err: err})
-			return
+			// allowed; done must fire exactly once on every exit, including a
+			// panic, or the limiter's in-flight count never drains.
+			defer func() { done(DoneInfo{Err: err}) }()
+			return handler(ctx, req)
 		}
 	}
 }

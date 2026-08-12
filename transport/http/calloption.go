@@ -44,8 +44,8 @@ type csAttempt struct {
 	res *http.Response
 }
 
-// ContentType with request content type.
-func ContentType(contentType string) CallOption {
+// WithContentType sets the request content type.
+func WithContentType(contentType string) CallOption {
 	return ContentTypeCallOption{ContentType: contentType}
 }
 
@@ -61,8 +61,8 @@ func (o ContentTypeCallOption) before(c *callInfo) error {
 	return nil
 }
 
-// Accept sets the request Accept header.
-func Accept(contentType string) CallOption {
+// WithAccept sets the request Accept header.
+func WithAccept(contentType string) CallOption {
 	return AcceptCallOption{ContentType: contentType}
 }
 
@@ -85,8 +85,8 @@ func defaultCallInfo(path string) callInfo {
 	}
 }
 
-// Operation is serviceMethod call option
-func Operation(operation string) CallOption {
+// WithOperation sets the operation (service method) for the client call.
+func WithOperation(operation string) CallOption {
 	return OperationCallOption{Operation: operation}
 }
 
@@ -101,8 +101,8 @@ func (o OperationCallOption) before(c *callInfo) error {
 	return nil
 }
 
-// PathTemplate is http path template
-func PathTemplate(pattern string) CallOption {
+// WithPathTemplate sets the HTTP path template for the client call.
+func WithPathTemplate(pattern string) CallOption {
 	return PathTemplateCallOption{Pattern: pattern}
 }
 
@@ -117,9 +117,9 @@ func (o PathTemplateCallOption) before(c *callInfo) error {
 	return nil
 }
 
-// Header returns a CallOptions that retrieves the http response header
-// from server reply.
-func Header(header *http.Header) CallOption {
+// WithHeader returns a CallOption that retrieves the HTTP response header
+// from the server reply.
+func WithHeader(header *http.Header) CallOption {
 	return HeaderCallOption{header: header}
 }
 

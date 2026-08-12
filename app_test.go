@@ -162,26 +162,26 @@ func TestApp(t *testing.T) {
 	hs := http.NewServer()
 	gs := grpc.NewServer()
 	app := New(
-		Name("forge"),
-		Version("v1.0.0"),
-		Server(hs, gs),
-		BeforeStart(func(_ context.Context) error {
+		WithName("forge"),
+		WithVersion("v1.0.0"),
+		WithServer(hs, gs),
+		WithBeforeStart(func(_ context.Context) error {
 			t.Log("BeforeStart...")
 			return nil
 		}),
-		BeforeStop(func(_ context.Context) error {
+		WithBeforeStop(func(_ context.Context) error {
 			t.Log("BeforeStop...")
 			return nil
 		}),
-		AfterStart(func(_ context.Context) error {
+		WithAfterStart(func(_ context.Context) error {
 			t.Log("AfterStart...")
 			return nil
 		}),
-		AfterStop(func(_ context.Context) error {
+		WithAfterStop(func(_ context.Context) error {
 			t.Log("AfterStop...")
 			return nil
 		}),
-		Registrar(&mockRegistry{service: make(map[string]*registry.ServiceInstance)}),
+		WithRegistrar(&mockRegistry{service: make(map[string]*registry.ServiceInstance)}),
 	)
 	time.AfterFunc(time.Second, func() {
 		_ = app.Stop()
@@ -209,20 +209,20 @@ func TestAppBeforeStartFailureInvokesTransportStopAfterEndpointBuild(t *testing.
 	beforeStopCalled := make(chan struct{})
 	afterStopCalled := make(chan struct{})
 	app := New(
-		Server(server),
-		Registrar(&errorRegistry{
+		WithServer(server),
+		WithRegistrar(&errorRegistry{
 			registered:   registerCalled,
 			deregistered: deregisterCalled,
 		}),
-		BeforeStart(func(context.Context) error {
+		WithBeforeStart(func(context.Context) error {
 			requireClosed(t, server.endpointBuilt, "endpoint build signal")
 			return startErr
 		}),
-		BeforeStop(func(context.Context) error {
+		WithBeforeStop(func(context.Context) error {
 			close(beforeStopCalled)
 			return nil
 		}),
-		AfterStop(func(context.Context) error {
+		WithAfterStop(func(context.Context) error {
 			close(afterStopCalled)
 			return nil
 		}),
@@ -251,15 +251,15 @@ func TestAppRegisterFailureRollsBackStartedServers(t *testing.T) {
 	registerCalled := make(chan struct{})
 	deregisterCalled := make(chan struct{})
 	app := New(
-		Server(server),
-		Registrar(&errorRegistry{
+		WithServer(server),
+		WithRegistrar(&errorRegistry{
 			registerErr:  registerErr,
 			registerWait: server.started,
 			registered:   registerCalled,
 			deregistered: deregisterCalled,
 		}),
-		BeforeStop(func(context.Context) error { return beforeStopErr }),
-		AfterStop(func(context.Context) error { return afterStopErr }),
+		WithBeforeStop(func(context.Context) error { return beforeStopErr }),
+		WithAfterStop(func(context.Context) error { return afterStopErr }),
 	)
 
 	err := app.Run()
@@ -287,16 +287,16 @@ func TestAppAfterStartFailureRollsBackRegisteredServers(t *testing.T) {
 	registerCalled := make(chan struct{})
 	deregisterCalled := make(chan struct{})
 	app := New(
-		Server(server),
-		Registrar(&errorRegistry{
+		WithServer(server),
+		WithRegistrar(&errorRegistry{
 			deregisterErr: deregisterErr,
 			registerWait:  server.started,
 			registered:    registerCalled,
 			deregistered:  deregisterCalled,
 		}),
-		AfterStart(func(context.Context) error { return afterStartErr }),
-		BeforeStop(func(context.Context) error { return beforeStopErr }),
-		AfterStop(func(context.Context) error { return afterStopErr }),
+		WithAfterStart(func(context.Context) error { return afterStartErr }),
+		WithBeforeStop(func(context.Context) error { return beforeStopErr }),
+		WithAfterStop(func(context.Context) error { return afterStopErr }),
 	)
 
 	err := app.Run()
@@ -324,10 +324,10 @@ func TestAppStartFailureRollsBackAndJoinsCleanupErrors(t *testing.T) {
 	registered := make(chan struct{})
 	deregistered := make(chan struct{})
 	app := New(
-		Server(server),
-		Registrar(&errorRegistry{registered: registered, deregistered: deregistered}),
-		BeforeStop(func(context.Context) error { return beforeStopErr }),
-		AfterStop(func(context.Context) error { return afterStopErr }),
+		WithServer(server),
+		WithRegistrar(&errorRegistry{registered: registered, deregistered: deregistered}),
+		WithBeforeStop(func(context.Context) error { return beforeStopErr }),
+		WithAfterStop(func(context.Context) error { return afterStopErr }),
 	)
 
 	err := app.Run()
@@ -348,7 +348,7 @@ func TestAppPreservesCleanupErrorJoinedWithCancellation(t *testing.T) {
 	cleanupErr := errors.New("cleanup")
 	server := newLifecycleServer()
 	server.stopErr = errors.Join(context.Canceled, cleanupErr)
-	app := New(Server(server))
+	app := New(WithServer(server))
 	go func() {
 		<-server.started
 		_ = app.Stop()
@@ -363,7 +363,7 @@ func TestAppPreservesCleanupErrorJoinedWithCancellation(t *testing.T) {
 func TestAppReturnsUnexpectedServerCancellation(t *testing.T) {
 	server := newLifecycleServer()
 	server.startErr = context.Canceled
-	app := New(Server(server))
+	app := New(WithServer(server))
 
 	if err := app.Run(); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Run() error = %v, want context.Canceled", err)
@@ -373,7 +373,7 @@ func TestAppReturnsUnexpectedServerCancellation(t *testing.T) {
 func TestAppSuppressesServerCancellationDuringRequestedStop(t *testing.T) {
 	server := newLifecycleServer()
 	server.exitErr = context.Canceled
-	app := New(Server(server))
+	app := New(WithServer(server))
 	go func() {
 		<-server.started
 		_ = app.Stop()
@@ -392,7 +392,7 @@ func TestAppStopDuringRegisterRollsBackLateSuccess(t *testing.T) {
 		registered:      make(chan struct{}),
 		deregistered:    make(chan struct{}),
 	}
-	app := New(Server(server), Registrar(registrar))
+	app := New(WithServer(server), WithRegistrar(registrar))
 	runErr := make(chan error, 1)
 	go func() { runErr <- app.Run() }()
 
@@ -416,9 +416,9 @@ func TestAppAfterStopUsesFreshBoundedContext(t *testing.T) {
 	server := newLifecycleServer()
 	var app *App
 	app = New(
-		Server(server),
-		AfterStopTimeout(time.Second),
-		AfterStop(func(ctx context.Context) error {
+		WithServer(server),
+		WithAfterStopTimeout(time.Second),
+		WithAfterStop(func(ctx context.Context) error {
 			called = true
 			if err := ctx.Err(); err != nil {
 				t.Fatalf("AfterStop context is already canceled: %v", err)
@@ -451,10 +451,10 @@ func TestAppJoinsLifecycleErrorsAndStillCancels(t *testing.T) {
 	server := newLifecycleServer()
 	registered := make(chan struct{})
 	app := New(
-		Server(server),
-		Registrar(&errorRegistry{deregisterErr: deregisterErr, registered: registered}),
-		BeforeStop(func(context.Context) error { return beforeErr }),
-		AfterStop(func(context.Context) error { return afterErr }),
+		WithServer(server),
+		WithRegistrar(&errorRegistry{deregisterErr: deregisterErr, registered: registered}),
+		WithBeforeStop(func(context.Context) error { return beforeErr }),
+		WithAfterStop(func(context.Context) error { return afterErr }),
 	)
 	go func() {
 		<-registered
@@ -476,7 +476,7 @@ func TestAppJoinsLifecycleErrorsAndStillCancels(t *testing.T) {
 
 func TestAppStopIsIdempotent(t *testing.T) {
 	var calls int
-	app := New(BeforeStop(func(context.Context) error {
+	app := New(WithBeforeStop(func(context.Context) error {
 		calls++
 		return nil
 	}))
@@ -496,7 +496,7 @@ func TestAppConcurrentStopIsIdempotent(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	var calls atomic.Int32
-	app := New(BeforeStop(func(context.Context) error {
+	app := New(WithBeforeStop(func(context.Context) error {
 		calls.Add(1)
 		close(entered)
 		<-release
@@ -521,7 +521,7 @@ func TestAppConcurrentStopIsIdempotent(t *testing.T) {
 
 func TestApp_ID(t *testing.T) {
 	v := "123"
-	o := New(ID(v))
+	o := New(WithID(v))
 	if !reflect.DeepEqual(v, o.ID()) {
 		t.Fatalf("o.ID():%s is not equal to v:%s", o.ID(), v)
 	}
@@ -529,7 +529,7 @@ func TestApp_ID(t *testing.T) {
 
 func TestApp_Name(t *testing.T) {
 	v := "123"
-	o := New(Name(v))
+	o := New(WithName(v))
 	if !reflect.DeepEqual(v, o.Name()) {
 		t.Fatalf("o.Name():%s is not equal to v:%s", o.Name(), v)
 	}
@@ -537,7 +537,7 @@ func TestApp_Name(t *testing.T) {
 
 func TestApp_Version(t *testing.T) {
 	v := "123"
-	o := New(Version(v))
+	o := New(WithVersion(v))
 	if !reflect.DeepEqual(v, o.Version()) {
 		t.Fatalf("o.Version():%s is not equal to v:%s", o.Version(), v)
 	}
@@ -548,7 +548,7 @@ func TestApp_Metadata(t *testing.T) {
 		"a": "1",
 		"b": "2",
 	}
-	o := New(Metadata(v))
+	o := New(WithMetadata(v))
 	if !reflect.DeepEqual(v, o.Metadata()) {
 		t.Fatalf("o.Metadata():%s is not equal to v:%s", o.Metadata(), v)
 	}
@@ -556,7 +556,7 @@ func TestApp_Metadata(t *testing.T) {
 
 func TestAppMetadataReturnsSnapshot(t *testing.T) {
 	metadata := map[string]string{"region": "ap-northeast-1"}
-	app := New(Metadata(metadata))
+	app := New(WithMetadata(metadata))
 	metadata["region"] = "external-change"
 
 	got := app.Metadata()
@@ -569,7 +569,7 @@ func TestAppMetadataReturnsSnapshot(t *testing.T) {
 	}
 }
 
-func TestApp_Endpoint(t *testing.T) {
+func TestApp_Endpoints(t *testing.T) {
 	v := []string{"https://go-kratos.dev", "localhost"}
 	var endpoints []*url.URL
 	for _, urlStr := range v {
@@ -579,27 +579,27 @@ func TestApp_Endpoint(t *testing.T) {
 			endpoints = append(endpoints, endpoint)
 		}
 	}
-	o := New(Endpoint(endpoints...))
+	o := New(WithEndpoint(endpoints...))
 	if instance, err := o.buildInstance(); err != nil {
 		t.Error("build instance failed")
 	} else {
 		o.instance = instance
 	}
-	if !reflect.DeepEqual(o.Endpoint(), v) {
-		t.Errorf("Endpoint() = %v, want %v", o.Endpoint(), v)
+	if !reflect.DeepEqual(o.Endpoints(), v) {
+		t.Errorf("Endpoints() = %v, want %v", o.Endpoints(), v)
 	}
 }
 
-func TestAppEndpointReturnsSnapshot(t *testing.T) {
+func TestAppEndpointsReturnsSnapshot(t *testing.T) {
 	app := New()
 	app.mu.Lock()
 	app.endpoints = []string{"http://127.0.0.1:8000"}
 	app.mu.Unlock()
 
-	got := app.Endpoint()
+	got := app.Endpoints()
 	got[0] = "http://127.0.0.1:9000"
-	if current := app.Endpoint()[0]; current != "http://127.0.0.1:8000" {
-		t.Fatalf("Endpoint()[0] after returned slice mutation = %q", current)
+	if current := app.Endpoints()[0]; current != "http://127.0.0.1:8000" {
+		t.Fatalf("Endpoints()[0] after returned slice mutation = %q", current)
 	}
 }
 
@@ -629,11 +629,11 @@ func TestApp_buildInstance(t *testing.T) {
 		}
 	}
 	app := New(
-		ID(want.id),
-		Name(want.name),
-		Version(want.version),
-		Metadata(want.metadata),
-		Endpoint(endpoints...),
+		WithID(want.id),
+		WithName(want.name),
+		WithVersion(want.version),
+		WithMetadata(want.metadata),
+		WithEndpoint(endpoints...),
 	)
 	if got, err := app.buildInstance(); err != nil {
 		t.Error("build got failed")
@@ -648,7 +648,7 @@ func TestApp_buildInstance(t *testing.T) {
 			t.Errorf("Version() = %v, want %v", got.Version, want.version)
 		}
 		if !reflect.DeepEqual(got.Endpoints, want.endpoints) {
-			t.Errorf("Endpoint() = %v, want %v", got.Endpoints, want.endpoints)
+			t.Errorf("Endpoints() = %v, want %v", got.Endpoints, want.endpoints)
 		}
 		if !reflect.DeepEqual(got.Metadata, want.metadata) {
 			t.Errorf("Metadata() = %v, want %v", got.Metadata, want.metadata)
@@ -745,8 +745,8 @@ func TestApp_Context(t *testing.T) {
 				if got.Version() != tt.want.version {
 					t.Errorf("Version() = %v, want %v", got.Version(), tt.want.version)
 				}
-				if !reflect.DeepEqual(got.Endpoint(), tt.want.endpoint) {
-					t.Errorf("Endpoint() = %v, want %v", got.Endpoint(), tt.want.endpoint)
+				if !reflect.DeepEqual(got.Endpoints(), tt.want.endpoint) {
+					t.Errorf("Endpoints() = %v, want %v", got.Endpoints(), tt.want.endpoint)
 				}
 				if !reflect.DeepEqual(got.Metadata(), tt.want.metadata) {
 					t.Errorf("Metadata() = %v, want %v", got.Metadata(), tt.want.metadata)
@@ -768,7 +768,7 @@ func TestApp_ContextCanceled(t *testing.T) {
 		}
 		return nil
 	}
-	app := New(Context(ctx), Server(&mockServer{stopFn: stopFn}), StopTimeout(time.Hour))
+	app := New(WithContext(ctx), WithServer(&mockServer{stopFn: stopFn}), WithStopTimeout(time.Hour))
 	time.AfterFunc(time.Millisecond*10, stop)
 	_ = app.Run()
 }
@@ -828,7 +828,7 @@ func (s *gracefulServer) Stop(ctx context.Context) error {
 
 func TestAppShutdownPrefersGracefulStop(t *testing.T) {
 	server := newGracefulServer()
-	app := New(Server(server), StopTimeout(time.Second))
+	app := New(WithServer(server), WithStopTimeout(time.Second))
 	errCh := make(chan error, 1)
 	go func() { errCh <- app.Run() }()
 	<-server.started
@@ -847,7 +847,7 @@ func TestAppShutdownFallsBackToStopOnAbandonedDrain(t *testing.T) {
 	server := newGracefulServer()
 	server.gracefulErr = context.DeadlineExceeded
 	server.gracefulHook = func(ctx context.Context) { <-ctx.Done() }
-	app := New(Server(server), StopTimeout(50*time.Millisecond))
+	app := New(WithServer(server), WithStopTimeout(50*time.Millisecond))
 	errCh := make(chan error, 1)
 	go func() { errCh <- app.Run() }()
 	<-server.started
@@ -867,7 +867,7 @@ func TestAppShutdownJoinsIndependentDrainError(t *testing.T) {
 	drainErr := errors.New("drain failed")
 	server := newGracefulServer()
 	server.gracefulErr = drainErr
-	app := New(Server(server), StopTimeout(time.Second))
+	app := New(WithServer(server), WithStopTimeout(time.Second))
 	errCh := make(chan error, 1)
 	go func() { errCh <- app.Run() }()
 	<-server.started
@@ -888,7 +888,7 @@ func TestAppShutdownWithoutGracefulStopperIsUnchanged(t *testing.T) {
 	var stopCalls atomic.Int32
 	server := newLifecycleServer()
 	wrapped := &countingServer{lifecycleServer: server, stopCalls: &stopCalls}
-	app := New(Server(wrapped), StopTimeout(time.Second))
+	app := New(WithServer(wrapped), WithStopTimeout(time.Second))
 	errCh := make(chan error, 1)
 	go func() { errCh <- app.Run() }()
 	<-server.started
@@ -923,10 +923,10 @@ func TestAppHealthzAggregatesHealthzers(t *testing.T) {
 	unhealthy := newGracefulServer()
 	opaque := &mockServer{} // no Healthz: makes no claim
 
-	if app := New(Server(healthy, opaque)); !app.Healthz() {
+	if app := New(WithServer(healthy, opaque)); !app.Healthz() {
 		t.Fatal("all reporting servers healthy, want true")
 	}
-	if app := New(Server(healthy, unhealthy)); app.Healthz() {
+	if app := New(WithServer(healthy, unhealthy)); app.Healthz() {
 		t.Fatal("one reporting server unhealthy, want false")
 	}
 	if app := New(); !app.Healthz() {
@@ -936,7 +936,7 @@ func TestAppHealthzAggregatesHealthzers(t *testing.T) {
 
 func TestAppHealthzTurnsFalseDuringShutdown(t *testing.T) {
 	server := newGracefulServer()
-	app := New(Server(server), StopTimeout(time.Second))
+	app := New(WithServer(server), WithStopTimeout(time.Second))
 	errCh := make(chan error, 1)
 	go func() { errCh <- app.Run() }()
 	<-server.started

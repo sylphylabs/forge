@@ -1,3 +1,5 @@
+// Package wrr provides a weighted round robin selector: nodes are picked in
+// proportion to their declared weights, with no runtime feedback.
 package wrr
 
 import (
@@ -8,32 +10,34 @@ import (
 	"github.com/sylphylabs/forge/selector/node/direct"
 )
 
-const (
-	// Name is wrr(Weighted Round Robin) balancer name
-	Name = "wrr"
+// Name is the balancer name, "wrr".
+const Name = "wrr"
+
+var (
+	_ selector.Balancer        = (*balancer)(nil)
+	_ selector.BalancerBuilder = (*Builder)(nil)
 )
 
-var _ selector.Balancer = (*Balancer)(nil)
-
-// Option is wrr builder option.
-type Option func(o *options)
-
-// options is wrr builder options
-type options struct{}
-
-// Balancer is a wrr balancer.
-type Balancer struct {
+// balancer implements smooth weighted round robin over the interleaving
+// algorithm nginx uses: each pick advances every node's current weight by
+// its effective weight and selects the leader, then sets the leader back by
+// the total, so picks interleave instead of bursting per node.
+type balancer struct {
 	mu            sync.Mutex
 	currentWeight map[string]float64
 }
 
-// New random a selector.
-func New(opts ...Option) selector.Selector {
-	return NewBuilder(opts...).Build()
+func newBalancer() *balancer {
+	return &balancer{currentWeight: make(map[string]float64)}
 }
 
-// Pick is pick a weighted node.
-func (p *Balancer) Pick(_ context.Context, nodes []selector.WeightedNode) (selector.WeightedNode, selector.DoneFunc, error) {
+// New returns a weighted round robin selector.
+func New() *selector.Composite {
+	return selector.NewComposite(&direct.Builder{}, newBalancer())
+}
+
+// Pick picks a node by smooth weighted round robin.
+func (p *balancer) Pick(_ context.Context, nodes []selector.WeightedNode) (selector.WeightedNode, selector.DoneFunc, error) {
 	if len(nodes) == 0 {
 		return nil, nil, selector.ErrNoAvailable
 	}
@@ -45,19 +49,18 @@ func (p *Balancer) Pick(_ context.Context, nodes []selector.WeightedNode) (selec
 	var selected selector.WeightedNode
 	var selectWeight float64
 
-	// nginx wrr load balancing algorithm: http://blog.csdn.net/zhangskd/article/details/50194069
 	for _, node := range nodes {
 		totalWeight += node.Weight()
-		cwt := p.currentWeight[node.Address()]
+		cwt := p.currentWeight[node.Raw().Address]
 		// current += effectiveWeight
 		cwt += node.Weight()
-		p.currentWeight[node.Address()] = cwt
+		p.currentWeight[node.Raw().Address] = cwt
 		if selected == nil || selectWeight < cwt {
 			selectWeight = cwt
 			selected = node
 		}
 	}
-	p.currentWeight[selected.Address()] = selectWeight - totalWeight
+	p.currentWeight[selected.Raw().Address] = selectWeight - totalWeight
 
 	// After the loop, currentWeight has an entry for every current node, plus any
 	// leftover entries for nodes that have disappeared from service discovery. So
@@ -74,10 +77,10 @@ func (p *Balancer) Pick(_ context.Context, nodes []selector.WeightedNode) (selec
 }
 
 // cleanupStaleEntries removes currentWeight entries whose node is no longer present.
-func (p *Balancer) cleanupStaleEntries(nodes []selector.WeightedNode) {
+func (p *balancer) cleanupStaleEntries(nodes []selector.WeightedNode) {
 	current := make(map[string]struct{}, len(nodes))
 	for _, node := range nodes {
-		current[node.Address()] = struct{}{}
+		current[node.Raw().Address] = struct{}{}
 	}
 	for address := range p.currentWeight {
 		if _, ok := current[address]; !ok {
@@ -86,22 +89,15 @@ func (p *Balancer) cleanupStaleEntries(nodes []selector.WeightedNode) {
 	}
 }
 
-// NewBuilder returns a selector builder with wrr balancer
-func NewBuilder(opts ...Option) selector.Builder {
-	var option options
-	for _, opt := range opts {
-		opt(&option)
-	}
-	return &selector.DefaultBuilder{
-		Balancer: &Builder{},
-		Node:     &direct.Builder{},
-	}
+// NewBuilder returns a builder for weighted round robin selectors.
+func NewBuilder() *selector.CompositeBuilder {
+	return selector.NewCompositeBuilder(&direct.Builder{}, &Builder{})
 }
 
-// Builder is wrr builder
+// Builder builds wrr balancers.
 type Builder struct{}
 
-// Build creates Balancer
+// Build returns a new balancer with fresh round robin state.
 func (b *Builder) Build() selector.Balancer {
-	return &Balancer{currentWeight: make(map[string]float64)}
+	return newBalancer()
 }

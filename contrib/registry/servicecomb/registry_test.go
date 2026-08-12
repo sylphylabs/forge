@@ -70,9 +70,9 @@ func TestRegistry(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	t.Run("GetService test, expected: success.", func(t *testing.T) {
+	t.Run("Instances test, expected: success.", func(t *testing.T) {
 		var insts []*registry.ServiceInstance
-		insts, err = r.GetService(ctx, svc.Name)
+		insts, err = r.Instances(ctx, svc.Name)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -115,7 +115,7 @@ func TestWatcher(t *testing.T) {
 	t.Run("Watch register event, expected: success", func(t *testing.T) {
 		go sbWatcher.Put(svc1)
 		var instances []*registry.ServiceInstance
-		instances, err = w.Next()
+		instances, err = w.Next(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -134,7 +134,7 @@ func TestWatcher(t *testing.T) {
 		}
 		go sbWatcher.Put(svc1)
 		var instances []*registry.ServiceInstance
-		instances, err = w.Next()
+		instances, err = w.Next(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -55,7 +55,8 @@ func (b *balancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 		// Block the RPC until a new picker is available via UpdateState().
 		return base.NewErrPicker(balancer.ErrNoSubConnAvailable)
 	}
-	nodes := make([]selector.Node, 0, len(info.ReadySCs))
+	nodes := make([]*selector.Node, 0, len(info.ReadySCs))
+	subConns := make(map[*selector.Node]balancer.SubConn, len(info.ReadySCs))
 	// Every address in one channel comes from the same client, so the first
 	// policy found describes the whole set.
 	var configured selector.Builder
@@ -64,10 +65,9 @@ func (b *balancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 		if configured == nil {
 			configured = discovery.SelectorBuilderFromAddress(info.Address)
 		}
-		nodes = append(nodes, &grpcNode{
-			Node:    selector.NewNode("grpc", info.Address.Addr, ins),
-			subConn: conn,
-		})
+		node := selector.NewNode("grpc", info.Address.Addr, ins)
+		nodes = append(nodes, node)
+		subConns[node] = conn
 	}
 	builder := configured
 	if builder == nil {
@@ -78,6 +78,7 @@ func (b *balancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 	}
 	p := &balancerPicker{
 		selector: builder.Build(),
+		subConns: subConns,
 	}
 	p.selector.Apply(nodes)
 	return p
@@ -86,6 +87,10 @@ func (b *balancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 // balancerPicker is a grpc picker.
 type balancerPicker struct {
 	selector selector.Selector
+	// subConns maps each applied node, by identity, to its connection. The
+	// selector preserves node identity through Select, so the picked *Node
+	// is always a key of this map.
+	subConns map[*selector.Node]balancer.SubConn
 }
 
 // Pick pick instances.
@@ -101,15 +106,21 @@ func (p *balancerPicker) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 	if err != nil {
 		return balancer.PickResult{}, err
 	}
+	conn, ok := p.subConns[n]
+	if !ok {
+		// A filter substituted a node the picker never applied; there is no
+		// connection to serve it.
+		return balancer.PickResult{}, selector.ErrNoAvailable
+	}
 
 	return balancer.PickResult{
-		SubConn: n.(*grpcNode).subConn,
+		SubConn: conn,
 		Done: func(di balancer.DoneInfo) {
 			done(info.Ctx, selector.DoneInfo{
 				Err:           di.Err,
 				BytesSent:     di.BytesSent,
 				BytesReceived: di.BytesReceived,
-				ReplyMD:       Trailer(di.Trailer),
+				ReplyMetadata: Trailer(di.Trailer),
 			})
 		},
 	}, nil
@@ -125,9 +136,4 @@ func (t Trailer) Get(k string) string {
 		return v[0]
 	}
 	return ""
-}
-
-type grpcNode struct {
-	selector.Node
-	subConn balancer.SubConn
 }

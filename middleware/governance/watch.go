@@ -31,9 +31,10 @@ type ParseFunc[T any] func(config.Value) (T, error)
 // A dynamic update never partially applies and never silently downgrades a
 // rule to a zero value.
 //
-// Each call observes one key, and a [config.Config] keeps a single observer
-// per key, so give every watched rule table its own section.
-func Watch[T any](c config.Config, key string, r *Rules[T], parse ParseFunc[T]) error {
+// Each call adds one observer on key; a [config.Config] supports several
+// observers per key, but give every watched rule table its own section so
+// unrelated tables never alias one another's rules.
+func Watch[T any](c *config.Config, key string, r *Rules[T], parse ParseFunc[T]) error {
 	if c == nil || r == nil || parse == nil {
 		return fmt.Errorf("governance: Watch requires a config, a rule table, and a parse function")
 	}

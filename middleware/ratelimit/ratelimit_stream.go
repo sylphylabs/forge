@@ -14,14 +14,15 @@ import (
 func ServerStream(opts ...Option) middleware.StreamMiddleware {
 	options := newOptions(opts...)
 	return func(handler middleware.StreamHandler) middleware.StreamHandler {
-		return func(request any, stream middleware.ServerStream) error {
-			done, err := options.limiterFor(stream.Context()).Allow()
-			if err != nil {
+		return func(request any, stream middleware.ServerStream) (err error) {
+			done, allowErr := options.limiterFor(stream.Context()).Allow()
+			if allowErr != nil {
 				return ErrLimitExceed
 			}
-			err = handler(request, stream)
-			done(DoneInfo{Err: err})
-			return err
+			// done must fire exactly once on every exit, including a panic,
+			// or the limiter's in-flight count never drains.
+			defer func() { done(DoneInfo{Err: err}) }()
+			return handler(request, stream)
 		}
 	}
 }
@@ -63,12 +64,13 @@ type limitedStream struct {
 	options *options
 }
 
-func (s *limitedStream) RecvMsg(m any) error {
-	done, err := s.options.limiterFor(s.Context()).Allow()
-	if err != nil {
+func (s *limitedStream) RecvMsg(m any) (err error) {
+	done, allowErr := s.options.limiterFor(s.Context()).Allow()
+	if allowErr != nil {
 		return ErrLimitExceed
 	}
-	err = s.ServerStream.RecvMsg(m)
-	done(DoneInfo{Err: err})
-	return err
+	// done must fire exactly once on every exit, including a panic, or the
+	// limiter's in-flight count never drains.
+	defer func() { done(DoneInfo{Err: err}) }()
+	return s.ServerStream.RecvMsg(m)
 }

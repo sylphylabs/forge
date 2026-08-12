@@ -141,8 +141,8 @@ func (r *Registry) Deregister(ctx context.Context, svc *registry.ServiceInstance
 	return r.cli.Deregister(ctx, svc.ID)
 }
 
-// GetService return service by name
-func (r *Registry) GetService(ctx context.Context, name string) ([]*registry.ServiceInstance, error) {
+// Instances returns the currently known instances of the named service.
+func (r *Registry) Instances(ctx context.Context, name string) ([]*registry.ServiceInstance, error) {
 	r.lock.RLock()
 	set := r.registry[name]
 	r.lock.RUnlock()

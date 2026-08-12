@@ -4,14 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"runtime"
-	"time"
 
 	"github.com/sylphylabs/forge/errors"
 	"github.com/sylphylabs/forge/middleware"
 )
-
-// Latency is recovery latency context key
-type Latency struct{}
 
 // ErrUnknownRequest is returned when a handler panicked and no recovery
 // handler supplied a more specific error.
@@ -60,7 +56,6 @@ func Recovery(opts ...Option) middleware.UnaryMiddleware {
 	}
 	return func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 		return func(ctx context.Context, req any) (reply any, err error) {
-			startTime := time.Now()
 			defer func() {
 				if rerr := recover(); rerr != nil {
 					buf := make([]byte, 64<<10) //nolint:mnd
@@ -71,7 +66,6 @@ func Recovery(opts ...Option) middleware.UnaryMiddleware {
 						slog.Any("request", req),
 						slog.String("stack", string(buf)),
 					)
-					ctx = context.WithValue(ctx, Latency{}, time.Since(startTime).Seconds())
 					err = op.handler(ctx, req, rerr)
 				}
 			}()

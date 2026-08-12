@@ -14,11 +14,11 @@ import (
 func TestAppProbeReportsIdentity(t *testing.T) {
 	endpoint, _ := url.Parse("grpc://127.0.0.1:9000")
 	app := New(
-		ID("instance-1"),
-		Name("checkout"),
-		Version("v1.2.3"),
-		Metadata(map[string]string{"region": "eu-west-1"}),
-		Endpoint(endpoint),
+		WithID("instance-1"),
+		WithName("checkout"),
+		WithVersion("v1.2.3"),
+		WithMetadata(map[string]string{"region": "eu-west-1"}),
+		WithEndpoint(endpoint),
 	)
 
 	reg := diagnosis.NewRegistry()
@@ -49,7 +49,7 @@ func TestAppProbeReportsIdentity(t *testing.T) {
 }
 
 func TestAppProbeReadsLive(t *testing.T) {
-	app := New(Name("checkout"))
+	app := New(WithName("checkout"))
 	probe := AppProbe(app)
 
 	res, err := probe(context.Background())
@@ -97,7 +97,7 @@ type diagnosticSuite struct {
 
 func (s *diagnosticSuite) Options() []Option {
 	return []Option{
-		AfterStart(func(ctx context.Context) error {
+		WithAfterStart(func(ctx context.Context) error {
 			info, ok := FromContext(ctx)
 			if !ok {
 				return nil
@@ -111,8 +111,8 @@ func (s *diagnosticSuite) Options() []Option {
 func TestSuiteRegistersProbes(t *testing.T) {
 	reg := diagnosis.NewRegistry()
 	app := New(
-		Name("checkout"),
-		Version("v9"),
+		WithName("checkout"),
+		WithVersion("v9"),
 		WithSuite(&diagnosticSuite{registry: reg}),
 	)
 

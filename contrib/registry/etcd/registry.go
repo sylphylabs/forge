@@ -27,22 +27,23 @@ type options struct {
 	maxRetry  int
 }
 
-// Context with registry context.
-func Context(ctx context.Context) Option {
+// WithContext sets the registry context.
+func WithContext(ctx context.Context) Option {
 	return func(o *options) { o.ctx = ctx }
 }
 
-// Namespace with registry namespace.
-func Namespace(ns string) Option {
+// WithNamespace sets the registry namespace.
+func WithNamespace(ns string) Option {
 	return func(o *options) { o.namespace = ns }
 }
 
-// RegisterTTL with register ttl.
-func RegisterTTL(ttl time.Duration) Option {
+// WithRegisterTTL sets the register lease TTL.
+func WithRegisterTTL(ttl time.Duration) Option {
 	return func(o *options) { o.ttl = ttl }
 }
 
-func MaxRetry(num int) Option {
+// WithMaxRetry sets how many times a failed register call is retried.
+func WithMaxRetry(num int) Option {
 	return func(o *options) { o.maxRetry = num }
 }
 
@@ -139,8 +140,8 @@ func (r *Registry) Deregister(ctx context.Context, service *registry.ServiceInst
 	return err
 }
 
-// GetService return the service instances in memory according to the service name.
-func (r *Registry) GetService(ctx context.Context, name string) ([]*registry.ServiceInstance, error) {
+// Instances returns the currently known instances of the named service.
+func (r *Registry) Instances(ctx context.Context, name string) ([]*registry.ServiceInstance, error) {
 	key := r.serviceKey(name)
 	resp, err := r.kv.Get(ctx, key, clientv3.WithPrefix())
 	if err != nil {

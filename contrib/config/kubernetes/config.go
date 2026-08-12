@@ -32,36 +32,36 @@ type options struct {
 	Master string
 }
 
-// Namespace with kubernetes namespace.
-func Namespace(ns string) Option {
+// WithNamespace sets the kubernetes namespace.
+func WithNamespace(ns string) Option {
 	return func(o *options) {
 		o.Namespace = ns
 	}
 }
 
-// LabelSelector with kubernetes label selector.
-func LabelSelector(label string) Option {
+// WithLabelSelector sets the kubernetes label selector.
+func WithLabelSelector(label string) Option {
 	return func(o *options) {
 		o.LabelSelector = label
 	}
 }
 
-// FieldSelector with kubernetes field selector.
-func FieldSelector(field string) Option {
+// WithFieldSelector sets the kubernetes field selector.
+func WithFieldSelector(field string) Option {
 	return func(o *options) {
 		o.FieldSelector = field
 	}
 }
 
-// KubeConfig with kubernetes config.
-func KubeConfig(config string) Option {
+// WithKubeConfig sets the kubeconfig path for out-of-cluster use.
+func WithKubeConfig(config string) Option {
 	return func(o *options) {
 		o.KubeConfig = config
 	}
 }
 
-// Master with kubernetes master.
-func Master(master string) Option {
+// WithMaster sets the kubernetes master URL.
+func WithMaster(master string) Option {
 	return func(o *options) {
 		o.Master = master
 	}
@@ -130,7 +130,7 @@ func (k *kube) configMap(cm v1.ConfigMap) (kvs []*config.KeyValue) {
 	return kvs
 }
 
-func (k *kube) Load() ([]*config.KeyValue, error) {
+func (k *kube) Load(context.Context) ([]*config.KeyValue, error) {
 	if k.opts.Namespace == "" {
 		return nil, errors.New("options namespace not full")
 	}
@@ -140,6 +140,6 @@ func (k *kube) Load() ([]*config.KeyValue, error) {
 	return k.load()
 }
 
-func (k *kube) Watch() (config.Watcher, error) {
-	return newWatcher(k)
+func (k *kube) Watch(ctx context.Context) (config.Watcher, error) {
+	return newWatcher(ctx, k)
 }

@@ -12,6 +12,7 @@ import (
 )
 
 func TestRegistry(t *testing.T) {
+	requireEtcd(t)
 	client, err := clientv3.New(clientv3.Config{
 		Endpoints:   []string{"127.0.0.1:2379"},
 		DialTimeout: time.Second,
@@ -37,7 +38,7 @@ func TestRegistry(t *testing.T) {
 	}()
 	go func() {
 		for {
-			res, err1 := w.Next()
+			res, err1 := w.Next(ctx)
 			if err1 != nil {
 				return
 			}
@@ -54,7 +55,7 @@ func TestRegistry(t *testing.T) {
 	}
 	time.Sleep(time.Second)
 
-	res, err := r.GetService(ctx, s.Name)
+	res, err := r.Instances(ctx, s.Name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +68,7 @@ func TestRegistry(t *testing.T) {
 	}
 	time.Sleep(time.Second)
 
-	res, err = r.GetService(ctx, s.Name)
+	res, err = r.Instances(ctx, s.Name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,6 +78,7 @@ func TestRegistry(t *testing.T) {
 }
 
 func TestHeartBeat(t *testing.T) {
+	requireEtcd(t)
 	client, err := clientv3.New(clientv3.Config{
 		Endpoints:   []string{"127.0.0.1:2379"},
 		DialTimeout: time.Second,
@@ -102,7 +104,7 @@ func TestHeartBeat(t *testing.T) {
 			_ = w.Stop()
 		}()
 		for {
-			res, err2 := w.Next()
+			res, err2 := w.Next(ctx)
 			if err2 != nil {
 				return
 			}
@@ -116,8 +118,8 @@ func TestHeartBeat(t *testing.T) {
 
 	// new a server
 	r := New(client,
-		RegisterTTL(2*time.Second),
-		MaxRetry(5),
+		WithRegisterTTL(2*time.Second),
+		WithMaxRetry(5),
 	)
 
 	key := fmt.Sprintf("%s/%s/%s", r.opts.namespace, s.Name, s.ID)
@@ -131,7 +133,7 @@ func TestHeartBeat(t *testing.T) {
 	// wait for lease expired
 	time.Sleep(3 * time.Second)
 
-	res, err := r.GetService(ctx, s.Name)
+	res, err := r.Instances(ctx, s.Name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +144,7 @@ func TestHeartBeat(t *testing.T) {
 	go r.heartBeat(ctx, leaseID, key, value)
 
 	time.Sleep(time.Second)
-	res, err = r.GetService(ctx, s.Name)
+	res, err = r.Instances(ctx, s.Name)
 	if err != nil {
 		t.Fatal(err)
 	}

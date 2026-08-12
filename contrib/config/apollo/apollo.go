@@ -1,6 +1,7 @@
 package apollo
 
 import (
+	"context"
 	"strings"
 
 	"github.com/apolloconfig/agollo/v5"
@@ -210,11 +211,11 @@ func (e apollo) getOriginConfig(ns string) (*config.KeyValue, error) {
 	}, nil
 }
 
-func (e *apollo) Load() (kv []*config.KeyValue, err error) {
+func (e *apollo) Load(context.Context) (kv []*config.KeyValue, err error) {
 	return e.load(), nil
 }
 
-func (e *apollo) Watch() (config.Watcher, error) {
+func (e *apollo) Watch(context.Context) (config.Watcher, error) {
 	w, err := newWatcher(e)
 	if err != nil {
 		return nil, err

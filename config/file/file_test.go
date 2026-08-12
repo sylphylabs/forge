@@ -120,7 +120,7 @@ func testWatchFile(t *testing.T, path string) {
 	t.Log(path)
 
 	s := NewSource(path)
-	watch, err := s.Watch()
+	watch, err := s.Watch(t.Context())
 	if err != nil {
 		t.Error(err)
 	}
@@ -134,7 +134,7 @@ func testWatchFile(t *testing.T, path string) {
 	if err != nil {
 		t.Error(err)
 	}
-	kvs, err := watch.Next()
+	kvs, err := watch.Next(t.Context())
 	if err != nil {
 		t.Errorf("watch.Next() error(%v)", err)
 	}
@@ -146,7 +146,7 @@ func testWatchFile(t *testing.T, path string) {
 	if err = os.Rename(path, newFilepath); err != nil {
 		t.Error(err)
 	}
-	kvs, err = watch.Next()
+	kvs, err = watch.Next(t.Context())
 	if err == nil {
 		t.Errorf("watch.Next() error(%v)", err)
 	}
@@ -169,7 +169,7 @@ func testWatchDir(t *testing.T, path, file string) {
 	t.Log(file)
 
 	s := NewSource(path)
-	watch, err := s.Watch()
+	watch, err := s.Watch(t.Context())
 	if err != nil {
 		t.Error(err)
 	}
@@ -184,7 +184,7 @@ func testWatchDir(t *testing.T, path, file string) {
 		t.Error(err)
 	}
 
-	kvs, err := watch.Next()
+	kvs, err := watch.Next(t.Context())
 	if err != nil {
 		t.Errorf("watch.Next() error(%v)", err)
 	}
@@ -197,7 +197,7 @@ func testSource(t *testing.T, path string, data []byte) {
 	t.Log(path)
 
 	s := NewSource(path)
-	kvs, err := s.Load()
+	kvs, err := s.Load(t.Context())
 	if err != nil {
 		t.Error(err)
 	}
@@ -212,15 +212,19 @@ func TestConfig(t *testing.T) {
 	if err := os.WriteFile(path, []byte(_testJSON), 0o666); err != nil {
 		t.Error(err)
 	}
-	c := config.New(config.WithSource(
+	c, err := config.New(t.Context(), config.WithSource(
 		NewSource(path),
 	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
 	testScan(t, c)
 
 	testConfig(t, c)
 }
 
-func testConfig(t *testing.T, c config.Config) {
+func testConfig(t *testing.T, c *config.Config) {
 	expected := map[string]any{
 		"test.settings.int_key":      int64(1000),
 		"test.settings.float_key":    1000.1,
@@ -228,9 +232,6 @@ func testConfig(t *testing.T, c config.Config) {
 		"test.settings.duration_key": time.Duration(10000),
 		"test.server.addr":           "127.0.0.1",
 		"test.server.port":           int64(8000),
-	}
-	if err := c.Load(); err != nil {
-		t.Error(err)
 	}
 	for key, value := range expected {
 		switch value.(type) {
@@ -289,7 +290,7 @@ func testConfig(t *testing.T, c config.Config) {
 	}
 }
 
-func testScan(t *testing.T, c config.Config) {
+func testScan(t *testing.T, c *config.Config) {
 	type TestJSON struct {
 		Test struct {
 			Settings struct {
@@ -309,24 +310,27 @@ func testScan(t *testing.T, c config.Config) {
 		} `json:"foo"`
 	}
 	var conf TestJSON
-	if err := c.Load(); err != nil {
-		t.Error(err)
-	}
 	if err := c.Scan(&conf); err != nil {
 		t.Error(err)
 	}
 	t.Log(conf)
 }
 
-func TestMergeDataRace(t *testing.T) {
+// TestScanReloadDataRace scans concurrently with watcher-driven reloads: the
+// snapshot swap must be atomic with respect to readers.
+func TestScanReloadDataRace(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test_config.json")
 	defer os.Remove(path)
 	if err := os.WriteFile(path, []byte(_testJSON), 0o666); err != nil {
 		t.Error(err)
 	}
-	c := config.New(config.WithSource(
+	c, err := config.New(t.Context(), config.WithSource(
 		NewSource(path),
 	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
 	const count = 80
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
@@ -346,7 +350,7 @@ func TestMergeDataRace(t *testing.T) {
 		defer wg.Done()
 		<-startCh
 		for i := 0; i < count; i++ {
-			if err := c.Load(); err != nil {
+			if err := os.WriteFile(path, []byte(_testJSON), 0o666); err != nil {
 				t.Error(err)
 			}
 		}

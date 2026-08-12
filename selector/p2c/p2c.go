@@ -1,3 +1,6 @@
+// Package p2c provides a "power of two choices" selector: each pick compares
+// two random nodes by their EWMA-tracked latency and health and takes the
+// better one, which balances load with O(1) work per pick.
 package p2c
 
 import (
@@ -10,32 +13,31 @@ import (
 	"github.com/sylphylabs/forge/selector/node/ewma"
 )
 
-const (
-	forcePick = time.Second * 3
-	// Name is p2c(Pick of 2 choices) balancer name
-	Name = "p2c"
+// forcePick bounds how long a node can go unpicked: a node idle longer is
+// picked once regardless of weight, so its statistics keep refreshing and a
+// recovered node is rediscovered.
+const forcePick = time.Second * 3
+
+// Name is the balancer name, "p2c".
+const Name = "p2c"
+
+var (
+	_ selector.Balancer        = (*balancer)(nil)
+	_ selector.BalancerBuilder = (*Builder)(nil)
 )
 
-var _ selector.Balancer = (*Balancer)(nil)
-
-// Option is p2c builder option.
-type Option func(o *options)
-
-// options is p2c builder options
-type options struct{}
-
-// New creates a p2c selector.
-func New(opts ...Option) selector.Selector {
-	return NewBuilder(opts...).Build()
+// New returns a p2c selector.
+func New() *selector.Composite {
+	return selector.NewComposite(&ewma.Builder{}, &balancer{})
 }
 
-// Balancer is p2c selector.
-type Balancer struct {
+// balancer picks the better of two random choices by EWMA weight.
+type balancer struct {
 	picked atomic.Bool
 }
 
-// choose two distinct nodes.
-func (s *Balancer) prePick(nodes []selector.WeightedNode) (nodeA selector.WeightedNode, nodeB selector.WeightedNode) {
+// prePick chooses two distinct nodes uniformly at random.
+func (s *balancer) prePick(nodes []selector.WeightedNode) (nodeA selector.WeightedNode, nodeB selector.WeightedNode) {
 	// rand/v2 top-level functions are safe for concurrent use, so no per-balancer
 	// mutex or Rand is needed and picks no longer serialize on local random state.
 	a := rand.IntN(len(nodes))
@@ -47,8 +49,8 @@ func (s *Balancer) prePick(nodes []selector.WeightedNode) (nodeA selector.Weight
 	return
 }
 
-// Pick pick a node.
-func (s *Balancer) Pick(_ context.Context, nodes []selector.WeightedNode) (selector.WeightedNode, selector.DoneFunc, error) {
+// Pick picks a node.
+func (s *balancer) Pick(_ context.Context, nodes []selector.WeightedNode) (selector.WeightedNode, selector.DoneFunc, error) {
 	if len(nodes) == 0 {
 		return nil, nil, selector.ErrNoAvailable
 	}
@@ -59,15 +61,16 @@ func (s *Balancer) Pick(_ context.Context, nodes []selector.WeightedNode) (selec
 
 	var pc, upc selector.WeightedNode
 	nodeA, nodeB := s.prePick(nodes)
-	// meta.Weight is the weight set by the service publisher in discovery
+	// nodeB.Weight() reflects both the published weight and live feedback.
 	if nodeB.Weight() > nodeA.Weight() {
 		pc, upc = nodeB, nodeA
 	} else {
 		pc, upc = nodeA, nodeB
 	}
 
-	// If the failed node has never been selected once during forceGap, it is forced to be selected once
-	// Take advantage of forced opportunities to trigger updates of success rate and delay
+	// If the losing node has not been picked within forcePick, pick it once
+	// to refresh its success rate and latency statistics. The CAS admits one
+	// forced pick at a time so a stampede cannot flood a struggling node.
 	if upc.PickElapsed() > forcePick && s.picked.CompareAndSwap(false, true) {
 		defer s.picked.Store(false)
 		pc = upc
@@ -76,22 +79,15 @@ func (s *Balancer) Pick(_ context.Context, nodes []selector.WeightedNode) (selec
 	return pc, done, nil
 }
 
-// NewBuilder returns a selector builder with p2c balancer
-func NewBuilder(opts ...Option) selector.Builder {
-	var option options
-	for _, opt := range opts {
-		opt(&option)
-	}
-	return &selector.DefaultBuilder{
-		Balancer: &Builder{},
-		Node:     &ewma.Builder{},
-	}
+// NewBuilder returns a builder for p2c selectors.
+func NewBuilder() *selector.CompositeBuilder {
+	return selector.NewCompositeBuilder(&ewma.Builder{}, &Builder{})
 }
 
-// Builder is p2c builder
+// Builder builds p2c balancers.
 type Builder struct{}
 
-// Build creates Balancer
+// Build returns a new balancer with fresh pick state.
 func (b *Builder) Build() selector.Balancer {
-	return &Balancer{}
+	return &balancer{}
 }

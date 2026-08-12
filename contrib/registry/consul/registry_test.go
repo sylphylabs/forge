@@ -20,7 +20,7 @@ import (
 	"github.com/sylphylabs/forge/registry"
 )
 
-// awaitService polls GetService until it returns want, or the deadline passes.
+// awaitService polls Instances until it returns want, or the deadline passes.
 //
 // Consul only marks an instance passing after its first health check, so a
 // registration is not immediately visible. Waiting for the state the test
@@ -34,7 +34,7 @@ func awaitService(t *testing.T, r *Registry, name string, want []*registry.Servi
 		err error
 	)
 	for {
-		got, err = r.GetService(context.Background(), name)
+		got, err = r.Instances(context.Background(), name)
 		if err == nil && reflect.DeepEqual(got, want) {
 			return got
 		}
@@ -59,6 +59,7 @@ func tcpServer(lis net.Listener) {
 }
 
 func TestRegistry_Register(t *testing.T) {
+	requireConsul(t)
 	opts := []Option{
 		WithHealthCheck(false),
 	}
@@ -166,15 +167,15 @@ func TestRegistry_Register(t *testing.T) {
 				return
 			}
 
-			got, err := watch.Next()
+			got, err := watch.Next(context.Background())
 			if (err != nil) != tt.wantErr {
-				t.Errorf("GetService() error = %v, wantErr %v", err, tt.wantErr)
-				t.Errorf("GetService() got = %v", got)
+				t.Errorf("Instances() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Instances() got = %v", got)
 				watchCancel()
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetService() got = %v, want %v", got, tt.want)
+				t.Errorf("Instances() got = %v, want %v", got, tt.want)
 			}
 
 			err = watch.Stop()
@@ -221,12 +222,12 @@ func TestServiceSetBroadcastsEmptyUpdate(t *testing.T) {
 	w := &watcher{event: make(chan struct{}, 1), set: set, ctx: t.Context()}
 	set.watcher[w] = struct{}{}
 	set.broadcast([]*registry.ServiceInstance{{ID: "one"}})
-	if got, err := w.Next(); err != nil || len(got) != 1 {
+	if got, err := w.Next(context.Background()); err != nil || len(got) != 1 {
 		t.Fatalf("initial update = %v, %v", got, err)
 	}
 
 	set.broadcast([]*registry.ServiceInstance{})
-	got, err := w.Next()
+	got, err := w.Next(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +236,8 @@ func TestServiceSetBroadcastsEmptyUpdate(t *testing.T) {
 	}
 }
 
-func TestRegistry_GetService(t *testing.T) {
+func TestRegistry_Instances(t *testing.T) {
+	requireConsul(t)
 	addr := fmt.Sprintf("%s:9091", getIntranetIP())
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -300,11 +302,12 @@ func TestRegistry_GetService(t *testing.T) {
 					t.Error(err)
 				}
 				watchCtx, watchCancel := context.WithCancel(context.Background())
+				defer watchCancel()
 				watch, err := r.Watch(watchCtx, instance1.Name)
 				if err != nil {
-					t.Error(err)
+					t.Fatal(err)
 				}
-				_, err = watch.Next()
+				_, err = watch.Next(context.Background())
 				if err != nil {
 					t.Error(err)
 				}
@@ -335,11 +338,12 @@ func TestRegistry_GetService(t *testing.T) {
 					t.Error(err)
 				}
 				watchCtx, watchCancel := context.WithCancel(context.Background())
+				defer watchCancel()
 				watch, err := r.Watch(watchCtx, instance2.Name)
 				if err != nil {
-					t.Error(err)
+					t.Fatal(err)
 				}
-				_, err = watch.Next()
+				_, err = watch.Next(context.Background())
 				if err != nil {
 					t.Error(err)
 				}
@@ -368,22 +372,23 @@ func TestRegistry_GetService(t *testing.T) {
 			}
 
 			if test.wantErr {
-				service, err := test.fields.registry.GetService(context.Background(), test.args.serviceName)
+				service, err := test.fields.registry.Instances(context.Background(), test.args.serviceName)
 				if err == nil {
-					t.Errorf("GetService() error = nil, wantErr true")
-					t.Errorf("GetService() got = %v", service)
+					t.Errorf("Instances() error = nil, wantErr true")
+					t.Errorf("Instances() got = %v", service)
 				}
 				return
 			}
 			service := awaitService(t, test.fields.registry, test.args.serviceName, test.want)
 			if !reflect.DeepEqual(service, test.want) {
-				t.Errorf("GetService() got = %v, want %v", service, test.want)
+				t.Errorf("Instances() got = %v, want %v", service, test.want)
 			}
 		})
 	}
 }
 
 func TestRegistry_Watch(t *testing.T) {
+	requireConsul(t)
 	addr := fmt.Sprintf("%s:9091", getIntranetIP())
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -499,7 +504,7 @@ func TestRegistry_Watch(t *testing.T) {
 			}()
 			watch, err := r.Watch(tt.args.ctx, tt.args.instance.Name)
 			if err != nil {
-				t.Error(err)
+				t.Fatal(err)
 			}
 
 			if tt.args.cancel != nil {
@@ -513,10 +518,10 @@ func TestRegistry_Watch(t *testing.T) {
 			deadline := time.Now().Add(20 * time.Second)
 			var service []*registry.ServiceInstance
 			for {
-				service, err = watch.Next()
+				service, err = watch.Next(context.Background())
 				if (err != nil) != tt.wantErr {
-					t.Errorf("GetService() error = %v, wantErr %v", err, tt.wantErr)
-					t.Errorf("GetService() got = %v", service)
+					t.Errorf("Instances() error = %v, wantErr %v", err, tt.wantErr)
+					t.Errorf("Instances() got = %v", service)
 					return
 				}
 				if err != nil || reflect.DeepEqual(service, tt.want) || time.Now().After(deadline) {
@@ -524,7 +529,7 @@ func TestRegistry_Watch(t *testing.T) {
 				}
 			}
 			if !reflect.DeepEqual(service, tt.want) {
-				t.Errorf("GetService() got = %v, want %v", service, tt.want)
+				t.Errorf("Instances() got = %v, want %v", service, tt.want)
 			}
 			err = watch.Stop()
 			if err != nil {
@@ -535,6 +540,7 @@ func TestRegistry_Watch(t *testing.T) {
 }
 
 func TestRegistry_IdleAndWatch(t *testing.T) {
+	requireConsul(t)
 	addr := fmt.Sprintf("%s:9091", getIntranetIP())
 
 	time.Sleep(time.Millisecond * 100)
@@ -590,7 +596,7 @@ func TestRegistry_IdleAndWatch(t *testing.T) {
 			for i := 0; i < 10; i++ {
 				watch, err := r.Watch(tt.args.ctx, tt.args.instance.Name) //nolint
 				if err != nil {
-					t.Error(err)
+					t.Fatal(err)
 				}
 				defer func() {
 					_ = watch.Stop()
@@ -617,13 +623,13 @@ func TestRegistry_IdleAndWatch(t *testing.T) {
 					defer wg1.Done()
 
 					// first
-					service, err := watch.Next() //nolint
+					service, err := watch.Next(context.Background()) //nolint
 					if err != nil {
 						t.Error(err)
 						return
 					}
 					if !reflect.DeepEqual(service, want) {
-						t.Errorf("GetService() got = %v, want = %v", service, want)
+						t.Errorf("Instances() got = %v, want = %v", service, want)
 						return
 					}
 				}(watch, tt.want1)
@@ -648,13 +654,13 @@ func TestRegistry_IdleAndWatch(t *testing.T) {
 					defer wg2.Done()
 
 					// instance changes
-					service, err := watch.Next() //nolint
+					service, err := watch.Next(context.Background()) //nolint
 					if err != nil {
 						t.Error(err)
 						return
 					}
 					if !reflect.DeepEqual(service, want) {
-						t.Errorf("GetService() got = %v, want = %v", service, want)
+						t.Errorf("Instances() got = %v, want = %v", service, want)
 					}
 				}(watch, tt.want2)
 			}
@@ -664,6 +670,7 @@ func TestRegistry_IdleAndWatch(t *testing.T) {
 }
 
 func TestRegistry_IdleAndWatch2(t *testing.T) {
+	requireConsul(t)
 	addr := fmt.Sprintf("%s:9091", getIntranetIP())
 
 	time.Sleep(time.Millisecond * 100)
@@ -724,14 +731,15 @@ func TestRegistry_IdleAndWatch2(t *testing.T) {
 				stopCtx, stopCancel := context.WithCancel(ctx)
 				watch, err1 := r.Watch(stopCtx, tt.args.instance.Name)
 				if err1 != nil {
-					t.Error(err1)
+					stopCancel()
+					t.Fatal(err1)
 				}
 				go func(_ int) {
 					// first
-					service, err2 := watch.Next()
+					service, err2 := watch.Next(context.Background())
 					if (err2 != nil) != tt.wantErr {
-						t.Errorf("GetService() error = %v, wantErr %v", err, tt.wantErr)
-						t.Errorf("GetService() got = %v", service)
+						t.Errorf("Instances() error = %v, wantErr %v", err, tt.wantErr)
+						t.Errorf("Instances() got = %v", service)
 						return
 					}
 				}(i)
@@ -760,17 +768,18 @@ func TestRegistry_IdleAndWatch2(t *testing.T) {
 			watchCtx, watchCancel := context.WithCancel(context.Background())
 			watch, err := r.Watch(watchCtx, tt.args.instance.Name)
 			if err != nil {
-				t.Error(err)
+				watchCancel()
+				t.Fatal(err)
 			}
-			service, err := watch.Next()
+			service, err := watch.Next(context.Background())
 			if (err != nil) != tt.wantErr {
-				t.Errorf("GetService() error = %v, wantErr %v", err, tt.wantErr)
-				t.Errorf("GetService() got = %v", service)
+				t.Errorf("Instances() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Instances() got = %v", service)
 				watchCancel()
 				return
 			}
 			if !reflect.DeepEqual(service, tt.want) {
-				t.Errorf("GetService() got = %v, want %v", service, tt.want)
+				t.Errorf("Instances() got = %v, want %v", service, tt.want)
 			}
 			watchCancel()
 		})
@@ -778,6 +787,7 @@ func TestRegistry_IdleAndWatch2(t *testing.T) {
 }
 
 func TestRegistry_ExitOldResolverAndReWatch(t *testing.T) {
+	requireConsul(t)
 	addr := fmt.Sprintf("%s:9091", getIntranetIP())
 
 	time.Sleep(time.Millisecond * 100)
@@ -839,12 +849,13 @@ func TestRegistry_ExitOldResolverAndReWatch(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			watch, err := r.Watch(ctx, tt.args.instance.Name)
 			if err != nil {
-				t.Error(err)
+				cancel()
+				t.Fatal(err)
 			}
-			service, err := watch.Next()
+			service, err := watch.Next(context.Background())
 			if (err != nil) != tt.wantErr {
-				t.Errorf("GetService() error = %v, wantErr %v", err, tt.wantErr)
-				t.Errorf("GetService() got = %v", service)
+				t.Errorf("Instances() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Instances() got = %v", service)
 			}
 
 			time.Sleep(time.Second * 3)
@@ -860,12 +871,12 @@ func TestRegistry_ExitOldResolverAndReWatch(t *testing.T) {
 			// time.Sleep(time.Second * 8)
 			newWatch, err := r.Watch(watchCtx, tt.args.instance.Name)
 			if err != nil {
-				t.Error(err)
+				t.Fatal(err)
 			}
-			service, err = newWatch.Next()
+			service, err = newWatch.Next(context.Background())
 			if (err != nil) != tt.wantErr {
-				t.Errorf("GetService() error = %v, wantErr %v", err, tt.wantErr)
-				t.Errorf("GetService() got = %v", service)
+				t.Errorf("Instances() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Instances() got = %v", service)
 			}
 			// change register info
 			time.Sleep(time.Second * 1)
@@ -891,14 +902,14 @@ func TestRegistry_ExitOldResolverAndReWatch(t *testing.T) {
 			c := make(chan struct{}, 1)
 
 			go func() {
-				service, err = newWatch.Next()
+				service, err = newWatch.Next(context.Background())
 				if (err != nil) != tt.wantErr {
-					t.Errorf("GetService() error = %v, wantErr %v", err, tt.wantErr)
-					t.Errorf("GetService() got = %v", service)
+					t.Errorf("Instances() error = %v, wantErr %v", err, tt.wantErr)
+					t.Errorf("Instances() got = %v", service)
 					return
 				}
 				if !reflect.DeepEqual(service, tt.want) {
-					t.Errorf("GetService() got = %v, want %v", service, tt.want)
+					t.Errorf("Instances() got = %v, want %v", service, tt.want)
 				}
 				c <- struct{}{}
 			}()
@@ -990,6 +1001,7 @@ func TestRegistry_ShareServiceSet(t *testing.T) {
 }
 
 func TestRegistry_MultiWatch(t *testing.T) {
+	requireConsul(t)
 	cli, err := api.NewClient(&api.Config{Address: "127.0.0.1:8500", WaitTime: 2 * time.Second})
 	if err != nil {
 		t.Fatalf("create consul client failed: %v", err)
@@ -1047,13 +1059,13 @@ func TestRegistry_MultiWatch(t *testing.T) {
 		}
 	}()
 
-	got1, err := watch1.Next()
+	got1, err := watch1.Next(context.Background())
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	got2, err := watch2.Next()
+	got2, err := watch2.Next(context.Background())
 	if err != nil {
 		t.Error(err)
 		return
@@ -1088,7 +1100,7 @@ func TestRegistry_MultiWatch(t *testing.T) {
 	}()
 
 	// second watcher should get the new instance
-	got, err := watch2.Next()
+	got, err := watch2.Next(context.Background())
 	if err != nil {
 		t.Error(err)
 		return

@@ -57,7 +57,7 @@ func loggingFilter(next http.Handler) http.Handler {
 func TestRoute(t *testing.T) {
 	ctx := context.Background()
 	srv := NewServer(
-		Filter(corsFilter, loggingFilter),
+		WithFilter(corsFilter, loggingFilter),
 	)
 	route := srv.Route("/v1")
 	route.GET("/users/{name}", func(ctx Context) error {
@@ -225,7 +225,7 @@ func TestRouter_ContextDataRace(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	t.Cleanup(upstream.Close)
-	srv := NewServer(Timeout(time.Millisecond*50), Listener(listener))
+	srv := NewServer(WithTimeout(time.Millisecond*50), WithListener(listener))
 
 	router := srv.Route("/")
 	router.GET("/ping", func(ctx Context) error {

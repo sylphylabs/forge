@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -17,8 +18,8 @@ type watcher struct {
 	f  *file
 	fw *fsnotify.Watcher
 
-	ctx    context.Context
-	cancel context.CancelFunc
+	exit chan struct{}
+	once sync.Once
 }
 
 func newWatcher(f *file) (config.Watcher, error) {
@@ -27,20 +28,22 @@ func newWatcher(f *file) (config.Watcher, error) {
 		return nil, err
 	}
 	if err := fw.Add(f.path); err != nil {
+		_ = fw.Close()
 		return nil, err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	return &watcher{f: f, fw: fw, ctx: ctx, cancel: cancel}, nil
+	return &watcher{f: f, fw: fw, exit: make(chan struct{})}, nil
 }
 
-func (w *watcher) Next() ([]*config.KeyValue, error) {
+func (w *watcher) Next(ctx context.Context) ([]*config.KeyValue, error) {
 	for {
 		select {
-		case <-w.ctx.Done():
-			return nil, w.ctx.Err()
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-w.exit:
+			return nil, context.Canceled
 		case event, ok := <-w.fw.Events:
 			if !ok {
-				return nil, w.ctx.Err()
+				return nil, context.Canceled
 			}
 			if skipFile(filepath.Base(event.Name)) {
 				continue
@@ -60,6 +63,8 @@ func (w *watcher) Next() ([]*config.KeyValue, error) {
 			if fi.IsDir() {
 				path = filepath.Join(w.f.path, filepath.Base(event.Name))
 			}
+			// Editors often truncate and rewrite; a short pause lets the
+			// write finish before the file is read back.
 			time.Sleep(time.Millisecond)
 			kv, err := w.f.loadFile(path)
 			if err != nil {
@@ -68,14 +73,20 @@ func (w *watcher) Next() ([]*config.KeyValue, error) {
 			return []*config.KeyValue{kv}, nil
 		case err, ok := <-w.fw.Errors:
 			if !ok {
-				return nil, w.ctx.Err()
+				return nil, context.Canceled
 			}
 			return nil, err
 		}
 	}
 }
 
+// Stop unblocks an in-flight Next and releases the filesystem watcher. It is
+// safe to call more than once.
 func (w *watcher) Stop() error {
-	w.cancel()
-	return w.fw.Close()
+	var err error
+	w.once.Do(func() {
+		close(w.exit)
+		err = w.fw.Close()
+	})
+	return err
 }

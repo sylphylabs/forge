@@ -22,9 +22,13 @@ type Suite interface {
 
 // WithSuite expands a Suite into a single Option. The suite's options apply
 // in place, exactly where the returned Option appears in the caller's option
-// list, in the order Options returned them. Options that set the same field
-// keep their usual semantics: the one applied last wins, whether it came from
-// a suite or was written directly.
+// list, in the order Options returned them. Each option keeps its usual
+// semantics whether it came from a suite or was written directly: scalar
+// options such as [WithName], [WithVersion], [WithID], [WithContext], and
+// [WithLogger] set a single field and the one applied last wins, while
+// collection options such as [WithServer], [WithEndpoint], [WithMetadata],
+// and the lifecycle hooks accumulate, so
+// independent suites contributing to the same collection all take effect.
 //
 // WithSuite calls Options once, immediately, so a suite is read at the point
 // it is wired, not when the application is constructed. It panics right away

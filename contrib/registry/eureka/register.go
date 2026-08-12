@@ -75,8 +75,8 @@ func (r *Registry) Deregister(ctx context.Context, service *registry.ServiceInst
 	return r.api.Deregister(ctx, r.Endpoints(service))
 }
 
-// GetService gets services from Eureka.
-func (r *Registry) GetService(ctx context.Context, serviceName string) ([]*registry.ServiceInstance, error) {
+// Instances returns the currently known instances of the named service.
+func (r *Registry) Instances(ctx context.Context, serviceName string) ([]*registry.ServiceInstance, error) {
 	instances := r.api.GetService(ctx, serviceName)
 	items := make([]*registry.ServiceInstance, 0, len(instances))
 	for _, instance := range instances {

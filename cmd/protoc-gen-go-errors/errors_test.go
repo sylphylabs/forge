@@ -101,7 +101,10 @@ func TestGenerateSentinels(t *testing.T) {
 		`errors.KindNotFound`,
 		// The domain is the proto package, so reasons cannot collide globally.
 		`"test.v1"`,
-		`FailureReason_FAILURE_REASON_NOT_FOUND.String()`,
+		// The reason is the enum value name as a literal: a package-level var
+		// initializes before the init() that registers the enum descriptor, so
+		// calling String() here would dereference an unregistered descriptor.
+		`"FAILURE_REASON_NOT_FOUND"`,
 		// A value without its own kind inherits default_kind.
 		`var ErrBackendDown = errors.MustDefine(`,
 		`errors.KindInternal`,

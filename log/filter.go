@@ -16,10 +16,10 @@ type filterConfig struct {
 	filter func(ctx context.Context, record slog.Record) bool
 }
 
-// FilterKey redacts the values of attributes whose key matches any of the
+// WithFilterKey redacts the values of attributes whose key matches any of the
 // provided keys. Keys may be leaf names ("password") or dotted group paths
 // ("user.password").
-func FilterKey(keys ...string) FilterOption {
+func WithFilterKey(keys ...string) FilterOption {
 	return func(c *filterConfig) {
 		if c.keys == nil {
 			c.keys = make(map[string]struct{}, len(keys))
@@ -30,9 +30,9 @@ func FilterKey(keys ...string) FilterOption {
 	}
 }
 
-// FilterFunc drops records for which fn returns true. fn is evaluated after key
+// WithFilterFunc drops records for which fn returns true. fn is evaluated after key
 // redaction.
-func FilterFunc(fn func(ctx context.Context, record slog.Record) bool) FilterOption {
+func WithFilterFunc(fn func(ctx context.Context, record slog.Record) bool) FilterOption {
 	return func(c *filterConfig) { c.filter = fn }
 }
 

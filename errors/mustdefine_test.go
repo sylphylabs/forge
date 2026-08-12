@@ -2,8 +2,9 @@ package errors
 
 import "testing"
 
-// A sentinel with no identity would match unrelated errors by Kind alone, so an
-// invalid declaration must fail at init rather than reach the wire.
+// A sentinel exists to be matched, and matching requires a complete, valid
+// identity, so an invalid declaration must fail at init rather than reach the
+// wire as an error nothing can identify.
 func TestMustDefineRejectsUnidentifiableSentinels(t *testing.T) {
 	tests := []struct {
 		name   string

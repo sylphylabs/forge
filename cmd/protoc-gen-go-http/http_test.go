@@ -54,8 +54,8 @@ func TestHTTPTemplateClientUsesCompiledPathAndGoogleJSON(t *testing.T) {
 		`path, err := _Greeter_SayHello0_HTTP_Path.Build(in)`,
 		`path, err := _Greeter_CreateHello0_HTTP_Path.Build(in)`,
 		`if err != nil`,
-		`http.Accept("application/json")`,
-		`http.ContentType("application/json")`,
+		`http.WithAccept("application/json")`,
+		`http.WithContentType("application/json")`,
 		`transcoding.NewProtoJSON(in)`,
 		`transcoding.NewProtoJSON(&out)`,
 	} {
@@ -207,9 +207,9 @@ func TestHTTPTemplateStreamsAndHTTPBody(t *testing.T) {
 		`path *transcoding.CompiledPath`,
 		`path, err := x.path.Build(m)`,
 		`stream, err := x.cc.WebSocket(x.ctx, path, opts...)`,
-		`http.ContentType("application/protojson")`,
+		`http.WithContentType("application/protojson")`,
 		`return &Greeter_ChatHelloHTTPClient{ctx: ctx, cc: c.cc, path: _Greeter_ChatHello0_HTTP_Path, opts: opts}, nil`,
-		`http.ContentType(http.BodyContentType(in.GetBody()))`,
+		`http.WithContentType(http.BodyContentType(in.GetBody()))`,
 		`transcoding.WithOmitFields("body")`,
 		`return ctx.Blob(200, http.BodyContentType(reply.GetBody()), reply.GetBody().GetData())`,
 		// Client-streaming RPC with a streamable (message-kind) named body field.
@@ -590,7 +590,7 @@ func TestGeneratedGoogleHTTPConformance(t *testing.T) {
 	defer httpServer.Close()
 
 	recorder := new(recordingTransport)
-	client, err := forgehttp.NewClient(t.Context(), forgehttp.WithEndpoint(httpServer.URL), forgehttp.WithTransport(recorder))
+	client, err := forgehttp.NewClient(t.Context(), forgehttp.WithTarget(httpServer.URL), forgehttp.WithTransport(recorder))
 	if err != nil {
 		t.Fatal(err)
 	}

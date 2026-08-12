@@ -33,8 +33,10 @@ func newWatch(ctx context.Context, cli *API, serverName string) (*watcher, error
 	return w, e
 }
 
-func (w *watcher) Next() (services []*registry.ServiceInstance, err error) {
+func (w *watcher) Next(ctx context.Context) (services []*registry.ServiceInstance, err error) {
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case <-w.ctx.Done():
 		return nil, w.ctx.Err()
 	case <-w.watchChan:

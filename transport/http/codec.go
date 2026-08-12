@@ -149,7 +149,7 @@ func DefaultErrorEncoder(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 func encodeError(w http.ResponseWriter, r *http.Request, err error) {
-	var rd *redirect
+	var rd Redirector
 	if errors.As(err, &rd) {
 		url, code := rd.Redirect()
 		http.Redirect(w, r, url, code)

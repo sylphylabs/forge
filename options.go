@@ -3,6 +3,7 @@ package forge
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"net/url"
 	"os"
 	"time"
@@ -12,6 +13,15 @@ import (
 )
 
 // Option is an application option.
+//
+// Options come in two shapes. Scalar options ([WithID], [WithName],
+// [WithVersion], [WithContext], [WithLogger], [WithRegistrar], and the
+// timeouts) set a single field: when the same option appears more than once,
+// the one applied last wins. Collection options ([WithServer], [WithEndpoint],
+// [WithSignal], [WithMetadata], and the lifecycle hooks) accumulate: every
+// application of the option adds to what earlier applications contributed, so
+// independent option lists — for example two [Suite] values — compose without
+// overwriting each other.
 type Option func(o *options)
 
 // options is an application options.
@@ -39,97 +49,105 @@ type options struct {
 	afterStop   []func(context.Context) error
 }
 
-// ID with service id.
-func ID(id string) Option {
+// WithID sets the service id.
+func WithID(id string) Option {
 	return func(o *options) { o.id = id }
 }
 
-// Name with service name.
-func Name(name string) Option {
+// WithName sets the service name.
+func WithName(name string) Option {
 	return func(o *options) { o.name = name }
 }
 
-// Version with service version.
-func Version(version string) Option {
+// WithVersion sets the service version.
+func WithVersion(version string) Option {
 	return func(o *options) { o.version = version }
 }
 
-// Metadata with service metadata.
-func Metadata(md map[string]string) Option {
-	return func(o *options) { o.metadata = md }
+// WithMetadata merges md into the service metadata. Keys from later applications
+// win over earlier ones.
+func WithMetadata(md map[string]string) Option {
+	return func(o *options) {
+		if o.metadata == nil {
+			o.metadata = make(map[string]string, len(md))
+		}
+		maps.Copy(o.metadata, md)
+	}
 }
 
-// Endpoint with service endpoint.
-func Endpoint(endpoints ...*url.URL) Option {
-	return func(o *options) { o.endpoints = endpoints }
+// WithEndpoint appends endpoints to the service endpoints.
+func WithEndpoint(endpoints ...*url.URL) Option {
+	return func(o *options) { o.endpoints = append(o.endpoints, endpoints...) }
 }
 
-// Context with service context.
-func Context(ctx context.Context) Option {
+// WithContext sets the service context.
+func WithContext(ctx context.Context) Option {
 	return func(o *options) { o.ctx = ctx }
 }
 
-// Logger with service logger.
-func Logger(logger *slog.Logger) Option {
+// WithLogger sets the service logger.
+func WithLogger(logger *slog.Logger) Option {
 	return func(o *options) { o.logger = logger }
 }
 
-// Server with transport servers.
-func Server(srv ...transport.Server) Option {
-	return func(o *options) { o.servers = srv }
+// WithServer appends transport servers to the application.
+func WithServer(srv ...transport.Server) Option {
+	return func(o *options) { o.servers = append(o.servers, srv...) }
 }
 
-// Signal with exit signals.
-func Signal(sigs ...os.Signal) Option {
-	return func(o *options) { o.sigs = sigs }
+// WithSignal appends exit signals to the set the application stops on. When
+// no WithSignal option is given, the application stops on SIGTERM, SIGQUIT,
+// and SIGINT.
+func WithSignal(sigs ...os.Signal) Option {
+	return func(o *options) { o.sigs = append(o.sigs, sigs...) }
 }
 
-// Registrar with service registry.
-func Registrar(r registry.Registrar) Option {
+// WithRegistrar sets the service registrar.
+func WithRegistrar(r registry.Registrar) Option {
 	return func(o *options) { o.registrar = r }
 }
 
-// RegistrarTimeout with registrar timeout.
-func RegistrarTimeout(t time.Duration) Option {
+// WithRegistrarTimeout sets the registrar timeout.
+func WithRegistrarTimeout(t time.Duration) Option {
 	return func(o *options) { o.registrarTimeout = t }
 }
 
-// StopTimeout with app stop timeout.
-func StopTimeout(t time.Duration) Option {
+// WithStopTimeout sets the app stop timeout.
+func WithStopTimeout(t time.Duration) Option {
 	return func(o *options) { o.stopTimeout = t }
 }
 
-// AfterStopTimeout sets the total time allowed for all AfterStop hooks.
+// WithAfterStopTimeout sets the total time allowed for all AfterStop hooks.
 // A non-positive duration disables the deadline.
-func AfterStopTimeout(t time.Duration) Option {
+func WithAfterStopTimeout(t time.Duration) Option {
 	return func(o *options) { o.afterStopTimeout = t }
 }
 
 // Before and Afters
 
-// BeforeStart run funcs before app starts
-func BeforeStart(fn func(context.Context) error) Option {
+// WithBeforeStart registers a func to run before the app starts.
+func WithBeforeStart(fn func(context.Context) error) Option {
 	return func(o *options) {
 		o.beforeStart = append(o.beforeStart, fn)
 	}
 }
 
-// BeforeStop run funcs before app stops
-func BeforeStop(fn func(context.Context) error) Option {
+// WithBeforeStop registers a func to run before the app stops.
+func WithBeforeStop(fn func(context.Context) error) Option {
 	return func(o *options) {
 		o.beforeStop = append(o.beforeStop, fn)
 	}
 }
 
-// AfterStart run funcs after app starts
-func AfterStart(fn func(context.Context) error) Option {
+// WithAfterStart registers a func to run after the app starts.
+func WithAfterStart(fn func(context.Context) error) Option {
 	return func(o *options) {
 		o.afterStart = append(o.afterStart, fn)
 	}
 }
 
-// AfterStop run funcs after app stops
-func AfterStop(fn func(context.Context) error) Option {
+// WithAfterStop registers a func to run after the app stops.
+func WithAfterStop(fn func(context.Context) error) Option {
 	return func(o *options) {
 		o.afterStop = append(o.afterStop, fn)
 	}

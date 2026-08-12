@@ -9,14 +9,9 @@ import (
 	"github.com/sylphylabs/forge/log"
 )
 
-// Reader is config reader.
-type Reader interface {
-	Merge(...*KeyValue) error
-	Value(string) (Value, bool)
-	Source() ([]byte, error)
-	Resolve() error
-}
-
+// reader accumulates decoded source payloads into one key tree and serves
+// point lookups over it. Each load builds a fresh reader; [Config] swaps the
+// current one atomically on reload.
 type reader struct {
 	opts   options
 	values map[string]any
@@ -53,7 +48,7 @@ func (r *reader) Merge(kvs ...*KeyValue) error {
 	return nil
 }
 
-func (r *reader) Value(path string) (Value, bool) {
+func (r *reader) Value(path string) (*atomicValue, bool) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	return readValue(r.values, path)
@@ -116,9 +111,9 @@ func convertMap(src any) any {
 	}
 }
 
-// readValue read Value in given map[string]interface{}
-// by the given path, will return false if not found.
-func readValue(values map[string]any, path string) (Value, bool) {
+// readValue walks the dot-separated path through nested maps and returns the
+// value at its end, reporting false when any segment is missing.
+func readValue(values map[string]any, path string) (*atomicValue, bool) {
 	var (
 		next = values
 		keys = strings.Split(path, ".")

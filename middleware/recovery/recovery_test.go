@@ -18,12 +18,8 @@ func TestOnce(t *testing.T) {
 	next := func(context.Context, any) (any, error) {
 		panic("panic reason")
 	}
-	_, e := Recovery(WithHandler(func(ctx context.Context, _, err any) error {
-		_, ok := ctx.Value(Latency{}).(float64)
-		if !ok {
-			t.Errorf("not latency")
-		}
-		return errors.New(errors.KindInternal).WithReason("RECOVERY").Msg(fmt.Sprintf("panic triggered: %v", err))
+	_, e := Recovery(WithHandler(func(_ context.Context, _, err any) error {
+		return errors.Of(errors.KindInternal).WithReason("RECOVERY").Msg(fmt.Sprintf("panic triggered: %v", err))
 	}))(next)(context.Background(), "panic")
 	t.Logf("succ and reason is %v", e)
 }
@@ -34,7 +30,7 @@ func TestNotPanic(t *testing.T) {
 	}
 
 	_, e := Recovery(WithHandler(func(_ context.Context, _ any, err any) error {
-		return errors.New(errors.KindInternal).WithReason("RECOVERY").Msg(fmt.Sprintf("panic triggered: %v", err))
+		return errors.Of(errors.KindInternal).WithReason("RECOVERY").Msg(fmt.Sprintf("panic triggered: %v", err))
 	}))(next)(context.Background(), "notPanic")
 	if e != nil {
 		t.Errorf("e isn't nil")

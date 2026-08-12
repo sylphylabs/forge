@@ -82,12 +82,12 @@ func Example_a66DurationOnly() {
 	}
 
 	_ = forgegrpc.NewServer(
-		forgegrpc.Options(grpcotel.ServerOption(otelOptions)),
+		forgegrpc.WithOptions(grpcotel.ServerOption(otelOptions)),
 	)
 	conn, err := forgegrpc.NewClient(
 		context.Background(),
-		forgegrpc.WithEndpoint("dns:///example.invalid:443"),
-		forgegrpc.WithOptions(grpcotel.DialOption(otelOptions)),
+		forgegrpc.WithTarget("dns:///example.invalid:443"),
+		forgegrpc.WithDialOptions(grpcotel.DialOption(otelOptions)),
 	)
 	if err != nil {
 		return
@@ -270,7 +270,7 @@ func TestGRPCA66ZeroTraceOptionsDoesNotDuplicateClientSpan(t *testing.T) {
 		t,
 		nil,
 		metricnoop.NewMeterProvider(),
-		forgegrpc.WithMiddleware(forgetracing.Client(
+		forgegrpc.WithClientMiddleware(forgetracing.Client(
 			forgetracing.WithTracerProvider(tracerProvider),
 		)),
 	)
@@ -331,11 +331,11 @@ func newA66FixtureWithProvider(
 	service := newA66GreeterServer()
 	streamService := newA66StreamService()
 	server := forgegrpc.NewServer(
-		forgegrpc.Listener(listener),
-		forgegrpc.Timeout(10*time.Second),
-		forgegrpc.CustomHealth(),
-		forgegrpc.DisableReflection(),
-		forgegrpc.Options(
+		forgegrpc.WithListener(listener),
+		forgegrpc.WithTimeout(10*time.Second),
+		forgegrpc.WithCustomHealth(),
+		forgegrpc.WithDisableReflection(),
+		forgegrpc.WithOptions(
 			grpcotel.ServerOption(otelOptions),
 			grpc.UnknownServiceHandler(func(any, grpc.ServerStream) error {
 				return status.Error(codes.Unimplemented, "unknown method")
@@ -367,10 +367,10 @@ func newA66FixtureWithProvider(
 
 	clientOptions := make([]forgegrpc.ClientOption, 0, 4+len(extraClientOptions))
 	clientOptions = append(clientOptions,
-		forgegrpc.WithEndpoint(listener.Addr().String()),
-		forgegrpc.WithTimeout(10*time.Second),
+		forgegrpc.WithTarget(listener.Addr().String()),
+		forgegrpc.WithRequestTimeout(10*time.Second),
 		forgegrpc.WithHealthCheck(false),
-		forgegrpc.WithOptions(
+		forgegrpc.WithDialOptions(
 			grpcotel.DialOption(otelOptions),
 			grpc.WithDefaultServiceConfig(a66RetryServiceConfig),
 		),

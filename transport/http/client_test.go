@@ -105,7 +105,7 @@ func TestWithRoundTripperWrapperAppends(t *testing.T) {
 
 func TestWithTimeout(t *testing.T) {
 	ov := 1 * time.Second
-	o := WithTimeout(ov)
+	o := WithRequestTimeout(ov)
 	co := &clientOptions{}
 	o(co)
 	if !reflect.DeepEqual(co.timeout, ov) {
@@ -124,7 +124,7 @@ func TestWithBlock(t *testing.T) {
 
 func TestWithTLSConfig(t *testing.T) {
 	ov := &tls.Config{}
-	o := WithTLSConfig(ov)
+	o := WithClientTLSConfig(ov)
 	co := &clientOptions{}
 	o(co)
 	if !reflect.DeepEqual(co.tlsConf, ov) {
@@ -147,7 +147,7 @@ func TestWithMiddleware(t *testing.T) {
 	v := []middleware.UnaryMiddleware{
 		func(middleware.UnaryHandler) middleware.UnaryHandler { return nil },
 	}
-	WithMiddleware(v...)(o)
+	WithClientMiddleware(v...)(o)
 	if !reflect.DeepEqual(o.middleware, v) {
 		t.Errorf("expected middleware to be %v, got %v", v, o.middleware)
 	}
@@ -155,7 +155,7 @@ func TestWithMiddleware(t *testing.T) {
 
 func TestWithEndpoint(t *testing.T) {
 	ov := "some-endpoint"
-	o := WithEndpoint(ov)
+	o := WithTarget(ov)
 	co := &clientOptions{}
 	o(co)
 	if !reflect.DeepEqual(co.endpoint, ov) {
@@ -194,7 +194,7 @@ func TestWithErrorDecoder(t *testing.T) {
 
 type mockDiscovery struct{}
 
-func (*mockDiscovery) GetService(_ context.Context, _ string) ([]*registry.ServiceInstance, error) {
+func (*mockDiscovery) Instances(_ context.Context, _ string) ([]*registry.ServiceInstance, error) {
 	return nil, nil
 }
 
@@ -204,7 +204,7 @@ func (*mockDiscovery) Watch(_ context.Context, _ string) (registry.Watcher, erro
 
 type mockWatcher struct{}
 
-func (m *mockWatcher) Next() ([]*registry.ServiceInstance, error) {
+func (m *mockWatcher) Next(_ context.Context) ([]*registry.ServiceInstance, error) {
 	instance := &registry.ServiceInstance{
 		ID:        "1",
 		Name:      "forge",
@@ -231,8 +231,8 @@ func TestWithDiscovery(t *testing.T) {
 }
 
 func TestWithNodeFilter(t *testing.T) {
-	ov := func(context.Context, []selector.Node) []selector.Node {
-		return []selector.Node{&selector.DefaultNode{}}
+	ov := func(context.Context, []*selector.Node) []*selector.Node {
+		return []*selector.Node{{}}
 	}
 	o := WithNodeFilter(ov)
 	co := &clientOptions{}
@@ -364,7 +364,7 @@ func TestDefaultRequestEncoderUnknownCodec(t *testing.T) {
 
 func TestInvokeAcceptHeader(t *testing.T) {
 	rt := &captureRoundTripper{}
-	client, err := NewClient(context.Background(), WithEndpoint("127.0.0.1:8888"), WithTransport(rt))
+	client, err := NewClient(context.Background(), WithTarget("127.0.0.1:8888"), WithTransport(rt))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,8 +374,8 @@ func TestInvokeAcceptHeader(t *testing.T) {
 		"/go",
 		&emptypb.Empty{},
 		&emptypb.Empty{},
-		Accept("application/protojson"),
-		ContentType("application/protojson"),
+		WithAccept("application/protojson"),
+		WithContentType("application/protojson"),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -391,7 +391,7 @@ func TestInvokeAcceptHeader(t *testing.T) {
 func TestInvokePreservesEndpointBasePath(t *testing.T) {
 	rt := &captureRoundTripper{}
 	client, err := NewClient(t.Context(),
-		WithEndpoint("https://api.example.com/base/v1/"),
+		WithTarget("https://api.example.com/base/v1/"),
 		WithTransport(rt),
 	)
 	if err != nil {
@@ -403,7 +403,7 @@ func TestInvokePreservesEndpointBasePath(t *testing.T) {
 		"/greeters/a%2Fb?view=full",
 		nil,
 		&emptypb.Empty{},
-		Accept("application/protojson"),
+		WithAccept("application/protojson"),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -554,27 +554,27 @@ func TestCodecForResponse(t *testing.T) {
 }
 
 func TestNewClient(t *testing.T) {
-	_, err := NewClient(context.Background(), WithEndpoint("127.0.0.1:8888"))
+	_, err := NewClient(context.Background(), WithTarget("127.0.0.1:8888"))
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = NewClient(context.Background(), WithEndpoint("127.0.0.1:9999"), WithTLSConfig(&tls.Config{ServerName: "www.kratos.com", RootCAs: nil}))
+	_, err = NewClient(context.Background(), WithTarget("127.0.0.1:9999"), WithClientTLSConfig(&tls.Config{ServerName: "www.kratos.com", RootCAs: nil}))
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = NewClient(context.Background(), WithDiscovery(&mockDiscovery{}), WithEndpoint("discovery:///go-kratos"))
+	_, err = NewClient(context.Background(), WithDiscovery(&mockDiscovery{}), WithTarget("discovery:///go-kratos"))
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = NewClient(context.Background(), WithDiscovery(&mockDiscovery{}), WithEndpoint("127.0.0.1:8888"))
+	_, err = NewClient(context.Background(), WithDiscovery(&mockDiscovery{}), WithTarget("127.0.0.1:8888"))
 	if err != nil {
 		t.Error(err)
 	}
-	_, err = NewClient(context.Background(), WithEndpoint("127.0.0.1:8888:xxxxa"))
+	_, err = NewClient(context.Background(), WithTarget("127.0.0.1:8888:xxxxa"))
 	if err == nil {
 		t.Error("except a parseTarget error")
 	}
-	_, err = NewClient(context.Background(), WithDiscovery(&mockDiscovery{}), WithEndpoint("https://go-kratos.dev/"))
+	_, err = NewClient(context.Background(), WithDiscovery(&mockDiscovery{}), WithTarget("https://go-kratos.dev/"))
 	if err == nil {
 		t.Error("err should not be equal to nil")
 	}
@@ -582,8 +582,8 @@ func TestNewClient(t *testing.T) {
 	client, err := NewClient(
 		context.Background(),
 		WithDiscovery(&mockDiscovery{}),
-		WithEndpoint("discovery:///go-kratos"),
-		WithMiddleware(func(handler middleware.UnaryHandler) middleware.UnaryHandler {
+		WithTarget("discovery:///go-kratos"),
+		WithClientMiddleware(func(handler middleware.UnaryHandler) middleware.UnaryHandler {
 			t.Logf("handle in middleware")
 			return func(ctx context.Context, req any) (any, error) {
 				return handler(ctx, req)
@@ -611,6 +611,90 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
+// ctxBoundDiscovery hands out watchers that fail once the ctx given to Watch
+// ends, so a test can tell which context the client rooted its watch in.
+type ctxBoundDiscovery struct{}
+
+func (*ctxBoundDiscovery) Instances(_ context.Context, _ string) ([]*registry.ServiceInstance, error) {
+	return nil, nil
+}
+
+func (*ctxBoundDiscovery) Watch(ctx context.Context, _ string) (registry.Watcher, error) {
+	return &ctxBoundWatcher{watchCtx: ctx}, nil
+}
+
+type ctxBoundWatcher struct {
+	watchCtx context.Context
+	sent     bool
+}
+
+func (w *ctxBoundWatcher) Next(ctx context.Context) ([]*registry.ServiceInstance, error) {
+	if err := w.watchCtx.Err(); err != nil {
+		return nil, err
+	}
+	if w.sent {
+		select {
+		case <-w.watchCtx.Done():
+			return nil, w.watchCtx.Err()
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	w.sent = true
+	instance := &registry.ServiceInstance{
+		ID:        "1",
+		Name:      "forge",
+		Version:   "v1",
+		Endpoints: []string{"http://127.0.0.1:9001?isSecure=false"},
+	}
+	return []*registry.ServiceInstance{instance}, nil
+}
+
+func (*ctxBoundWatcher) Stop() error { return nil }
+
+// signalingSelector reports the first Apply it receives, so a test can tell
+// whether discovery updates reached the client's balancer.
+type signalingSelector struct {
+	selector.Selector
+	applied chan struct{}
+}
+
+func (s *signalingSelector) Build() selector.Selector { return s }
+
+func (s *signalingSelector) Apply(nodes []*selector.Node) {
+	select {
+	case s.applied <- struct{}{}:
+	default:
+	}
+	s.Selector.Apply(nodes)
+}
+
+// TestNewClientDiscoveryOutlivesConstructionContext proves the watch is not
+// rooted in NewClient's ctx: canceling it right after construction — the usual
+// `ctx, cancel := context.WithTimeout(...); defer cancel()` shape — must not
+// tear down service discovery.
+func TestNewClientDiscoveryOutlivesConstructionContext(t *testing.T) {
+	s := &signalingSelector{Selector: wrr.NewBuilder().Build(), applied: make(chan struct{}, 1)}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	client, err := NewClient(ctx,
+		WithDiscovery(&ctxBoundDiscovery{}),
+		WithTarget("discovery:///forge"),
+		WithSelector(s),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	select {
+	case <-s.applied:
+	case <-time.After(2 * time.Second):
+		t.Fatal("discovery received no update after the construction ctx was canceled")
+	}
+}
+
 func TestNewClientWithTLSDoesNotModifyDefaultTransport(t *testing.T) {
 	defaultTransport, ok := http.DefaultTransport.(*http.Transport)
 	if !ok {
@@ -618,7 +702,7 @@ func TestNewClientWithTLSDoesNotModifyDefaultTransport(t *testing.T) {
 	}
 	originalTLSConfig := defaultTransport.TLSClientConfig
 
-	_, err := NewClient(context.Background(), WithEndpoint("127.0.0.1:9999"), WithTLSConfig(&tls.Config{ServerName: "www.kratos.com"}))
+	_, err := NewClient(context.Background(), WithTarget("127.0.0.1:9999"), WithClientTLSConfig(&tls.Config{ServerName: "www.kratos.com"}))
 	if err != nil {
 		t.Error(err)
 	}
@@ -650,7 +734,7 @@ func TestNewClientAppliesRoundTripperWrappersInOrder(t *testing.T) {
 
 	client, err := NewClient(
 		t.Context(),
-		WithEndpoint("http://example.com"),
+		WithTarget("http://example.com"),
 		WithTransport(base),
 		WithRoundTripperWrapper(wrapper("first")),
 		WithRoundTripperWrapper(wrapper("second")),
@@ -687,9 +771,9 @@ func TestNewClientAppliesRoundTripperWrapperAfterTLSClone(t *testing.T) {
 
 	_, err := NewClient(
 		t.Context(),
-		WithEndpoint("https://example.com"),
+		WithTarget("https://example.com"),
 		WithTransport(base),
-		WithTLSConfig(tlsConfig),
+		WithClientTLSConfig(tlsConfig),
 		WithRoundTripperWrapper(func(next http.RoundTripper) (http.RoundTripper, error) {
 			wrappedBase = next
 			return next, nil
@@ -752,7 +836,7 @@ func TestNewClientRejectsInvalidRoundTripperWrappers(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opts := append([]ClientOption{WithEndpoint("http://example.com")}, tt.opts...)
+			opts := append([]ClientOption{WithTarget("http://example.com")}, tt.opts...)
 			_, err := NewClient(t.Context(), opts...)
 			if err == nil {
 				t.Fatal("NewClient() error = nil")
@@ -771,7 +855,7 @@ func TestClientMarksOnlyUndeliveredRequests(t *testing.T) {
 	t.Run("dial failure is marked", func(t *testing.T) {
 		// Port 1 on loopback refuses connections, so the request body is
 		// never written.
-		client, err := NewClient(context.Background(), WithEndpoint("127.0.0.1:1"))
+		client, err := NewClient(context.Background(), WithTarget("127.0.0.1:1"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -810,7 +894,7 @@ func TestClientMarksOnlyUndeliveredRequests(t *testing.T) {
 			}
 		}()
 
-		client, err := NewClient(context.Background(), WithEndpoint(ln.Addr().String()))
+		client, err := NewClient(context.Background(), WithTarget(ln.Addr().String()))
 		if err != nil {
 			t.Fatal(err)
 		}

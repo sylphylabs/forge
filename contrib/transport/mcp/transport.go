@@ -69,7 +69,7 @@ func (h headerCarrier) Keys() []string {
 // *mcp.CallToolResult as its reply. Middleware that inspects the request type
 // should type-assert accordingly.
 //
-// Pass the result to server.WithToolHandlerMiddleware, or use ToolMiddleware
+// Pass the result to server.WithToolHandlerMiddleware, or use WithToolMiddleware
 // to do both at once.
 func UnaryMiddleware(endpoint string, m ...middleware.UnaryMiddleware) server.ToolHandlerMiddleware {
 	chain := middleware.ChainUnary(m...)
@@ -99,13 +99,12 @@ func UnaryMiddleware(endpoint string, m ...middleware.UnaryMiddleware) server.To
 	}
 }
 
-// ToolMiddleware registers framework middleware on the server's tool handlers.
+// WithToolMiddleware registers framework middleware on the server's tool handlers.
 // It is the option form of UnaryMiddleware and reports the server's own
 // endpoint, so it must be passed to NewServer rather than to SrvOptions.
 //
-// Repeated calls append, matching WithMiddleware in transport/message. Nil
-// middleware is ignored.
-func ToolMiddleware(m ...middleware.UnaryMiddleware) ServerOption {
+// Repeated calls append. Nil middleware is ignored.
+func WithToolMiddleware(m ...middleware.UnaryMiddleware) ServerOption {
 	return func(s *Server) {
 		for _, mw := range m {
 			if mw != nil {

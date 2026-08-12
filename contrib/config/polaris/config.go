@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -74,7 +75,7 @@ func New(client polaris.ConfigAPI, opts ...Option) (config.Source, error) {
 }
 
 // Load return the config values
-func (s *source) Load() ([]*config.KeyValue, error) {
+func (s *source) Load(context.Context) ([]*config.KeyValue, error) {
 	configFile, err := s.client.FetchConfigFile(&polaris.GetConfigFileRequest{
 		GetConfigFileRequest: &model.GetConfigFileRequest{
 			Namespace: s.options.namespace,
@@ -103,6 +104,6 @@ func (s *source) Load() ([]*config.KeyValue, error) {
 }
 
 // Watch return the watcher
-func (s *source) Watch() (config.Watcher, error) {
+func (s *source) Watch(context.Context) (config.Watcher, error) {
 	return newWatcher(s.options.configFile), nil
 }

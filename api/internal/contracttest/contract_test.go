@@ -3,7 +3,6 @@ package contracttest
 import (
 	"testing"
 
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -12,45 +11,6 @@ import (
 	"github.com/sylphylabs/forge/api/errors/v1"
 	message "github.com/sylphylabs/forge/api/message/v1"
 )
-
-func TestErrorStatusRoundTrip(t *testing.T) {
-	want := &errors.Status{
-		Kind:    errors.Kind_KIND_NOT_FOUND,
-		Domain:  "sylphy.test.v1",
-		Reason:  "DOCUMENT_NOT_FOUND",
-		Message: "document not found",
-		Metadata: map[string]string{
-			"name": "documents/42",
-		},
-		TraceId: "trace-42",
-		Violations: []*errors.Violation{
-			{Field: "name", Description: "must not be empty"},
-		},
-	}
-	wire, err := proto.Marshal(want)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := new(errors.Status)
-	if err = proto.Unmarshal(wire, got); err != nil {
-		t.Fatal(err)
-	}
-	if !proto.Equal(got, want) {
-		t.Fatalf("wire round trip = %v, want %v", got, want)
-	}
-
-	jsonWire, err := protojson.Marshal(want)
-	if err != nil {
-		t.Fatal(err)
-	}
-	jsonGot := new(errors.Status)
-	if err := protojson.Unmarshal(jsonWire, jsonGot); err != nil {
-		t.Fatal(err)
-	}
-	if !proto.Equal(jsonGot, want) {
-		t.Fatalf("JSON round trip = %v, want %v", jsonGot, want)
-	}
-}
 
 func TestCustomOptions(t *testing.T) {
 	enumOptions := new(descriptorpb.EnumOptions)

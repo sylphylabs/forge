@@ -744,9 +744,9 @@ func (client *Client) WebSocket(ctx context.Context, path string, opts ...CallOp
 				scheme = "wss"
 			}
 			req.URL.Scheme = scheme
-			req.URL.Host = node.Address()
-			req.Host = node.Address()
-			dialURL = fmt.Sprintf("%s://%s%s", scheme, node.Address(), path)
+			req.URL.Host = node.Address
+			req.Host = node.Address
+			dialURL = fmt.Sprintf("%s://%s%s", scheme, node.Address, path)
 		}
 		dialer := websocket.Dialer{
 			Proxy:            stdhttp.ProxyFromEnvironment,

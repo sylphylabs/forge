@@ -96,16 +96,16 @@ func TestServiceInstanceEqual(t *testing.T) {
 	}
 }
 
-func TestServiceInstanceEqualNilAndOtherTypes(t *testing.T) {
+func TestServiceInstanceEqualNil(t *testing.T) {
 	var nilInstance *ServiceInstance
 	tests := []struct {
 		name     string
 		receiver *ServiceInstance
-		other    any
+		other    *ServiceInstance
 		want     bool
 	}{
 		{
-			name: "nil receiver and nil interface",
+			name: "nil receiver and nil argument",
 			want: true,
 		},
 		{
@@ -114,18 +114,12 @@ func TestServiceInstanceEqualNilAndOtherTypes(t *testing.T) {
 			want:  true,
 		},
 		{
-			name:     "instance and nil interface",
+			name:     "instance and nil argument",
 			receiver: &ServiceInstance{},
 		},
 		{
-			name:     "instance and typed nil",
-			receiver: &ServiceInstance{},
-			other:    nilInstance,
-		},
-		{
-			name:     "different type",
-			receiver: &ServiceInstance{},
-			other:    "instance",
+			name:  "nil receiver and instance",
+			other: &ServiceInstance{},
 		},
 	}
 

@@ -11,7 +11,7 @@ import (
 
 func TestFilterKeyRedacts(t *testing.T) {
 	capture := &captureHandler{}
-	h := newFilterHandler(capture, FilterKey("password"))
+	h := newFilterHandler(capture, WithFilterKey("password"))
 	record := slog.NewRecord(time.Now(), LevelInfo, "login", 0)
 	record.AddAttrs(slog.String("user", "alice"), slog.String("password", "secret"))
 	_ = h.Handle(context.Background(), record)
@@ -26,7 +26,7 @@ func TestFilterKeyRedacts(t *testing.T) {
 
 func TestFilterFuncDrops(t *testing.T) {
 	capture := &captureHandler{}
-	h := newFilterHandler(capture, FilterFunc(func(_ context.Context, r slog.Record) bool {
+	h := newFilterHandler(capture, WithFilterFunc(func(_ context.Context, r slog.Record) bool {
 		return r.Message == "drop"
 	}))
 	r1 := slog.NewRecord(time.Now(), LevelInfo, "drop", 0)
@@ -40,7 +40,7 @@ func TestFilterFuncDrops(t *testing.T) {
 
 func TestFilterKeyRedactsGroupPath(t *testing.T) {
 	var buf bytes.Buffer
-	h := newFilterHandler(slog.NewJSONHandler(&buf, nil), FilterKey("user.password"))
+	h := newFilterHandler(slog.NewJSONHandler(&buf, nil), WithFilterKey("user.password"))
 	logger := slog.New(h)
 
 	logger.Info("login", slog.Group("user",
@@ -63,7 +63,7 @@ func TestFilterKeyRedactsGroupPath(t *testing.T) {
 
 func TestFilterKeyRedactsHandlerGroupPath(t *testing.T) {
 	var buf bytes.Buffer
-	h := newFilterHandler(slog.NewJSONHandler(&buf, nil), FilterKey("request.password"))
+	h := newFilterHandler(slog.NewJSONHandler(&buf, nil), WithFilterKey("request.password"))
 	logger := slog.New(h).WithGroup("request")
 
 	logger.Info("login", "password", "secret")

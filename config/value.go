@@ -13,10 +13,17 @@ import (
 
 var (
 	_ Value = (*atomicValue)(nil)
-	_ Value = (*errValue)(nil)
+	_ Value = errValue{}
 )
 
-// Value is config value interface.
+// Value is a read-only view of one configuration value.
+//
+// Each accessor converts the underlying value to the requested type and
+// reports an error when the conversion is not possible; Scan unmarshals a
+// structured value into a caller-supplied type. A Value obtained from
+// [Config.Value] reads the current snapshot even after a reload — how the
+// coordinator installs new data is not part of this surface, so a Value
+// cannot be used to write configuration.
 type Value interface {
 	Bool() (bool, error)
 	Int() (int64, error)
@@ -26,10 +33,12 @@ type Value interface {
 	Slice() ([]Value, error)
 	Map() (map[string]Value, error)
 	Scan(any) error
-	Load() any
-	Store(any)
 }
 
+// atomicValue holds one decoded config value: readers convert it while the
+// coordinator swaps it on reload. The embedded atomic.Value is the
+// coordinator's write hook; keeping the type unexported keeps that hook off
+// the public [Value] surface.
 type atomicValue struct {
 	atomic.Value
 }
@@ -172,6 +181,8 @@ func (v *atomicValue) Scan(obj any) error {
 	return protojsonutil.Unmarshal(data, obj)
 }
 
+// errValue is the Value of a key that does not exist: every accessor reports
+// the lookup error.
 type errValue struct {
 	err error
 }
@@ -182,7 +193,5 @@ func (v errValue) Float() (float64, error)          { return 0.0, v.err }
 func (v errValue) Duration() (time.Duration, error) { return 0, v.err }
 func (v errValue) String() (string, error)          { return "", v.err }
 func (v errValue) Scan(any) error                   { return v.err }
-func (v errValue) Load() any                        { return nil }
-func (v errValue) Store(any)                        {}
 func (v errValue) Slice() ([]Value, error)          { return nil, v.err }
 func (v errValue) Map() (map[string]Value, error)   { return nil, v.err }

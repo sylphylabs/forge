@@ -41,7 +41,7 @@ func newWatcher(ctx context.Context, key, name string, client *clientv3.Client) 
 	return w, nil
 }
 
-func (w *watcher) Next() ([]*registry.ServiceInstance, error) {
+func (w *watcher) Next(ctx context.Context) ([]*registry.ServiceInstance, error) {
 	if w.first {
 		item, err := w.getInstance()
 		w.first = false
@@ -50,6 +50,8 @@ func (w *watcher) Next() ([]*registry.ServiceInstance, error) {
 
 	for {
 		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		case <-w.ctx.Done():
 			return nil, w.ctx.Err()
 		case watchResp, ok := <-w.watchChan:

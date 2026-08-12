@@ -1,3 +1,5 @@
+// Package random provides a uniformly random selector: every pick chooses
+// among the candidates with equal probability, ignoring weights.
 package random
 
 import (
@@ -8,29 +10,24 @@ import (
 	"github.com/sylphylabs/forge/selector/node/direct"
 )
 
-const (
-	// Name is random balancer name
-	Name = "random"
+// Name is the balancer name, "random".
+const Name = "random"
+
+var (
+	_ selector.Balancer        = (*balancer)(nil)
+	_ selector.BalancerBuilder = (*Builder)(nil)
 )
 
-var _ selector.Balancer = (*Balancer)(nil)
+// balancer picks uniformly at random.
+type balancer struct{}
 
-// Option is random builder option.
-type Option func(o *options)
-
-// options is random builder options
-type options struct{}
-
-// Balancer is a random balancer.
-type Balancer struct{}
-
-// New a random selector.
-func New(opts ...Option) selector.Selector {
-	return NewBuilder(opts...).Build()
+// New returns a random selector.
+func New() *selector.Composite {
+	return selector.NewComposite(&direct.Builder{}, balancer{})
 }
 
-// Pick is pick a weighted node.
-func (p *Balancer) Pick(_ context.Context, nodes []selector.WeightedNode) (selector.WeightedNode, selector.DoneFunc, error) {
+// Pick picks a node uniformly at random.
+func (p balancer) Pick(_ context.Context, nodes []selector.WeightedNode) (selector.WeightedNode, selector.DoneFunc, error) {
 	if len(nodes) == 0 {
 		return nil, nil, selector.ErrNoAvailable
 	}
@@ -40,22 +37,15 @@ func (p *Balancer) Pick(_ context.Context, nodes []selector.WeightedNode) (selec
 	return selected, d, nil
 }
 
-// NewBuilder returns a selector builder with random balancer
-func NewBuilder(opts ...Option) selector.Builder {
-	var option options
-	for _, opt := range opts {
-		opt(&option)
-	}
-	return &selector.DefaultBuilder{
-		Balancer: &Builder{},
-		Node:     &direct.Builder{},
-	}
+// NewBuilder returns a builder for random selectors.
+func NewBuilder() *selector.CompositeBuilder {
+	return selector.NewCompositeBuilder(&direct.Builder{}, &Builder{})
 }
 
-// Builder is random builder
+// Builder builds random balancers.
 type Builder struct{}
 
-// Build creates Balancer
+// Build returns a new balancer.
 func (b *Builder) Build() selector.Balancer {
-	return &Balancer{}
+	return balancer{}
 }

@@ -116,7 +116,6 @@ func analyzeErrorEnum(file *protogen.File, enum *protogen.Enum) (*errorWrapper, 
 			comment = value.Comments.Trailing.String()
 		}
 		wrapper.Errors = append(wrapper.Errors, &errorInfo{
-			Enum:         enum.GoIdent.GoName,
 			Value:        valueName,
 			SentinelName: sentinelName(enumName, valueName),
 			KindIdent:    kindIdents[kind],

@@ -45,7 +45,7 @@ func NewConfigSource(client config_client.IConfigClient, opts ...Option) config.
 	return &Config{client: client, opts: _options}
 }
 
-func (c *Config) Load() ([]*config.KeyValue, error) {
+func (c *Config) Load(context.Context) ([]*config.KeyValue, error) {
 	content, err := c.client.GetConfig(vo.ConfigParam{
 		DataId: c.opts.dataID,
 		Group:  c.opts.group,
@@ -63,7 +63,9 @@ func (c *Config) Load() ([]*config.KeyValue, error) {
 	}, nil
 }
 
-func (c *Config) Watch() (config.Watcher, error) {
+func (c *Config) Watch(context.Context) (config.Watcher, error) {
+	// The watcher's lifetime is bounded by Stop, not by the construction
+	// context, so it derives its stop signal from Background.
 	watcher := newWatcher(context.Background(), c.opts.dataID, c.opts.group, c.client.CancelListenConfig)
 	err := c.client.ListenConfig(vo.ConfigParam{
 		DataId: c.opts.dataID,

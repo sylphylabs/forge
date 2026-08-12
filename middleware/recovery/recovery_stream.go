@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"runtime"
-	"time"
 
 	"github.com/sylphylabs/forge/middleware"
 )
@@ -30,7 +29,6 @@ func Stream(opts ...Option) middleware.StreamMiddleware {
 	}
 	return func(handler middleware.StreamHandler) middleware.StreamHandler {
 		return func(request any, stream middleware.ServerStream) (err error) {
-			startTime := time.Now()
 			defer func() {
 				if rerr := recover(); rerr != nil {
 					buf := make([]byte, 64<<10) //nolint:mnd
@@ -42,7 +40,6 @@ func Stream(opts ...Option) middleware.StreamMiddleware {
 						slog.Any("request", request),
 						slog.String("stack", string(buf)),
 					)
-					ctx = context.WithValue(ctx, Latency{}, time.Since(startTime).Seconds())
 					err = op.handler(ctx, request, rerr)
 				}
 			}()

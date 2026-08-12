@@ -31,7 +31,7 @@ func TestConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	kvs, err := source.Load()
+	kvs, err := source.Load(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestConfig(t *testing.T) {
 		t.Fatal("config error")
 	}
 
-	w, err := source.Watch()
+	w, err := source.Watch(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestConfig(t *testing.T) {
 		t.Error(err)
 	}
 
-	if kvs, err = w.Next(); err != nil {
+	if kvs, err = w.Next(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -85,7 +85,7 @@ func TestExtToFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	kvs, err := source.Load()
+	kvs, err := source.Load(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func Test_source_Watch(t *testing.T) {
 				defer tt.deferFunc(t)
 			}
 
-			got, err := tt.fields.source.Watch()
+			got, err := tt.fields.source.Watch(t.Context())
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Watch() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -168,7 +168,7 @@ func Test_source_Watch(t *testing.T) {
 				t.Error(err)
 			}
 
-			next, err := got.Next()
+			next, err := got.Next(t.Context())
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Watch() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -245,7 +245,7 @@ func Test_source_Load(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
-			got, err := tt.fields.source.Load()
+			got, err := tt.fields.source.Load(t.Context())
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Load() error = %v, wantErr %v", err, tt.wantErr)
 				return

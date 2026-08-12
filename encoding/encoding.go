@@ -2,6 +2,7 @@ package encoding
 
 import (
 	"strings"
+	"sync"
 )
 
 // Codec defines the interface Transport uses to encode and decode messages. Note
@@ -18,10 +19,14 @@ type Codec interface {
 	Name() string
 }
 
-var registeredCodecs = make(map[string]Codec)
+var (
+	registeredCodecsMu sync.RWMutex
+	registeredCodecs   = make(map[string]Codec)
+)
 
 // RegisterCodec registers the provided Codec for use with all Transport clients and
-// servers.
+// servers. It is safe to call concurrently with itself and with [GetCodec];
+// registering a Codec whose name is already registered replaces the earlier one.
 func RegisterCodec(codec Codec) {
 	if codec == nil {
 		panic("cannot register a nil Codec")
@@ -30,13 +35,18 @@ func RegisterCodec(codec Codec) {
 		panic("cannot register Codec with empty string result for Name()")
 	}
 	contentSubtype := strings.ToLower(codec.Name())
+	registeredCodecsMu.Lock()
+	defer registeredCodecsMu.Unlock()
 	registeredCodecs[contentSubtype] = codec
 }
 
 // GetCodec gets a registered Codec by content-subtype, or nil if no Codec is
-// registered for the content-subtype.
+// registered for the content-subtype. It is safe to call concurrently with
+// [RegisterCodec].
 //
 // The content-subtype is expected to be lowercase.
 func GetCodec(contentSubtype string) Codec {
+	registeredCodecsMu.RLock()
+	defer registeredCodecsMu.RUnlock()
 	return registeredCodecs[contentSubtype]
 }

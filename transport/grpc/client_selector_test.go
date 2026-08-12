@@ -16,7 +16,7 @@ import (
 // minimum a channel needs to reach READY and build a picker.
 type staticDiscovery struct{ addr string }
 
-func (*staticDiscovery) GetService(context.Context, string) ([]*registry.ServiceInstance, error) {
+func (*staticDiscovery) Instances(context.Context, string) ([]*registry.ServiceInstance, error) {
 	return nil, nil
 }
 
@@ -30,10 +30,14 @@ type staticWatcher struct {
 	sent bool
 }
 
-func (w *staticWatcher) Next() ([]*registry.ServiceInstance, error) {
+func (w *staticWatcher) Next(ctx context.Context) ([]*registry.ServiceInstance, error) {
 	if w.sent {
-		<-w.ctx.Done()
-		return nil, w.ctx.Err()
+		select {
+		case <-w.ctx.Done():
+			return nil, w.ctx.Err()
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 	w.sent = true
 	return []*registry.ServiceInstance{{
@@ -60,7 +64,7 @@ func TestClientSelectorReachesPicker(t *testing.T) {
 
 	configured := &countingBuilder{inner: wrr.NewBuilder()}
 	conn, err := NewClient(t.Context(),
-		WithEndpoint("discovery:///selector-test"),
+		WithTarget("discovery:///selector-test"),
 		WithDiscovery(&staticDiscovery{addr: lis.Addr().String()}),
 		WithSelector(configured),
 	)
