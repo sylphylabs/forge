@@ -5,7 +5,7 @@ go 1.27rc2
 require (
 	github.com/nats-io/nats-server/v2 v2.14.4
 	github.com/nats-io/nats.go v1.52.0
-	github.com/sylphylabs/forge v0.0.0
+	github.com/sylphylabs/forge v0.0.1
 )
 
 require (
@@ -21,5 +21,3 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 )
-
-replace github.com/sylphylabs/forge => ../../../

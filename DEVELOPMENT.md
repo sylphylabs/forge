@@ -89,6 +89,25 @@ go test ./selector/p2c -run '^$' -bench '^BenchmarkSelect' \
 
 All Forge modules and generated Go package paths use the `github.com/sylphylabs/forge` prefix. An internal cross-module requirement points at a published tag (for example `api/v0.0.1`) with no `replace` directive, because external consumers do not honor replaces. The temporary `v0.0.0` version plus a local `replace` is reserved for a dependency that has no tag yet; `internal/releasecheck` enforces the pairing in both directions.
 
+## Local Workspace
+
+Because internal requirements point at published tags, a change to the root or
+`api` module is not visible to `cmd/` or `contrib/*` until it is tagged. For
+cross-module local development, use a Go workspace instead:
+
+```shell
+cp go.work.example go.work
+```
+
+`go.work.example` lists all 31 modules. `go.work` and `go.work.sum` are
+gitignored and must never be committed; the released `go.mod` files remain the
+source of truth for consumers. Run release-sensitive checks the way CI does,
+with the workspace disabled:
+
+```shell
+GOWORK=off go test ./internal/releasecheck
+```
+
 The `upstream` remote cannot be pushed to from this checkout. Add the Forge repository as `origin` only after it has been created:
 
 ```shell

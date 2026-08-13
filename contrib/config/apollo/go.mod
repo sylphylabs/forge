@@ -4,7 +4,7 @@ go 1.27rc2
 
 require (
 	github.com/apolloconfig/agollo/v5 v5.0.0
-	github.com/sylphylabs/forge v0.0.0
+	github.com/sylphylabs/forge v0.0.1
 )
 
 require (
@@ -23,6 +23,3 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-replace github.com/sylphylabs/forge => ../../../
-

@@ -4,7 +4,7 @@ go 1.27rc2
 
 require (
 	github.com/felixge/httpsnoop v1.1.0
-	github.com/sylphylabs/forge v0.0.0
+	github.com/sylphylabs/forge v0.0.1
 	go.opentelemetry.io/contrib/bridges/otelslog v0.20.0
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/log v0.21.0
@@ -34,5 +34,3 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260720211330-0afa2a65878a // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260720211330-0afa2a65878a // indirect
 )
-
-replace github.com/sylphylabs/forge => ../../

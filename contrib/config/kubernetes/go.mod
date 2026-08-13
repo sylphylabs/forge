@@ -3,7 +3,7 @@ module github.com/sylphylabs/forge/contrib/config/kubernetes
 go 1.27rc2
 
 require (
-	github.com/sylphylabs/forge v0.0.0
+	github.com/sylphylabs/forge v0.0.1
 	k8s.io/api v0.36.3
 	k8s.io/apimachinery v0.36.3
 	k8s.io/client-go v0.36.3
@@ -57,5 +57,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
-
-replace github.com/sylphylabs/forge => ../../../

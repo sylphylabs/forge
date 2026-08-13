@@ -4,7 +4,7 @@ go 1.27rc2
 
 require (
 	github.com/nacos-group/nacos-sdk-go/v2 v2.3.5
-	github.com/sylphylabs/forge v0.0.0
+	github.com/sylphylabs/forge v0.0.1
 )
 
 require (
@@ -65,5 +65,3 @@ require (
 	gopkg.in/ini.v1 v1.67.3 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
-
-replace github.com/sylphylabs/forge => ../../../

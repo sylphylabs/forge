@@ -1,4 +1,6 @@
 github.com/go-zookeeper/zk v1.0.4 h1:DPzxraQx7OrPyXq2phlGlNSIyWEsAox0RJmjTseMV6I=
 github.com/go-zookeeper/zk v1.0.4/go.mod h1:nOB03cncLtlp4t+UAkGSV+9beXP/akpekBwL+UX1Qcw=
+github.com/sylphylabs/forge v0.0.1 h1:DiROP5Y4roVy3t9KwVrSZH2ciVhGEPGzRm5d9D+L5Dw=
+github.com/sylphylabs/forge v0.0.1/go.mod h1:bYe3rprbWKbmCP+Pz401FuHsklnnq0VoCdMU5T7sPhE=
 golang.org/x/sync v0.22.0 h1:SZjpbeLmrCk4xhRSZFNZW5gFUeCeFgjekvI/+gfScek=
 golang.org/x/sync v0.22.0/go.mod h1:9xrNwdLfx4jkKbNva9FpL6vEN7evnE43NNNJQ2LF3+0=

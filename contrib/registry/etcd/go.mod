@@ -3,7 +3,7 @@ module github.com/sylphylabs/forge/contrib/registry/etcd
 go 1.27rc2
 
 require (
-	github.com/sylphylabs/forge v0.0.0
+	github.com/sylphylabs/forge v0.0.1
 	go.etcd.io/etcd/client/v3 v3.7.1
 )
 
@@ -24,5 +24,3 @@ require (
 	google.golang.org/grpc v1.83.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-replace github.com/sylphylabs/forge => ../../../

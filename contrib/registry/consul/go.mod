@@ -4,7 +4,7 @@ go 1.27rc2
 
 require (
 	github.com/hashicorp/consul/api/v2 v2.0.0
-	github.com/sylphylabs/forge v0.0.0
+	github.com/sylphylabs/forge v0.0.1
 )
 
 require (
@@ -28,6 +28,3 @@ require (
 	golang.org/x/exp v0.0.0-20260718201538-764159d718ef // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
-
-replace github.com/sylphylabs/forge => ../../../
-

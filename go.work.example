@@ -1,0 +1,54 @@
+// Workspace template for local cross-module development.
+//
+// The modules in this repository require each other at published versions,
+// so a change to one module is not visible to the others until it is tagged.
+// To develop against your local checkouts instead, copy this file:
+//
+//	cp go.work.example go.work
+//
+// go.work is gitignored; never commit it. Commands that must resolve the
+// published versions (release checks, reproducing consumer builds) should
+// run with GOWORK=off.
+
+go 1.27rc2
+
+use (
+	.
+	./api
+	./api/testdata/consumer
+	./cmd
+	./contrib/config/apollo
+	./contrib/config/consul
+	./contrib/config/etcd
+	./contrib/config/kubernetes
+	./contrib/config/nacos
+	./contrib/config/polaris
+	./contrib/encoding/json
+	./contrib/encoding/msgpack
+	./contrib/message/kafka
+	./contrib/message/mqtt
+	./contrib/message/nats
+	./contrib/message/rabbitmq
+	./contrib/middleware/jwt
+	./contrib/middleware/session
+	./contrib/middleware/validate
+	./contrib/otel
+	./contrib/polaris
+	./contrib/registry/consul
+	./contrib/registry/discovery
+	./contrib/registry/etcd
+	./contrib/registry/eureka
+	./contrib/registry/kubernetes
+	./contrib/registry/nacos
+	./contrib/registry/polaris
+	./contrib/registry/servicecomb
+	./contrib/registry/zookeeper
+	./contrib/transport/mcp
+)
+
+// Some contrib dependencies (Polaris, Nacos, ServiceComb SDKs) still require
+// the pre-split monolithic genproto module, whose packages collide with the
+// google.golang.org/genproto/googleapis/{api,rpc} modules once the workspace
+// merges every module's requirements. Pin the monolith to a post-split
+// version, which no longer contains the moved packages.
+replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20260720211330-0afa2a65878a

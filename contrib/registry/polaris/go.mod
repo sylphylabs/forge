@@ -4,7 +4,7 @@ go 1.27rc2
 
 require (
 	github.com/polarismesh/polaris-go v1.7.1
-	github.com/sylphylabs/forge v0.0.0
+	github.com/sylphylabs/forge v0.0.1
 )
 
 require (
@@ -37,5 +37,3 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
-
-replace github.com/sylphylabs/forge => ../../../

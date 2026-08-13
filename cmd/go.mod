@@ -4,10 +4,10 @@ go 1.27rc2
 
 require (
 	github.com/google/gnostic v0.7.1
-	github.com/sylphylabs/forge/api v0.0.0
-	github.com/sylphylabs/forge v0.0.0
 	github.com/pb33f/libopenapi v0.38.7
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+	github.com/sylphylabs/forge v0.0.1
+	github.com/sylphylabs/forge/api v0.0.1
 	google.golang.org/genproto/googleapis/api v0.0.0-20260720211330-0afa2a65878a
 	google.golang.org/protobuf v1.36.11
 )
@@ -25,10 +25,5 @@ require (
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.6.1 // indirect
 )
-
-replace github.com/sylphylabs/forge => ..
-
-// The protobuf contract lives in this repository; see api/.
-replace github.com/sylphylabs/forge/api => ../api
 
 tool google.golang.org/grpc/cmd/protoc-gen-go-grpc
