@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/fsnotify/fsnotify v1.10.1

@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/contrib/registry/zookeeper
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/go-zookeeper/zk v1.0.4

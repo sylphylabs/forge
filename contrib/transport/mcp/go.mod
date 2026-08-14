@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/contrib/transport/mcp
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/mark3labs/mcp-go v0.57.0

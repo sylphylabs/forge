@@ -82,7 +82,7 @@ func TestGeneratedErrorsCompileAndRun(t *testing.T) {
 	}
 	goMod := fmt.Sprintf(`module errors.test
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/sylphylabs/forge/api v0.0.0

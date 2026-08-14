@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/contrib/message/mqtt
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/eclipse/paho.golang v0.23.0

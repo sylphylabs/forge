@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/cmd
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/google/gnostic v0.7.1

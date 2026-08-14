@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/contrib/message/kafka
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/sylphylabs/forge v0.0.1
