@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/contrib/message/rabbitmq
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/rabbitmq/amqp091-go v1.13.0

@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/contrib/config/apollo
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/apolloconfig/agollo/v5 v5.0.0

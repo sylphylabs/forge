@@ -3,15 +3,15 @@
 ## Toolchains
 
 The repository requires Go 1.27. Until the final toolchain is published, use Go 1.27 RC2.
-Module directives therefore use `go 1.27rc2` during prerelease development and
+Module directives therefore use `go 1.27rc3` during prerelease development and
 must move together to `go 1.27.0` after the final toolchain is available.
 
 Install the current release candidate without replacing the system Go installation:
 
 ```shell
-go install golang.org/dl/go1.27rc2@latest
-go1.27rc2 download
-go1.27rc2 version
+go install golang.org/dl/go1.27rc3@latest
+go1.27rc3 download
+go1.27rc3 version
 ```
 
 ## Modules
@@ -49,7 +49,7 @@ done
 Go 1.27 switches `x/net/http2` to its standard-library wrapper by default. Forge requires `golang.org/x/net` v0.55.0 or newer because earlier wrapper releases omitted APIs used by gRPC-Go. Validate the native path without compatibility build tags:
 
 ```shell
-go1.27rc2 test ./...
+go1.27rc3 test ./...
 ```
 
 ## HTTP Routing

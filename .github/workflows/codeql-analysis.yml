@@ -24,14 +24,14 @@ jobs:
 
     # CodeQL builds the module to analyse it, so it needs the toolchain the
     # modules require. setup-go spells release candidates as semver, unlike the
-    # go directive's 1.27rc2.
+    # go directive's 1.27rc3.
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        # Not go-version-file: setup-go normalises the go directive's 1.27rc2
+        # Not go-version-file: setup-go normalises the go directive's 1.27rc3
         # to 1.27, which has no release. Once 1.27 ships, every workflow can
         # read go.mod instead of repeating the version.
-        go-version: 1.27.0-rc.2
+        go-version: 1.27.0-rc.3
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4

@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/contrib/config/nacos
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/nacos-group/nacos-sdk-go/v2 v2.3.5

@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/contrib/message/nats
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/nats-io/nats-server/v2 v2.14.4

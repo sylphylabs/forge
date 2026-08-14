@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/contrib/otel
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/felixge/httpsnoop v1.1.0

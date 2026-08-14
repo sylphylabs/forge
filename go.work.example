@@ -10,7 +10,7 @@
 // published versions (release checks, reproducing consumer builds) should
 // run with GOWORK=off.
 
-go 1.27rc2
+go 1.27rc3
 
 use (
 	.

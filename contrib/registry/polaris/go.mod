@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/contrib/registry/polaris
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/polarismesh/polaris-go v1.7.1

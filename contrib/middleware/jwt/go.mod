@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/contrib/middleware/jwt
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
