@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go }}
 
@@ -99,7 +99,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: 1.27.0-rc.2
 
@@ -137,7 +137,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: 1.27.0-rc.2
 
@@ -206,7 +206,7 @@ jobs:
       # the modules require. Build tip from source instead — that is the version
       # this job exists to watch.
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: stable
 
@@ -248,7 +248,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: 1.27.0-rc.2
 
@@ -270,7 +270,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: 1.27.0-rc.2
 
