@@ -46,7 +46,7 @@ jobs:
           - 8091:8091
           - 8093:8093
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -97,7 +97,7 @@ jobs:
     name: generated code drift
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -135,7 +135,7 @@ jobs:
     name: external consumer build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -200,7 +200,7 @@ jobs:
     # rest. Bound it rather than letting a hung build hold a runner.
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # A released toolchain cannot serve this job: setup-go installs only the
       # Go team's binaries, and every release is older than the 1.27 candidate
       # the modules require. Build tip from source instead — that is the version
@@ -246,7 +246,7 @@ jobs:
     name: cross-service e2e
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -268,7 +268,7 @@ jobs:
     # unrelated changes. The report is the signal; fixing it is its own change.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Go
         uses: actions/setup-go@v6
         with:

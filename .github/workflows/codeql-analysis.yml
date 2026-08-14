@@ -20,7 +20,7 @@ jobs:
 
     steps:
     - name: Checkout repo
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
 
     # CodeQL builds the module to analyse it, so it needs the toolchain the
     # modules require. setup-go spells release candidates as semver, unlike the
