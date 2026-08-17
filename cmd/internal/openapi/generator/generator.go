@@ -38,17 +38,18 @@ import (
 )
 
 type Configuration struct {
-	OpenAPIVersion  *string
-	Version         *string
-	Title           *string
-	Description     *string
-	Naming          *string
-	FQSchemaNaming  *bool
-	EnumType        *string
-	CircularDepth   *int
-	DefaultResponse *bool
-	ErrorSchemaName *string
-	OutputMode      *string
+	OpenAPIVersion   *string
+	Version          *string
+	Title            *string
+	Description      *string
+	Naming           *string
+	FQSchemaNaming   *bool
+	EnumType         *string
+	CircularDepth    *int
+	DefaultResponse  *bool
+	ErrorSchemaName  *string
+	OutputMode       *string
+	ValidationReason *bool
 }
 
 const (
@@ -57,7 +58,7 @@ const (
 	// plugin uses them as flag defaults. Declaring them twice let the flag
 	// default and the fallback drift apart.
 	DefaultOpenAPIVersion   = "3.2.0"
-	DefaultErrorSchemaName  = "sylphy.errors.v1.Status"
+	DefaultErrorSchemaName  = "ForgeProblem"
 	defaultErrorDescription = "Forge error response"
 )
 
@@ -85,6 +86,7 @@ type OpenAPIv3Generator struct {
 
 	inputFiles        []*protogen.File
 	reflect           *OpenAPIv3Reflector
+	throws            *throwsAnalyzer
 	generatedSchemas  []string // Names of schemas that have already been generated.
 	linterRulePattern *regexp.Regexp
 	pathPattern       *regexp.Regexp
@@ -126,6 +128,15 @@ func (g *OpenAPIv3Generator) Run(outputFile *protogen.GeneratedFile) error {
 func (g *OpenAPIv3Generator) buildDocumentV3() (*v3.Document, error) {
 	d := &v3.Document{}
 	rules := httpbinding.NewSet()
+
+	throws, err := newThrowsAnalyzer(g.plugin.Request)
+	if err != nil {
+		return nil, err
+	}
+	if err := throws.scanMarkers(); err != nil {
+		return nil, err
+	}
+	g.throws = throws
 
 	d.Openapi = stringValue(g.conf.OpenAPIVersion, DefaultOpenAPIVersion)
 	d.Info = &v3.Info{
@@ -685,8 +696,8 @@ func (g *OpenAPIv3Generator) forgeErrorSchemaName() string {
 
 func (g *OpenAPIv3Generator) forgeErrorContent(d *v3.Document) *v3.MediaTypes {
 	schemaName := g.forgeErrorSchemaName()
-	g.addSchemaToDocumentV3(d, wk.NewForgeErrorStatusSchema(schemaName))
-	return wk.NewApplicationJSONMediaType(&v3.SchemaOrReference{
+	g.addSchemaToDocumentV3(d, wk.NewForgeProblemSchema(schemaName))
+	return wk.NewProblemJSONMediaType(&v3.SchemaOrReference{
 		Oneof: &v3.SchemaOrReference_Reference{
 			Reference: &v3.Reference{XRef: "#/components/schemas/" + schemaName},
 		},
@@ -769,6 +780,15 @@ func (g *OpenAPIv3Generator) addPathsToDocumentV3(d *v3.Document, services []*pr
 					proto.Merge(op, extOperation.(*v3.Operation))
 				}
 				g.applyForgeErrorResponses(d, op)
+
+				throwsResponses, err := g.methodErrorResponses(service, method)
+				if err != nil {
+					return fmt.Errorf("RPC %s: %w", method.Desc.FullName(), err)
+				}
+				if err := g.applyThrowsResponses(d, op, throwsResponses); err != nil {
+					return fmt.Errorf("RPC %s: %w", method.Desc.FullName(), err)
+				}
+				sortOperationResponses(op)
 
 				if err := g.addOperationToDocumentV3(d, op, openAPIPath, binding.Method); err != nil {
 					if binding.Index == 0 {

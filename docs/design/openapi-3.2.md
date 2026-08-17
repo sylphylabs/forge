@@ -1,7 +1,8 @@
 # OpenAPI 3.2 Generation
 
-Status: Core generation and shared HTTP binding semantics implemented;
-Problem Details schema alignment and advanced 3.2 features pending
+Status: Core generation, shared HTTP binding semantics, Problem Details
+schema alignment, and method error declarations implemented; advanced 3.2
+features pending
 
 ## Decision
 
@@ -30,32 +31,33 @@ needed by current Forge unary HTTP transcoding:
 - the Forge RFC 9457 Problem Details error representation.
 
 The canonical HTTP error component is a generator-owned `ForgeProblem`, not a
-Protobuf message:
+Protobuf message. It describes exactly the document the runtime error encoder
+writes — the wire contract in [`errors.md`](errors.md):
 
 ```json
 {
-  "type": "about:blank",
-  "title": "Not Found",
-  "status": 404,
-  "detail": "user not found",
   "kind": "NOT_FOUND",
   "domain": "sylphy.user.v1",
   "reason": "USER_FAILURE_REASON_NOT_FOUND",
+  "message": "user not found",
   "metadata": {"resource": "users/123"},
   "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
-  "violations": []
+  "violations": [{"field": "user.email", "description": "malformed"}]
 }
 ```
 
-`type`, `title`, `status`, and `kind` are required on Forge-produced errors.
-`detail`, complete domain/reason identity, metadata, trace ID, and violations
-are optional and omitted when empty. The component follows the wire contract in
-[`errors.md`](errors.md); it is synthesized from that stable framework
-contract, not discovered from a generated `Status` descriptor.
+`kind` is required on Forge-produced errors. Complete domain/reason identity,
+message, metadata, trace ID, and violations are optional and omitted when
+empty. The media type is RFC 9457's `application/problem+json`, but the members
+are the Forge errors contract's own vocabulary; RFC 9457's `type`, `title`,
+`status`, and `detail` members are deliberately not part of the contract, for
+the reasons given in [`errors.md`](errors.md). The component is synthesized
+from that stable framework contract, not discovered from a generated
+descriptor, and a contract test in `protoc-gen-openapi` asserts the schema's
+property set equals the key set the published runtime encoder actually writes.
 
-This is not `google.rpc.Status` and it is not
-`sylphy.errors.v1.Status`. The public Protobuf API intentionally defines no
-Status envelope. gRPC projects an error into `google.rpc.Status` plus native
+This is not `google.rpc.Status`. The public Protobuf API intentionally defines
+no Status envelope. gRPC projects an error into `google.rpc.Status` plus native
 details; OpenAPI describes only the HTTP Problem Details surface.
 
 When `default_response=true`, every operation receives a `default` response
@@ -63,6 +65,84 @@ referencing that schema. Independently of the default response option,
 explicitly annotated `4xx` and `5xx` responses with no content automatically
 receive `application/problem+json` content referencing the same schema. Explicit
 response content is never overwritten.
+
+## Method Error Declarations
+
+Methods document their exact error responses from declarations, not
+handwritten status-code literals. The Forge API defines one marker:
+
+```proto
+extend google.protobuf.FieldOptions {
+  bool throws = 500103;
+}
+```
+
+An application extends `google.protobuf.MethodOptions` — and, for errors every
+method of a service can raise, `google.protobuf.ServiceOptions` — with a
+repeated field of its own error reason enum and sets the marker on that
+extension field:
+
+```proto
+extend google.protobuf.MethodOptions {
+  repeated ShelfFailureReason throws = 50000 [(sylphy.errors.v1.throws) = true];
+}
+extend google.protobuf.ServiceOptions {
+  repeated ShelfFailureReason service_throws = 50001 [(sylphy.errors.v1.throws) = true];
+}
+
+service ShelfService {
+  option (service_throws) = SHELF_FAILURE_REASON_DENIED;
+  rpc GetShelf(GetShelfRequest) returns (Shelf) {
+    option (throws) = SHELF_FAILURE_REASON_NOT_FOUND;
+  }
+}
+```
+
+The field type is the application's own enum, so the compiler rejects a reason
+that does not exist. The generator claims only extension fields carrying the
+marker — an extension that merely happens to be typed by an error enum is
+never interpreted as a declaration — and resolves the marker dynamically from
+the request's descriptors, so it works against any application package.
+
+For each method, the union of service-level and method-level declarations is
+resolved to Kinds (the value-level `kind` annotation, falling back to the
+enum-level `default_kind`), projected onto HTTP status codes through the same
+projection the runtime error encoder uses, and grouped into one response per
+status code. Each response carries `application/problem+json` content
+referencing the shared error component and a description listing every
+identity behind the code, one line per `(kind, domain)` pair:
+
+```yaml
+"403":
+  description: 'PERMISSION_DENIED (sylphy.shelf.v1) — reasons: SHELF_FAILURE_REASON_DENIED'
+```
+
+When a method's request message carries any `buf.validate` constraint
+(message, field, or oneof level, discovered recursively with cycle
+protection), the framework identity `forge.sylphylabs.io / VALIDATION_FAILED`
+is merged into that method's `400` response alongside any declared 400
+reasons; a method with no declarations at all still receives the `400`. The
+`validation_reason` option disables this.
+
+Declared responses coexist with the `default` response, which keeps its
+catch-all semantics. Generation fails, with a diagnostic naming the offense,
+when:
+
+- the marker is set on a field that is not an extension of `MethodOptions` or
+  `ServiceOptions`;
+- a marked extension field is not a repeated enum;
+- a declaration references the enum zero value;
+- a declared value resolves to no kind (no value-level `kind`, no enum-level
+  `default_kind`);
+- a kind projects to a status outside 4xx/5xx;
+- the same identity is declared more than once for one method (including
+  through the service-level union);
+- a declaration-produced status code collides with a handwritten gnostic
+  response literal on the same method — the declaration is the single source,
+  the literal must go.
+
+Extensions the descriptor set cannot resolve are ignored; every resolvable
+marked declaration is discovered.
 
 ## Options
 
@@ -80,6 +160,7 @@ defaults:
 | `default_response` | `true` | Add the shared Forge default error response |
 | `error_schema_name` | `ForgeProblem` | Error component name |
 | `output_mode` | `merged` | One merged document or source-relative documents |
+| `validation_reason` | `true` | Document `VALIDATION_FAILED` on methods whose request carries `buf.validate` constraints |
 
 Example Buf configuration:
 
@@ -132,16 +213,18 @@ from protobuf annotations. Phase 1 intentionally does not claim support for:
 - sequential or streaming media types for streaming RPCs;
 - hierarchical tags and other 3.2-only document metadata;
 - validation-annotation projection into JSON Schema constraints;
-- external service configuration parity with `protoc-gen-go-http`;
-- automatic method-to-error-reason discovery.
+- external service configuration parity with `protoc-gen-go-http`.
 
 Unsupported features must be added with explicit fixtures and diagnostics;
 changing only the version string is not sufficient evidence of support.
 
 ## Next Gates
 
-1. Add a method-level error declaration that links RPC methods to generated
-   error enum values, then emit exact status/reason response documentation.
+1. Enforce the declarations at runtime — assert an outbound reason is in the
+   method's declared set — and diff generated OpenAPI documents in CI, so a
+   declaration that drifts from behavior fails a gate instead of aging into
+   fiction. Method-level declarations themselves are implemented; see
+   [ADR-0013](../adr/0013-method-error-declaration-via-marked-extensions.md).
 2. Project supported Protovalidate and field-behavior annotations into JSON
    Schema constraints.
 3. Replace or extend the gnostic model before enabling `QUERY`, arbitrary

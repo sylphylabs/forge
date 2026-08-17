@@ -48,7 +48,7 @@ func main() {
 		EnumType:        s("integer"),
 		CircularDepth:   i(2),
 		DefaultResponse: b(true),
-		ErrorSchemaName: s("sylphy.errors.v1.Status"),
+		ErrorSchemaName: s("ForgeProblem"),
 		OutputMode:      s("merged"),
 	}
 	var files []*protogen.File

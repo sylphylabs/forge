@@ -42,3 +42,22 @@ func NewApplicationJSONMediaType(schema *v3.SchemaOrReference) *v3.MediaTypes {
 		},
 	}
 }
+
+// NewProblemJSONMediaType is the media type of a Forge error response.
+//
+// The runtime error encoder always serves application/problem+json (RFC 9457),
+// and the client accepts a problem document under no other media type, so an
+// error response documented as anything else would describe a body the client
+// refuses to parse.
+func NewProblemJSONMediaType(schema *v3.SchemaOrReference) *v3.MediaTypes {
+	return &v3.MediaTypes{
+		AdditionalProperties: []*v3.NamedMediaType{
+			{
+				Name: "application/problem+json",
+				Value: &v3.MediaType{
+					Schema: schema,
+				},
+			},
+		},
+	}
+}

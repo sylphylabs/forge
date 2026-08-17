@@ -2,13 +2,18 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
 	v3 "github.com/google/gnostic/openapiv3"
 	"github.com/pb33f/libopenapi"
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	forgeerrors "github.com/sylphylabs/forge/errors"
+	forgehttp "github.com/sylphylabs/forge/transport/http"
 	"google.golang.org/genproto/googleapis/api/annotations"
 	"google.golang.org/genproto/googleapis/api/httpbody"
 	"google.golang.org/protobuf/compiler/protogen"
@@ -22,7 +27,7 @@ import (
 	openapigen "github.com/sylphylabs/forge/cmd/internal/openapi/generator"
 )
 
-func TestGenerateOpenAPI32UsesForgeErrorEnvelope(t *testing.T) {
+func TestGenerateOpenAPI32UsesForgeProblem(t *testing.T) {
 	plugin := newOpenAPIPlugin(t)
 	generator.Configure(plugin)
 	if err := generateOpenAPI(plugin, testConfig()); err != nil {
@@ -39,10 +44,14 @@ func TestGenerateOpenAPI32UsesForgeErrorEnvelope(t *testing.T) {
 	content := response.File[0].GetContent()
 	for _, want := range []string{
 		"openapi: 3.2.0",
-		"sylphy.errors.v1.Status:",
-		"description: Forge HTTP JSON error envelope",
-		"$ref: '#/components/schemas/sylphy.errors.v1.Status'",
+		"ForgeProblem:",
+		"Forge error response",
+		"$ref: '#/components/schemas/ForgeProblem'",
+		"application/problem+json:",
+		"kind:",
 		"reason:",
+		"trace_id:",
+		"violations:",
 		"metadata:",
 	} {
 		if !strings.Contains(content, want) {
@@ -69,13 +78,18 @@ func TestGenerateOpenAPIPatchesAnnotatedErrorResponses(t *testing.T) {
 	if strings.Contains(content, "default:") {
 		t.Fatalf("default response should be disabled:\n%s", content)
 	}
-	if !strings.Contains(content, "\"401\":") || !strings.Contains(content, "$ref: '#/components/schemas/sylphy.errors.v1.Status'") {
+	if !strings.Contains(content, "\"401\":") || !strings.Contains(content, "$ref: '#/components/schemas/ForgeProblem'") {
 		t.Fatalf("annotated 401 response did not receive Forge error content:\n%s", content)
 	}
 
 	document, err := v3.ParseDocument([]byte(content))
 	if err != nil {
 		t.Fatalf("parse generated OpenAPI: %v", err)
+	}
+	patched := findResponse(t, document, "401")
+	patchedTypes := patched.GetContent().GetAdditionalProperties()
+	if len(patchedTypes) != 1 || patchedTypes[0].GetName() != "application/problem+json" {
+		t.Fatalf("patched 401 content = %v, want application/problem+json", patchedTypes)
 	}
 	response := findResponse(t, document, "409")
 	mediaTypes := response.GetContent().GetAdditionalProperties()
@@ -218,6 +232,148 @@ func TestGenerateOpenAPIRejectsInvalidBindings(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestForgeProblemSchemaMatchesRuntimeWireFormat locks the generated
+// ForgeProblem schema to the runtime error encoder. It renders a full-field
+// error through the published forge runtime's DefaultErrorEncoder and asserts
+// that the JSON keys on the wire are exactly the properties the generator
+// documents, so a runtime field addition or rename turns this test red.
+func TestForgeProblemSchemaMatchesRuntimeWireFormat(t *testing.T) {
+	_, document := generateOpenAPIDocument(t, projectionTestFile())
+
+	problemSchema := findComponentSchema(t, document, openapigen.DefaultErrorSchemaName)
+	schemaKeys := propertyNames(t, problemSchema)
+	violationsProperty := findProperty(t, problemSchema, "violations")
+	violationItems := violationsProperty.GetItems().GetSchemaOrReference()
+	if len(violationItems) != 1 {
+		t.Fatalf("violations item schemas = %d, want 1", len(violationItems))
+	}
+	violationKeys := propertyNames(t, violationItems[0].GetSchema())
+
+	public := forgeerrors.Public{
+		Kind:     forgeerrors.KindInvalidArgument,
+		Domain:   "test.contract.v1",
+		Reason:   "CONTRACT_FAILURE_REASON_INVALID",
+		Message:  "field validation failed",
+		Metadata: map[string]string{"tenant": "t1"},
+		TraceID:  "4bf92f3577b34da6a3ce929d0e0e4736",
+		Violations: []forgeerrors.Violation{
+			{Field: "user.email", Description: "malformed"},
+		},
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest("GET", "/v1/contract", nil)
+	forgehttp.DefaultErrorEncoder(recorder, request, forgeerrors.FromPublic(public))
+
+	mediaTypes := errorResponseMediaTypes(t, document)
+	if len(mediaTypes) != 1 {
+		t.Fatalf("error response media types = %d, want 1", len(mediaTypes))
+	}
+	if contentType := recorder.Header().Get("Content-Type"); contentType != mediaTypes[0].GetName() {
+		t.Fatalf("runtime Content-Type = %q, OpenAPI media type = %q", contentType, mediaTypes[0].GetName())
+	}
+
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(recorder.Body.Bytes(), &wire); err != nil {
+		t.Fatalf("decode runtime error body %q: %v", recorder.Body.String(), err)
+	}
+	wireKeys := sortedKeys(wire)
+	if !slices.Equal(wireKeys, schemaKeys) {
+		t.Fatalf("runtime wire keys = %v, OpenAPI %s properties = %v", wireKeys, openapigen.DefaultErrorSchemaName, schemaKeys)
+	}
+
+	var wireViolations []map[string]json.RawMessage
+	if err := json.Unmarshal(wire["violations"], &wireViolations); err != nil {
+		t.Fatalf("decode violations: %v", err)
+	}
+	if len(wireViolations) != 1 {
+		t.Fatalf("wire violations = %d, want 1", len(wireViolations))
+	}
+	if wireViolationKeys := sortedKeys(wireViolations[0]); !slices.Equal(wireViolationKeys, violationKeys) {
+		t.Fatalf("runtime violation keys = %v, OpenAPI violation properties = %v", wireViolationKeys, violationKeys)
+	}
+}
+
+// findComponentSchema returns the named schema from document components.
+func findComponentSchema(t *testing.T, document *v3.Document, name string) *v3.Schema {
+	t.Helper()
+
+	for _, namedSchema := range document.GetComponents().GetSchemas().GetAdditionalProperties() {
+		if namedSchema.GetName() == name {
+			schema := namedSchema.GetValue().GetSchema()
+			if schema == nil {
+				t.Fatalf("component schema %q is a reference, want an inline schema", name)
+			}
+			return schema
+		}
+	}
+	t.Fatalf("component schema %q not found", name)
+	return nil
+}
+
+// findProperty returns the named property schema of an object schema.
+func findProperty(t *testing.T, schema *v3.Schema, name string) *v3.Schema {
+	t.Helper()
+
+	for _, property := range schema.GetProperties().GetAdditionalProperties() {
+		if property.GetName() == name {
+			value := property.GetValue().GetSchema()
+			if value == nil {
+				t.Fatalf("property %q is a reference, want an inline schema", name)
+			}
+			return value
+		}
+	}
+	t.Fatalf("property %q not found", name)
+	return nil
+}
+
+// propertyNames returns the sorted property names of an object schema.
+func propertyNames(t *testing.T, schema *v3.Schema) []string {
+	t.Helper()
+
+	properties := schema.GetProperties().GetAdditionalProperties()
+	if len(properties) == 0 {
+		t.Fatal("schema declares no properties")
+	}
+	names := make([]string, 0, len(properties))
+	for _, property := range properties {
+		names = append(names, property.GetName())
+	}
+	slices.Sort(names)
+	return names
+}
+
+// errorResponseMediaTypes returns the media types of the first default error
+// response in the document. A parsed gnostic document carries the `default`
+// response in the dedicated Default field rather than the named response list.
+func errorResponseMediaTypes(t *testing.T, document *v3.Document) []*v3.NamedMediaType {
+	t.Helper()
+
+	for _, path := range document.GetPaths().GetPath() {
+		for _, operation := range []*v3.Operation{
+			path.GetValue().GetGet(), path.GetValue().GetPost(),
+		} {
+			response := operation.GetResponses().GetDefault().GetResponse()
+			if response == nil {
+				continue
+			}
+			return response.GetContent().GetAdditionalProperties()
+		}
+	}
+	t.Fatal("no default error response found")
+	return nil
+}
+
+// sortedKeys returns the sorted keys of a decoded JSON object.
+func sortedKeys(object map[string]json.RawMessage) []string {
+	keys := make([]string, 0, len(object))
+	for key := range object {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	return keys
 }
 
 func findResponse(t *testing.T, document *v3.Document, name string) *v3.Response {

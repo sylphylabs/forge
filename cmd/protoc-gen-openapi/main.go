@@ -26,6 +26,8 @@ func main() {
 		DefaultResponse: flags.Bool("default_response", true, "add an Forge default error response"),
 		ErrorSchemaName: flags.String("error_schema_name", openapigen.DefaultErrorSchemaName, "Forge error schema component name"),
 		OutputMode:      flags.String("output_mode", "merged", "output mode: merged or source_relative"),
+		ValidationReason: flags.Bool("validation_reason", true,
+			"document the framework VALIDATION_FAILED identity on methods whose request carries buf.validate constraints"),
 	}
 
 	opts := protogen.Options{

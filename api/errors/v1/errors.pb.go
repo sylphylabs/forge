@@ -137,6 +137,14 @@ var file_sylphy_errors_v1_errors_proto_extTypes = []protoimpl.ExtensionInfo{
 		Tag:           "varint,500102,opt,name=kind,enum=sylphy.errors.v1.Kind",
 		Filename:      "sylphy/errors/v1/errors.proto",
 	},
+	{
+		ExtendedType:  (*descriptorpb.FieldOptions)(nil),
+		ExtensionType: (*bool)(nil),
+		Field:         500103,
+		Name:          "sylphy.errors.v1.throws",
+		Tag:           "varint,500103,opt,name=throws",
+		Filename:      "sylphy/errors/v1/errors.proto",
+	},
 }
 
 // Extension fields to descriptorpb.EnumOptions.
@@ -149,6 +157,12 @@ var (
 var (
 	// optional sylphy.errors.v1.Kind kind = 500102;
 	E_Kind = &file_sylphy_errors_v1_errors_proto_extTypes[1]
+)
+
+// Extension fields to descriptorpb.FieldOptions.
+var (
+	// optional bool throws = 500103;
+	E_Throws = &file_sylphy_errors_v1_errors_proto_extTypes[2]
 )
 
 var File_sylphy_errors_v1_errors_proto protoreflect.FileDescriptor
@@ -175,7 +189,8 @@ const file_sylphy_errors_v1_errors_proto_rawDesc = "" +
 	"\rKIND_INTERNAL\x10\x0e\x12\x12\n" +
 	"\x0eKIND_DATA_LOSS\x10\x0f:Y\n" +
 	"\fdefault_kind\x12\x1c.google.protobuf.EnumOptions\x18\x85\xc3\x1e \x01(\x0e2\x16.sylphy.errors.v1.KindR\vdefaultKind:O\n" +
-	"\x04kind\x12!.google.protobuf.EnumValueOptions\x18\x86\xc3\x1e \x01(\x0e2\x16.sylphy.errors.v1.KindR\x04kindBQ\n" +
+	"\x04kind\x12!.google.protobuf.EnumValueOptions\x18\x86\xc3\x1e \x01(\x0e2\x16.sylphy.errors.v1.KindR\x04kind:7\n" +
+	"\x06throws\x12\x1d.google.protobuf.FieldOptions\x18\x87\xc3\x1e \x01(\bR\x06throwsBQ\n" +
 	"\x1bcom.github.sylphy.errors.v1P\x01Z0github.com/sylphylabs/forge/api/errors/v1;errorsb\x06proto3"
 
 var (
@@ -195,16 +210,18 @@ var file_sylphy_errors_v1_errors_proto_goTypes = []any{
 	(Kind)(0),                             // 0: sylphy.errors.v1.Kind
 	(*descriptorpb.EnumOptions)(nil),      // 1: google.protobuf.EnumOptions
 	(*descriptorpb.EnumValueOptions)(nil), // 2: google.protobuf.EnumValueOptions
+	(*descriptorpb.FieldOptions)(nil),     // 3: google.protobuf.FieldOptions
 }
 var file_sylphy_errors_v1_errors_proto_depIdxs = []int32{
 	1, // 0: sylphy.errors.v1.default_kind:extendee -> google.protobuf.EnumOptions
 	2, // 1: sylphy.errors.v1.kind:extendee -> google.protobuf.EnumValueOptions
-	0, // 2: sylphy.errors.v1.default_kind:type_name -> sylphy.errors.v1.Kind
-	0, // 3: sylphy.errors.v1.kind:type_name -> sylphy.errors.v1.Kind
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	2, // [2:4] is the sub-list for extension type_name
-	0, // [0:2] is the sub-list for extension extendee
+	3, // 2: sylphy.errors.v1.throws:extendee -> google.protobuf.FieldOptions
+	0, // 3: sylphy.errors.v1.default_kind:type_name -> sylphy.errors.v1.Kind
+	0, // 4: sylphy.errors.v1.kind:type_name -> sylphy.errors.v1.Kind
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	3, // [3:5] is the sub-list for extension type_name
+	0, // [0:3] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
 }
 
@@ -220,7 +237,7 @@ func file_sylphy_errors_v1_errors_proto_init() {
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sylphy_errors_v1_errors_proto_rawDesc), len(file_sylphy_errors_v1_errors_proto_rawDesc)),
 			NumEnums:      1,
 			NumMessages:   0,
-			NumExtensions: 2,
+			NumExtensions: 3,
 			NumServices:   0,
 		},
 		GoTypes:           file_sylphy_errors_v1_errors_proto_goTypes,
