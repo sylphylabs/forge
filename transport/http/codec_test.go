@@ -341,7 +341,7 @@ func TestDefaultErrorEncoderIgnoresAccept(t *testing.T) {
 			r.Header.Set("Accept", accept)
 		}
 
-		DefaultErrorEncoder(w, r, errors.Of(errors.KindInternal).WithReason("MOCK").Msg("boom"))
+		DefaultErrorEncoder(w, r, errors.MustDefine(errors.KindInternal, "test.v1", "MOCK").Msg("boom"))
 
 		if got := w.Header().Get("Content-Type"); got != ProblemContentType {
 			t.Errorf("Accept %q: content type = %v, want %v", accept, got, ProblemContentType)
@@ -351,6 +351,29 @@ func TestDefaultErrorEncoderIgnoresAccept(t *testing.T) {
 		}
 		if !bytes.Contains(w.Data, []byte(`"reason":"MOCK"`)) {
 			t.Errorf("Accept %q: body = %s, want it to carry the reason", accept, w.Data)
+		}
+	}
+}
+
+// An undeclared identity is not part of any contract: it reaches the client
+// as a bare 500 with no reason, message, or metadata, whatever Kind it
+// carried in-process.
+func TestDefaultErrorEncoderWithholdsUndeclaredIdentity(t *testing.T) {
+	w := &mockResponseWriter{header: make(http.Header)}
+	r, _ := http.NewRequest(http.MethodGet, "", nil)
+
+	DefaultErrorEncoder(w, r, errors.Of(errors.KindNotFound).
+		WithDomain("store.internal").
+		WithReason("ROW_NOT_FOUND").
+		Msg("row for tenant acme missing").
+		Meta("tenant", "acme"))
+
+	if w.StatusCode != http.StatusInternalServerError {
+		t.Errorf("status = %v, want %v", w.StatusCode, http.StatusInternalServerError)
+	}
+	for _, leak := range []string{"ROW_NOT_FOUND", "store.internal", "acme", "missing"} {
+		if bytes.Contains(w.Data, []byte(leak)) {
+			t.Errorf("body = %s, must not carry %q", w.Data, leak)
 		}
 	}
 }

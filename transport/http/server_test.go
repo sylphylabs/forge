@@ -28,6 +28,10 @@ var h = func(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(testData{Path: r.RequestURI})
 }
 
+// errCause is declared: only a declared identity projects its own status and
+// body; an undeclared one would reach the client as a bare internal failure.
+var errCause = forgeerrors.MustDefine(forgeerrors.KindInvalidArgument, "test.v1", "XXX")
+
 type testKey struct{}
 
 type testData struct {
@@ -55,7 +59,7 @@ func TestServeHTTP(t *testing.T) {
 	mux := NewServer(WithListener(ln))
 	mux.HandleFunc("/index", h)
 	mux.Route("/errors").GET("/cause", func(Context) error {
-		return forgeerrors.Of(forgeerrors.KindInvalidArgument).WithReason("xxx").Msg("zzz").
+		return errCause.Msg("zzz").
 			WithMetadata(map[string]string{"foo": "bar"}).
 			Wrap(errors.New("error cause"))
 	})
@@ -93,7 +97,7 @@ func TestServer(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(testData{Path: r.RequestURI})
 	})
 	srv.Route("/errors").GET("/cause", func(Context) error {
-		return forgeerrors.Of(forgeerrors.KindInvalidArgument).WithReason("xxx").Msg("zzz").
+		return errCause.Msg("zzz").
 			WithMetadata(map[string]string{"foo": "bar"}).
 			Wrap(errors.New("error cause"))
 	})

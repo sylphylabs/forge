@@ -33,6 +33,21 @@ type Public struct {
 // wrapped value. An error that did not originate from this package discloses
 // only KindUnknown: its text was written for an operator, not for a caller, and
 // a transport supplies its own generic message instead.
+//
+// Disclosure is gated on declaration. An error speaks for a service's contract
+// only when its identity was declared through [MustDefine] — which is how
+// generated *_errors.pb.go files and deliberate framework sentinels come into
+// being. A locally produced error whose identity was never declared — an [Of]
+// product, or an ad-hoc WithDomain/WithReason pair — projects as an internal
+// failure carrying only its trace ID: its Kind, reason, message, metadata, and
+// violations were assembled for in-process use, and letting them cross would
+// both leak internal taxonomy and freeze accidental reasons into public API.
+// The original classification is not lost to the operator: logging and metrics
+// observe the error itself, before projection.
+//
+// A remote error is exempt: its data arrived over the wire from a peer that
+// already chose to disclose it, so passing it on discloses nothing new. That
+// keeps proxied statuses and health-check semantics intact.
 func PublicOf(err error) Public {
 	if err == nil {
 		return Public{}
@@ -40,6 +55,9 @@ func PublicOf(err error) Public {
 	e := asError(err)
 	if e == nil {
 		return Public{}
+	}
+	if !e.remote && !isContract(e.domain, e.reason) {
+		return Public{Kind: KindInternal, TraceID: e.trace}
 	}
 	return Public{
 		Kind:       e.kind,
