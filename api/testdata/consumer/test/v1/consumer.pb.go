@@ -10,6 +10,7 @@ import (
 	_ "github.com/sylphylabs/forge/api/errors/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	descriptorpb "google.golang.org/protobuf/types/descriptorpb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -27,6 +28,7 @@ type FailureReason int32
 const (
 	FailureReason_FAILURE_REASON_UNSPECIFIED FailureReason = 0
 	FailureReason_FAILURE_REASON_NOT_FOUND   FailureReason = 1
+	FailureReason_FAILURE_REASON_DENIED      FailureReason = 2
 )
 
 // Enum value maps for FailureReason.
@@ -34,10 +36,12 @@ var (
 	FailureReason_name = map[int32]string{
 		0: "FAILURE_REASON_UNSPECIFIED",
 		1: "FAILURE_REASON_NOT_FOUND",
+		2: "FAILURE_REASON_DENIED",
 	}
 	FailureReason_value = map[string]int32{
 		"FAILURE_REASON_UNSPECIFIED": 0,
 		"FAILURE_REASON_NOT_FOUND":   1,
+		"FAILURE_REASON_DENIED":      2,
 	}
 )
 
@@ -156,20 +160,54 @@ func (x *GetDocumentReply) GetName() string {
 	return ""
 }
 
+var file_test_v1_consumer_proto_extTypes = []protoimpl.ExtensionInfo{
+	{
+		ExtendedType:  (*descriptorpb.MethodOptions)(nil),
+		ExtensionType: ([]FailureReason)(nil),
+		Field:         50000,
+		Name:          "sylphy.test.v1.throws",
+		Tag:           "varint,50000,rep,packed,name=throws,enum=sylphy.test.v1.FailureReason",
+		Filename:      "test/v1/consumer.proto",
+	},
+	{
+		ExtendedType:  (*descriptorpb.ServiceOptions)(nil),
+		ExtensionType: ([]FailureReason)(nil),
+		Field:         50001,
+		Name:          "sylphy.test.v1.service_throws",
+		Tag:           "varint,50001,rep,packed,name=service_throws,enum=sylphy.test.v1.FailureReason",
+		Filename:      "test/v1/consumer.proto",
+	},
+}
+
+// Extension fields to descriptorpb.MethodOptions.
+var (
+	// repeated sylphy.test.v1.FailureReason throws = 50000;
+	E_Throws = &file_test_v1_consumer_proto_extTypes[0]
+)
+
+// Extension fields to descriptorpb.ServiceOptions.
+var (
+	// repeated sylphy.test.v1.FailureReason service_throws = 50001;
+	E_ServiceThrows = &file_test_v1_consumer_proto_extTypes[1]
+)
+
 var File_test_v1_consumer_proto protoreflect.FileDescriptor
 
 const file_test_v1_consumer_proto_rawDesc = "" +
 	"\n" +
-	"\x16test/v1/consumer.proto\x12\x0esylphy.test.v1\x1a\x1dsylphy/errors/v1/errors.proto\"(\n" +
+	"\x16test/v1/consumer.proto\x12\x0esylphy.test.v1\x1a google/protobuf/descriptor.proto\x1a\x1dsylphy/errors/v1/errors.proto\"(\n" +
 	"\x12GetDocumentRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"&\n" +
 	"\x10GetDocumentReply\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name*[\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name*}\n" +
 	"\rFailureReason\x12\x1e\n" +
 	"\x1aFAILURE_REASON_UNSPECIFIED\x10\x00\x12#\n" +
-	"\x18FAILURE_REASON_NOT_FOUND\x10\x01\x1a\x05\xb0\x98\xf4\x01\x06\x1a\x05\xa8\x98\xf4\x01\x0e2k\n" +
-	"\x0fDocumentService\x12X\n" +
-	"\vGetDocument\x12\".sylphy.test.v1.GetDocumentRequest\x1a .sylphy.test.v1.GetDocumentReply\"\x03\x90\x02\x02B0Z.example.com/sylphy/api-consumer/test/v1;testv1b\x06proto3"
+	"\x18FAILURE_REASON_NOT_FOUND\x10\x01\x1a\x05\xb0\x98\xf4\x01\x06\x12 \n" +
+	"\x15FAILURE_REASON_DENIED\x10\x02\x1a\x05\xb0\x98\xf4\x01\x05\x1a\x05\xa8\x98\xf4\x01\x0e2w\n" +
+	"\x0fDocumentService\x12]\n" +
+	"\vGetDocument\x12\".sylphy.test.v1.GetDocumentRequest\x1a .sylphy.test.v1.GetDocumentReply\"\b\x82\xb5\x18\x01\x01\x90\x02\x02\x1a\x05\x8a\xb5\x18\x01\x02:^\n" +
+	"\x06throws\x12\x1e.google.protobuf.MethodOptions\x18І\x03 \x03(\x0e2\x1d.sylphy.test.v1.FailureReasonB\x05\xb8\x98\xf4\x01\x01R\x06throws:n\n" +
+	"\x0eservice_throws\x12\x1f.google.protobuf.ServiceOptions\x18ц\x03 \x03(\x0e2\x1d.sylphy.test.v1.FailureReasonB\x05\xb8\x98\xf4\x01\x01R\rserviceThrowsB0Z.example.com/sylphy/api-consumer/test/v1;testv1b\x06proto3"
 
 var (
 	file_test_v1_consumer_proto_rawDescOnce sync.Once
@@ -186,17 +224,23 @@ func file_test_v1_consumer_proto_rawDescGZIP() []byte {
 var file_test_v1_consumer_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_test_v1_consumer_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_test_v1_consumer_proto_goTypes = []any{
-	(FailureReason)(0),         // 0: sylphy.test.v1.FailureReason
-	(*GetDocumentRequest)(nil), // 1: sylphy.test.v1.GetDocumentRequest
-	(*GetDocumentReply)(nil),   // 2: sylphy.test.v1.GetDocumentReply
+	(FailureReason)(0),                  // 0: sylphy.test.v1.FailureReason
+	(*GetDocumentRequest)(nil),          // 1: sylphy.test.v1.GetDocumentRequest
+	(*GetDocumentReply)(nil),            // 2: sylphy.test.v1.GetDocumentReply
+	(*descriptorpb.MethodOptions)(nil),  // 3: google.protobuf.MethodOptions
+	(*descriptorpb.ServiceOptions)(nil), // 4: google.protobuf.ServiceOptions
 }
 var file_test_v1_consumer_proto_depIdxs = []int32{
-	1, // 0: sylphy.test.v1.DocumentService.GetDocument:input_type -> sylphy.test.v1.GetDocumentRequest
-	2, // 1: sylphy.test.v1.DocumentService.GetDocument:output_type -> sylphy.test.v1.GetDocumentReply
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
+	3, // 0: sylphy.test.v1.throws:extendee -> google.protobuf.MethodOptions
+	4, // 1: sylphy.test.v1.service_throws:extendee -> google.protobuf.ServiceOptions
+	0, // 2: sylphy.test.v1.throws:type_name -> sylphy.test.v1.FailureReason
+	0, // 3: sylphy.test.v1.service_throws:type_name -> sylphy.test.v1.FailureReason
+	1, // 4: sylphy.test.v1.DocumentService.GetDocument:input_type -> sylphy.test.v1.GetDocumentRequest
+	2, // 5: sylphy.test.v1.DocumentService.GetDocument:output_type -> sylphy.test.v1.GetDocumentReply
+	5, // [5:6] is the sub-list for method output_type
+	4, // [4:5] is the sub-list for method input_type
+	2, // [2:4] is the sub-list for extension type_name
+	0, // [0:2] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
 }
 
@@ -212,13 +256,14 @@ func file_test_v1_consumer_proto_init() {
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_test_v1_consumer_proto_rawDesc), len(file_test_v1_consumer_proto_rawDesc)),
 			NumEnums:      1,
 			NumMessages:   2,
-			NumExtensions: 0,
+			NumExtensions: 2,
 			NumServices:   1,
 		},
 		GoTypes:           file_test_v1_consumer_proto_goTypes,
 		DependencyIndexes: file_test_v1_consumer_proto_depIdxs,
 		EnumInfos:         file_test_v1_consumer_proto_enumTypes,
 		MessageInfos:      file_test_v1_consumer_proto_msgTypes,
+		ExtensionInfos:    file_test_v1_consumer_proto_extTypes,
 	}.Build()
 	File_test_v1_consumer_proto = out.File
 	file_test_v1_consumer_proto_goTypes = nil

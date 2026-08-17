@@ -46,3 +46,23 @@ extend google.protobuf.EnumOptions {
 extend google.protobuf.EnumValueOptions {
   Kind kind = 500102;
 }
+
+// throws marks an application-declared extension field as a method error
+// declaration.
+//
+// An application extends google.protobuf.MethodOptions — and, for errors every
+// method of a service can raise, google.protobuf.ServiceOptions — with a
+// repeated field of its own error reason enum and sets this marker on that
+// extension field:
+//
+//   extend google.protobuf.MethodOptions {
+//     repeated MyFailureReason throws = 50000 [(sylphy.errors.v1.throws) = true];
+//   }
+//
+// The field type is the application's own enum, so the compiler rejects a
+// reason that does not exist. Generators claim only extension fields carrying
+// this marker; an extension field that merely happens to be typed by an error
+// enum is never interpreted as a declaration.
+extend google.protobuf.FieldOptions {
+  bool throws = 500103;
+}

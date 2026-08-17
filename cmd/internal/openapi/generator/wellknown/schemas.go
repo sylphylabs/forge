@@ -27,8 +27,8 @@ const (
 	typeObject  = "object"
 )
 
-// fieldCode is the name of the status code property shared by the
-// google.rpc.Status and Forge error envelope schemas.
+// fieldCode is the name of the status code property of the google.rpc.Status
+// schema.
 const fieldCode = "code"
 
 func NewStringSchema() *v3.SchemaOrReference {
@@ -335,53 +335,59 @@ func NewGoogleRPCStatusSchema(name string, anyName string) *v3.NamedSchemaOrRefe
 	}
 }
 
-// Forge HTTP errors use the stable four-field envelope shared by the
-// runtime errors package and the public sylphy.errors.v1.Status schema.
-func NewForgeErrorStatusSchema(name string) *v3.NamedSchemaOrReference {
+// NewForgeProblemSchema describes the Forge HTTP error response body.
+//
+// The document is served as RFC 9457 application/problem+json, but its members
+// are the Forge errors contract's own vocabulary — kind, domain, reason,
+// message, metadata, trace_id, violations — not RFC 9457's type/title/status/
+// detail prose members. The shape mirrors the runtime problem encoder in
+// transport/http; gRPC transports project the same error into google.rpc.Status
+// with google.rpc.ErrorInfo details.
+func NewForgeProblemSchema(name string) *v3.NamedSchemaOrReference {
+	stringProperty := func(name, description string) *v3.NamedSchemaOrReference {
+		return &v3.NamedSchemaOrReference{
+			Name: name,
+			Value: &v3.SchemaOrReference{
+				Oneof: &v3.SchemaOrReference_Schema{
+					Schema: &v3.Schema{
+						Type:        typeString,
+						Description: description,
+					},
+				},
+			},
+		}
+	}
+	violationSchema := &v3.SchemaOrReference{
+		Oneof: &v3.SchemaOrReference_Schema{
+			Schema: &v3.Schema{
+				Type:        typeObject,
+				Description: "A single field-level failure within an aggregate error.",
+				Required:    []string{"field"},
+				Properties: &v3.Properties{
+					AdditionalProperties: []*v3.NamedSchemaOrReference{
+						stringProperty("field", "Path into the request message identifying what failed, for example \"user.email\"."),
+						stringProperty("description", "Explanation of the failure in terms a caller can act on."),
+					},
+				},
+			},
+		},
+	}
 	return &v3.NamedSchemaOrReference{
 		Name: name,
 		Value: &v3.SchemaOrReference{
 			Oneof: &v3.SchemaOrReference_Schema{
 				Schema: &v3.Schema{
-					Type:        typeObject,
-					Description: "Forge HTTP JSON error envelope. gRPC transports project the same error into google.rpc.Status with google.rpc.ErrorInfo details.",
-					Required:    []string{fieldCode},
+					Type: typeObject,
+					Description: "Forge error response, served as RFC 9457 application/problem+json. " +
+						"The members are the Forge errors contract's vocabulary: a caller branches on kind and reason. " +
+						"Empty members are omitted. gRPC transports project the same error into google.rpc.Status with google.rpc.ErrorInfo details.",
+					Required: []string{"kind"},
 					Properties: &v3.Properties{
 						AdditionalProperties: []*v3.NamedSchemaOrReference{
-							{
-								Name: fieldCode,
-								Value: &v3.SchemaOrReference{
-									Oneof: &v3.SchemaOrReference_Schema{
-										Schema: &v3.Schema{
-											Type:        typeInteger,
-											Format:      "int32",
-											Description: "HTTP status code carried by the Forge error.",
-										},
-									},
-								},
-							},
-							{
-								Name: "reason",
-								Value: &v3.SchemaOrReference{
-									Oneof: &v3.SchemaOrReference_Schema{
-										Schema: &v3.Schema{
-											Type:        typeString,
-											Description: "Stable machine-readable error reason, normally generated from an annotated protobuf enum value.",
-										},
-									},
-								},
-							},
-							{
-								Name: "message",
-								Value: &v3.SchemaOrReference{
-									Oneof: &v3.SchemaOrReference_Schema{
-										Schema: &v3.Schema{
-											Type:        typeString,
-											Description: "Human-readable error message.",
-										},
-									},
-								},
-							},
+							stringProperty("kind", "Stable classification of the failure, for example NOT_FOUND. The HTTP status line is authoritative when the two disagree."),
+							stringProperty("domain", "Namespace owning the reason, typically the service's protobuf package."),
+							stringProperty("reason", "Stable machine-readable error reason, normally generated from an annotated protobuf enum value."),
+							stringProperty("message", "Human-readable error message."),
 							{
 								Name: "metadata",
 								Value: &v3.SchemaOrReference{
@@ -393,6 +399,21 @@ func NewForgeErrorStatusSchema(name string) *v3.NamedSchemaOrReference {
 												Oneof: &v3.AdditionalPropertiesItem_SchemaOrReference{
 													SchemaOrReference: NewStringSchema(),
 												},
+											},
+										},
+									},
+								},
+							},
+							stringProperty("trace_id", "Trace identifier of the request the error was produced in."),
+							{
+								Name: "violations",
+								Value: &v3.SchemaOrReference{
+									Oneof: &v3.SchemaOrReference_Schema{
+										Schema: &v3.Schema{
+											Type:        "array",
+											Description: "Field-level failures collected by a validation pass.",
+											Items: &v3.ItemsItem{
+												SchemaOrReference: []*v3.SchemaOrReference{violationSchema},
 											},
 										},
 									},
