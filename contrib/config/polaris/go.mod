@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/contrib/config/polaris
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/polarismesh/polaris-go v1.7.1
@@ -29,7 +29,7 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect

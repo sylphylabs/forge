@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/contrib/registry/servicecomb
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/go-chassis/cari v0.9.0

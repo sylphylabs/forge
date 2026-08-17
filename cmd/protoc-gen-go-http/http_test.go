@@ -448,7 +448,7 @@ func TestOpaqueGeneratedCodeCompiles(t *testing.T) {
 	apiRoot := filepath.Join(root, "api")
 	goMod := fmt.Sprintf(`module opaque.test
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/sylphylabs/forge/api v0.0.0

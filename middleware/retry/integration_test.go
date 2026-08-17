@@ -29,9 +29,13 @@ type flakyGreeter struct {
 	failures int64
 }
 
+// errFlaky is a declared transient failure: only a declared identity keeps its
+// Kind across the boundary, which the retry decision depends on.
+var errFlaky = errors.MustDefine(errors.KindUnavailable, "retrytest.v1", "FLAKY")
+
 func (s *flakyGreeter) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	if s.calls.Add(1) <= s.failures {
-		return nil, errors.Of(errors.KindUnavailable).WithReason("FLAKY").Msg("transient failure")
+		return nil, errFlaky.Msg("transient failure")
 	}
 	return &pb.HelloReply{Message: fmt.Sprintf("Hello %s", in.Name)}, nil
 }

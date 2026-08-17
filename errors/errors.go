@@ -97,6 +97,7 @@ func MustDefine(kind Kind, domain, reason string) *Error {
 	case !isScreamingSnake(reason):
 		panic(fmt.Sprintf("forge errors: reason %q must be SCREAMING_SNAKE_CASE", reason))
 	}
+	registerContract(domain, reason)
 	return &Error{kind: kind, domain: domain, reason: reason}
 }
 

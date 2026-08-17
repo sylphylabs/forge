@@ -22,7 +22,7 @@ Forge 是 [go-kratos/kratos](https://github.com/go-kratos/kratos) 的独立预�
 
 ### 环境要求
 
-- [Go](https://go.dev/dl/) 1.27 RC（当前为 1.27rc2；`go.mod` 已要求该版本，Go 1.26 无法构建 Forge）
+- [Go](https://go.dev/dl/) 1.27 RC（当前为 1.27rc3；`go.mod` 已要求该版本，Go 1.26 无法构建 Forge）
 - [protoc](https://github.com/protocolbuffers/protobuf)
 - [protoc-gen-go](https://github.com/protocolbuffers/protobuf-go)
 - [Buf](https://buf.build/) 或等效的 `protoc` 工作流
