@@ -34,6 +34,12 @@ var ErrNotFound = forgeerrors.MustDefine(
 var ErrBackendFailed = forgeerrors.MustDefine(
 	forgeerrors.KindUnavailable, "e2e.v1", "BACKEND_FAILED")
 
+// ErrInvalidRequest identifies the aggregate error. Violations cross the wire
+// only under a declared identity (ADR-0012), so the fixture declares one and
+// re-attaches it after aggregation, the way the validate middleware does.
+var ErrInvalidRequest = forgeerrors.MustDefine(
+	forgeerrors.KindInvalidArgument, "e2e.v1", "INVALID_REQUEST")
+
 // nameError is the request name that asks the service to fail, so the test can
 // check that a contract error keeps its identity across the wire.
 const nameError = "error"
@@ -74,7 +80,9 @@ func (s *server) SayHello(ctx context.Context, req *pb.HelloRequest) (*pb.HelloR
 		var v forgeerrors.Violations
 		v.Add("name", "must not be empty")
 		v.Add("locale", "unsupported")
-		return nil, v.Err(forgeerrors.KindInvalidArgument)
+		return nil, forgeerrors.FromError(v.Err(forgeerrors.KindInvalidArgument)).
+			WithDomain(ErrInvalidRequest.Domain()).
+			WithReason(ErrInvalidRequest.Reason())
 	case "internal":
 		return nil, forgeerrors.MustDefine(forgeerrors.KindInternal, "e2e.v1", "LOOKUP_FAILED").
 			Msg("lookup failed").

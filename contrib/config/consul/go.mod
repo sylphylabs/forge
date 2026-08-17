@@ -1,6 +1,6 @@
 module github.com/sylphylabs/forge/contrib/config/consul
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/hashicorp/consul/api/v2 v2.0.0
@@ -25,7 +25,7 @@ require (
 	github.com/mattn/go-isatty v0.0.23 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp v0.0.0-20260718201538-764159d718ef // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect

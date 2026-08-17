@@ -167,11 +167,16 @@ func TestWireSizeIsIndependentOfCauseDepth(t *testing.T) {
 }
 
 // Every violation must survive, so a client can show a user each bad field.
+// The aggregate carries a declared identity, as the validate middleware's
+// aggregates do; an undeclared aggregate would be withheld at the boundary.
 func TestViolationsSurviveTheWire(t *testing.T) {
 	var v errors.Violations
 	v.Add("email", "malformed")
 	v.Add("age", "must be positive")
-	err := errors.FromError(v.Err(errors.KindInvalidArgument))
+	err := errors.FromError(v.Err(errors.KindInvalidArgument)).
+		WithDomain("test.v1").
+		WithReason("VALIDATION_FAILED")
+	_ = errors.MustDefine(errors.KindInvalidArgument, "test.v1", "VALIDATION_FAILED")
 
 	received, _ := ErrorFrom(StatusFrom(errors.PublicOf(err)).Err())
 	got := received.Violations()
@@ -188,7 +193,7 @@ func TestViolationsSurviveTheWire(t *testing.T) {
 // combines it with its own idempotence declaration; this test covers the half
 // the transport is responsible for.
 func TestKindSurvivesTheWire(t *testing.T) {
-	transient := errors.Of(errors.KindUnavailable).WithReason("BACKEND_DOWN")
+	transient := errors.MustDefine(errors.KindUnavailable, "test.v1", "BACKEND_DOWN")
 	received, _ := ErrorFrom(StatusFrom(errors.PublicOf(transient)).Err())
 	if got := errors.KindOf(received); got != errors.KindUnavailable {
 		t.Errorf("KindOf(received) = %v, want KindUnavailable", got)

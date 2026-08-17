@@ -1,7 +1,7 @@
 # The end-to-end service, built from the repository root so the whole module is
 # available. Kept minimal on purpose: the test is about Forge's own behaviour
 # across a real network, not about image construction.
-FROM golang:1.27rc2 AS build
+FROM golang:1.27rc3 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 COPY api/go.mod api/go.sum ./api/

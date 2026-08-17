@@ -29,6 +29,10 @@ type server struct {
 	pb.UnimplementedGreeterServer
 }
 
+// errInvalidName is declared, so its identity and message cross the boundary;
+// an undeclared identity would project as a bare internal failure.
+var errInvalidName = errors.MustDefine(errors.KindInvalidArgument, "test.v1", "CUSTOM_ERROR")
+
 func (s *server) SayHelloStream(streamServer pb.Greeter_SayHelloStreamServer) error {
 	tctx, ok := transport.FromServerContext(streamServer.Context())
 	if ok {
@@ -43,7 +47,7 @@ func (s *server) SayHelloStream(streamServer pb.Greeter_SayHelloStreamServer) er
 			return err
 		}
 		if in.Name == "error" {
-			return errors.Of(errors.KindInvalidArgument).WithReason("custom_error").Msg(fmt.Sprintf("invalid argument %s", in.Name))
+			return errInvalidName.Msg(fmt.Sprintf("invalid argument %s", in.Name))
 		}
 		if in.Name == "panic" {
 			panic("server panic")
@@ -64,7 +68,7 @@ func (s *server) SayHelloStream(streamServer pb.Greeter_SayHelloStreamServer) er
 // SayHello implements helloworld.GreeterServer
 func (s *server) SayHello(_ context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 	if in.Name == "error" {
-		return nil, errors.Of(errors.KindInvalidArgument).WithReason("custom_error").Msg(fmt.Sprintf("invalid argument %s", in.Name))
+		return nil, errInvalidName.Msg(fmt.Sprintf("invalid argument %s", in.Name))
 	}
 	if in.Name == "panic" {
 		panic("server panic")

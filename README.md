@@ -22,7 +22,7 @@ The project currently tracks `v0` development and does not provide a stable API 
 
 ### Requirements
 
-- [Go](https://go.dev/dl/) 1.27 RC (currently 1.27rc2; `go.mod` requires it, so Go 1.26 cannot build Forge)
+- [Go](https://go.dev/dl/) 1.27 RC (currently 1.27rc3; `go.mod` requires it, so Go 1.26 cannot build Forge)
 - [protoc](https://github.com/protocolbuffers/protobuf)
 - [protoc-gen-go](https://github.com/protocolbuffers/protobuf-go)
 - [Buf](https://buf.build/) or an equivalent `protoc` workflow

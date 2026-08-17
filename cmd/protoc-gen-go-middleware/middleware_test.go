@@ -105,7 +105,7 @@ func TestGeneratedMiddlewareCompilesAndRuns(t *testing.T) {
 	}
 	goMod := fmt.Sprintf(`module middleware.test
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/sylphylabs/forge/api v0.0.0
@@ -263,7 +263,7 @@ func TestHTTPMethodSetModesMustMatch(t *testing.T) {
 			}
 			goMod := fmt.Sprintf(`module methodset.test
 
-go 1.27rc2
+go 1.27rc3
 
 require (
 	github.com/sylphylabs/forge/api v0.0.0
