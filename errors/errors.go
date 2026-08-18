@@ -61,6 +61,10 @@ type Error struct {
 	// describes a failure in another process, so it carries no cause and no
 	// local Go values that As could mistake for its own.
 	remote bool
+	// undisclosed marks an error whose public data must not leave the process
+	// even though its identity may be declared. It is set by [Undisclose] and
+	// honored by [PublicOf] before any other disclosure rule.
+	undisclosed bool
 }
 
 // Domain namespaces the reasons owned by the framework itself, so that a

@@ -1,0 +1,264 @@
+package api
+
+import (
+	"bytes"
+	"context"
+	"io"
+	"log/slog"
+	"strings"
+	"testing"
+	"time"
+
+	nethttp "net/http"
+
+	"github.com/sylphylabs/forge/errors"
+	"github.com/sylphylabs/forge/middleware"
+	"github.com/sylphylabs/forge/middleware/throws"
+)
+
+// The sentinels a real application would get from protoc-gen-go-errors:
+// MustDefine registers the identity as contract, so PublicOf discloses it.
+var (
+	errNotFound = errors.MustDefine(errors.KindNotFound, "throws.test.v1", "FAILURE_REASON_NOT_FOUND")
+	errDenied   = errors.MustDefine(errors.KindPermissionDenied, "throws.test.v1", "FAILURE_REASON_DENIED")
+	// A contract identity of the same domain that no throws option declares.
+	errSurprise = errors.MustDefine(errors.KindConflict, "throws.test.v1", "FAILURE_REASON_SURPRISE")
+)
+
+type libraryService struct {
+	err error
+}
+
+func (s libraryService) GetBook(context.Context, *GetBookRequest) (*Book, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &Book{Name: "b"}, nil
+}
+
+func (s libraryService) WatchBooks(*WatchBooksRequest, LibraryService_WatchBooksHTTPServer) error {
+	return s.err
+}
+
+type libraryGRPCService struct {
+	UnimplementedLibraryServiceServer
+	err error
+}
+
+func (s libraryGRPCService) GetBook(context.Context, *GetBookRequest) (*Book, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &Book{Name: "b"}, nil
+}
+
+func (s libraryGRPCService) WatchBooks(*WatchBooksRequest, LibraryService_WatchBooksServer) error {
+	return s.err
+}
+
+type undeclaredService struct{}
+
+func (undeclaredService) GetShelf(context.Context, *GetShelfRequest) (*Shelf, error) {
+	return &Shelf{Name: "s"}, nil
+}
+
+func newLogger() (*slog.Logger, *bytes.Buffer) {
+	var buf bytes.Buffer
+	return slog.New(slog.NewTextHandler(&buf, nil)), &buf
+}
+
+func TestDeclaredErrorPassesUnchanged(t *testing.T) {
+	logger, logs := newLogger()
+	in := errNotFound.Msg("book not found")
+	server, err := WrapLibraryServiceHTTPServer(libraryService{err: in}, LibraryServiceMiddleware{}, throws.WithLogger(logger))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, got := server.GetBook(t.Context(), &GetBookRequest{Name: "b"})
+	if got != error(in) { //nolint:errorlint // pass-through must be the same value
+		t.Fatalf("declared error rewritten: %v", got)
+	}
+	if logs.Len() != 0 {
+		t.Fatalf("declared error logged a violation: %s", logs.String())
+	}
+}
+
+func TestServiceLevelDeclarationCoversEveryMethod(t *testing.T) {
+	logger, logs := newLogger()
+	in := errDenied.Msg("no")
+	server, err := WrapLibraryServiceHTTPServer(libraryService{err: in}, LibraryServiceMiddleware{}, throws.WithLogger(logger))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// WatchBooks has no method-level declaration; service_throws covers it.
+	got := server.WatchBooks(&WatchBooksRequest{}, newWatchStream(t.Context()))
+	if got != error(in) { //nolint:errorlint // pass-through must be the same value
+		t.Fatalf("service-declared error rewritten: %v", got)
+	}
+	if logs.Len() != 0 {
+		t.Fatalf("service-declared error logged a violation: %s", logs.String())
+	}
+}
+
+func TestObserveLogsUndeclaredIdentity(t *testing.T) {
+	logger, logs := newLogger()
+	in := errSurprise.Msg("edition changed")
+	server, err := WrapLibraryServiceHTTPServer(libraryService{err: in}, LibraryServiceMiddleware{}, throws.WithLogger(logger))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, got := server.GetBook(t.Context(), &GetBookRequest{Name: "b"})
+	if got != error(in) { //nolint:errorlint // observe mode passes the same value
+		t.Fatalf("observe mode rewrote the error: %v", got)
+	}
+	logged := logs.String()
+	for _, want := range []string{"undeclared error identity", "throws.test.v1.LibraryService/GetBook", "FAILURE_REASON_SURPRISE"} {
+		if !strings.Contains(logged, want) {
+			t.Fatalf("violation log missing %q:\n%s", want, logged)
+		}
+	}
+}
+
+func TestStrictProjectsViolationAsInternal(t *testing.T) {
+	logger, _ := newLogger()
+	in := errSurprise.Msg("edition changed").WithTraceID("trace-1")
+	server, err := WrapLibraryServiceGRPCServer(libraryGRPCService{err: in}, LibraryServiceMiddleware{}, throws.Strict(), throws.WithLogger(logger))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, got := server.GetBook(t.Context(), &GetBookRequest{Name: "b"})
+	if !errors.IsUndisclosed(got) {
+		t.Fatalf("strict violation not undisclosed: %v", got)
+	}
+	// In-process identity survives for logging and metrics.
+	if !errors.Is(got, errSurprise) {
+		t.Fatal("strict verdict broke sentinel matching")
+	}
+	// The single disclosure gate projects an internal failure with trace.
+	public := errors.PublicOf(got)
+	if public.Kind != errors.KindInternal || public.Reason != "" || public.TraceID != "trace-1" {
+		t.Fatalf("PublicOf(strict verdict) = %+v, want internal + trace", public)
+	}
+}
+
+func TestStrictAppliesToStreamMethods(t *testing.T) {
+	logger, _ := newLogger()
+	in := errSurprise.Msg("edition changed")
+	server, err := WrapLibraryServiceHTTPServer(libraryService{err: in}, LibraryServiceMiddleware{}, throws.Strict("WatchBooks"), throws.WithLogger(logger))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := server.WatchBooks(&WatchBooksRequest{}, newWatchStream(t.Context()))
+	if !errors.IsUndisclosed(got) {
+		t.Fatalf("strict stream violation not undisclosed: %v", got)
+	}
+	// GetBook stays in observe mode.
+	_, unary := server.GetBook(t.Context(), &GetBookRequest{Name: "b"})
+	if errors.IsUndisclosed(unary) {
+		t.Fatal("Strict(\"WatchBooks\") leaked onto GetBook")
+	}
+}
+
+func TestFailUndeclaredForTests(t *testing.T) {
+	logger, _ := newLogger()
+	in := errSurprise.Msg("edition changed")
+	server, err := WrapLibraryServiceGRPCServer(libraryGRPCService{err: in}, LibraryServiceMiddleware{}, throws.FailUndeclared(), throws.WithLogger(logger))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, got := server.GetBook(t.Context(), &GetBookRequest{Name: "b"})
+	if !errors.Is(got, throws.ErrUndeclared) {
+		t.Fatalf("fail mode did not verdict ErrUndeclared: %v", got)
+	}
+}
+
+func TestFrameworkDomainExempt(t *testing.T) {
+	logger, logs := newLogger()
+	in := errors.MustDefine(errors.KindResourceExhausted, errors.Domain, "RATE_LIMITED").Msg("slow down")
+	server, err := WrapLibraryServiceHTTPServer(libraryService{err: in}, LibraryServiceMiddleware{}, throws.Strict(), throws.WithLogger(logger))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, got := server.GetBook(t.Context(), &GetBookRequest{Name: "b"})
+	if got != error(in) { //nolint:errorlint // pass-through must be the same value
+		t.Fatalf("framework identity rewritten even in strict mode: %v", got)
+	}
+	if logs.Len() != 0 {
+		t.Fatalf("framework identity logged: %s", logs.String())
+	}
+}
+
+func TestPlanMiddlewareErrorsAreAsserted(t *testing.T) {
+	// The assertion point is outside the composed chain, so an error minted
+	// by plan middleware — not the business handler — is judged too.
+	logger, logs := newLogger()
+	plan := LibraryServiceMiddleware{
+		Unary: []middleware.UnaryMiddleware{func(middleware.UnaryHandler) middleware.UnaryHandler {
+			return func(context.Context, any) (any, error) {
+				return nil, errSurprise.Msg("minted by middleware")
+			}
+		}},
+	}
+	server, err := WrapLibraryServiceHTTPServer(libraryService{}, plan, throws.WithLogger(logger))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = server.GetBook(t.Context(), &GetBookRequest{Name: "b"})
+	if !strings.Contains(logs.String(), "FAILURE_REASON_SURPRISE") {
+		t.Fatalf("middleware-minted violation not asserted:\n%s", logs.String())
+	}
+}
+
+func TestUnknownMethodInOptionFailsConstruction(t *testing.T) {
+	_, err := WrapLibraryServiceHTTPServer(libraryService{}, LibraryServiceMiddleware{}, throws.Strict("NoSuchMethod"))
+	if err == nil || !strings.Contains(err.Error(), "NoSuchMethod") {
+		t.Fatalf("construction error = %v, want unknown method diagnosis", err)
+	}
+}
+
+func TestUndeclaredServiceKeepsPlainSignature(t *testing.T) {
+	// Compile-time proof: a service without declarations keeps the exact
+	// two-argument constructor and carries no assertion machinery.
+	var wrap func(UndeclaredServiceHTTPServer, UndeclaredServiceMiddleware) (UndeclaredServiceHTTPServer, error) = WrapUndeclaredServiceHTTPServer
+	server, err := wrap(undeclaredService{}, UndeclaredServiceMiddleware{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := server.GetShelf(t.Context(), &GetShelfRequest{Name: "s"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReverseObservationThroughGeneratedDeclaration(t *testing.T) {
+	logger, _ := newLogger()
+	server, err := WrapLibraryServiceGRPCServer(libraryGRPCService{err: errNotFound}, LibraryServiceMiddleware{}, throws.WithLogger(logger))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = server.GetBook(t.Context(), &GetBookRequest{Name: "b"})
+	unobserved := _LibraryServiceThrowsGetBook.Unobserved()
+	for _, identity := range unobserved {
+		if identity.Reason == "FAILURE_REASON_NOT_FOUND" {
+			t.Fatalf("NOT_FOUND fired but is still unobserved: %v", unobserved)
+		}
+	}
+}
+
+// watchStream is a minimal HTTP server stream for WatchBooks.
+type watchStream struct {
+	ctx context.Context
+}
+
+func newWatchStream(ctx context.Context) *watchStream { return &watchStream{ctx: ctx} }
+
+func (s *watchStream) Context() context.Context         { return s.ctx }
+func (s *watchStream) SendMsg(any) error                { return nil }
+func (s *watchStream) RecvMsg(any) error                { return io.EOF }
+func (s *watchStream) Send(*Book) error                 { return nil }
+func (s *watchStream) SetHeader(nethttp.Header) error   { return nil }
+func (s *watchStream) SendHeader(nethttp.Header) error  { return nil }
+func (s *watchStream) SetTrailer(nethttp.Header)        {}
+func (s *watchStream) Close(error) error                { return nil }
+func (s *watchStream) SetContext(ctx context.Context)   { s.ctx = ctx }
+func (s *watchStream) SetReadDeadline(time.Time) error  { return nil }
+func (s *watchStream) SetWriteDeadline(time.Time) error { return nil }

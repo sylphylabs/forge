@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package throws.test.v1;
+
+import "google/api/annotations.proto";
+import "sylphy/errors/v1/errors.proto";
+import "google/protobuf/descriptor.proto";
+
+option go_package = "throws.test/api;api";
+
+// The application's error contract: reasons resolve a Kind through the
+// value-level annotation or the enum default.
+enum FailureReason {
+  option (sylphy.errors.v1.default_kind) = KIND_INTERNAL;
+
+  FAILURE_REASON_UNSPECIFIED = 0;
+  FAILURE_REASON_NOT_FOUND = 1 [(sylphy.errors.v1.kind) = KIND_NOT_FOUND];
+  FAILURE_REASON_DENIED = 2 [(sylphy.errors.v1.kind) = KIND_PERMISSION_DENIED];
+  FAILURE_REASON_STALE = 3;
+  // Part of the error contract, but never declared in a throws option:
+  // returning it from a declared method is the violation under test.
+  FAILURE_REASON_SURPRISE = 4 [(sylphy.errors.v1.kind) = KIND_CONFLICT];
+}
+
+// The application's own throws extensions, claimed by the Forge marker.
+extend google.protobuf.MethodOptions {
+  repeated FailureReason throws = 50000 [(sylphy.errors.v1.throws) = true];
+}
+
+extend google.protobuf.ServiceOptions {
+  repeated FailureReason service_throws = 50001 [(sylphy.errors.v1.throws) = true];
+}
+
+service LibraryService {
+  option (service_throws) = FAILURE_REASON_DENIED;
+
+  // GetBook participates in runtime assertion: its effective declaration is
+  // the union {NOT_FOUND, STALE} ∪ {DENIED}.
+  rpc GetBook(GetBookRequest) returns (Book) {
+    option (google.api.http) = {get: "/v1/books/{name}"};
+    option (throws) = FAILURE_REASON_NOT_FOUND;
+    option (throws) = FAILURE_REASON_STALE;
+  }
+
+  // WatchBooks participates through the service-level declaration only.
+  rpc WatchBooks(WatchBooksRequest) returns (stream Book) {
+    option (google.api.http) = {get: "/v1/books:watch"};
+  }
+}
+
+// UndeclaredService has no throws declarations anywhere: its generated
+// wrappers must be identical to pre-assertion output.
+service UndeclaredService {
+  rpc GetShelf(GetShelfRequest) returns (Shelf) {
+    option (google.api.http) = {get: "/v1/shelves/{name}"};
+  }
+}
+
+message GetBookRequest {
+  string name = 1;
+}
+
+message WatchBooksRequest {
+  string parent = 1;
+}
+
+message Book {
+  string name = 1;
+}
+
+message GetShelfRequest {
+  string name = 1;
+}
+
+message Shelf {
+  string name = 1;
+}

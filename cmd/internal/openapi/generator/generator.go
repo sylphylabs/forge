@@ -35,6 +35,7 @@ import (
 
 	"github.com/sylphylabs/forge/cmd/internal/httpbinding"
 	wk "github.com/sylphylabs/forge/cmd/internal/openapi/generator/wellknown"
+	"github.com/sylphylabs/forge/cmd/internal/throws"
 )
 
 type Configuration struct {
@@ -86,7 +87,7 @@ type OpenAPIv3Generator struct {
 
 	inputFiles        []*protogen.File
 	reflect           *OpenAPIv3Reflector
-	throws            *throwsAnalyzer
+	throws            *throws.Analyzer
 	generatedSchemas  []string // Names of schemas that have already been generated.
 	linterRulePattern *regexp.Regexp
 	pathPattern       *regexp.Regexp
@@ -129,14 +130,14 @@ func (g *OpenAPIv3Generator) buildDocumentV3() (*v3.Document, error) {
 	d := &v3.Document{}
 	rules := httpbinding.NewSet()
 
-	throws, err := newThrowsAnalyzer(g.plugin.Request)
+	analyzer, err := throws.NewAnalyzer(g.plugin.Request)
 	if err != nil {
 		return nil, err
 	}
-	if err := throws.scanMarkers(); err != nil {
+	if err := analyzer.ScanMarkers(); err != nil {
 		return nil, err
 	}
-	g.throws = throws
+	g.throws = analyzer
 
 	d.Openapi = stringValue(g.conf.OpenAPIVersion, DefaultOpenAPIVersion)
 	d.Info = &v3.Info{
