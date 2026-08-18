@@ -8,6 +8,7 @@ package testv1
 
 import (
 	_ "github.com/sylphylabs/forge/api/errors/v1"
+	_ "github.com/sylphylabs/forge/api/openapi/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	descriptorpb "google.golang.org/protobuf/types/descriptorpb"
@@ -195,19 +196,30 @@ var File_test_v1_consumer_proto protoreflect.FileDescriptor
 
 const file_test_v1_consumer_proto_rawDesc = "" +
 	"\n" +
-	"\x16test/v1/consumer.proto\x12\x0esylphy.test.v1\x1a google/protobuf/descriptor.proto\x1a\x1dsylphy/errors/v1/errors.proto\"(\n" +
-	"\x12GetDocumentRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"&\n" +
+	"\x16test/v1/consumer.proto\x12\x0esylphy.test.v1\x1a google/protobuf/descriptor.proto\x1a\x1dsylphy/errors/v1/errors.proto\x1a#sylphy/openapi/v1/annotations.proto\"\x83\x01\n" +
+	"\x12GetDocumentRequest\x12F\n" +
+	"\x04name\x18\x01 \x01(\tB2\x82\xa5\xf4\x01-\n" +
+	"\x1eResource name of the document.\x12\vdocuments/1R\x04name:%\xfa\xa4\xf4\x01 \n" +
+	"\x1eRequest to fetch one document.\"&\n" +
 	"\x10GetDocumentReply\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name*}\n" +
 	"\rFailureReason\x12\x1e\n" +
 	"\x1aFAILURE_REASON_UNSPECIFIED\x10\x00\x12#\n" +
 	"\x18FAILURE_REASON_NOT_FOUND\x10\x01\x1a\x05\xb0\x98\xf4\x01\x06\x12 \n" +
-	"\x15FAILURE_REASON_DENIED\x10\x02\x1a\x05\xb0\x98\xf4\x01\x05\x1a\x05\xa8\x98\xf4\x01\x0e2w\n" +
-	"\x0fDocumentService\x12]\n" +
-	"\vGetDocument\x12\".sylphy.test.v1.GetDocumentRequest\x1a .sylphy.test.v1.GetDocumentReply\"\b\x82\xb5\x18\x01\x01\x90\x02\x02\x1a\x05\x8a\xb5\x18\x01\x02:^\n" +
+	"\x15FAILURE_REASON_DENIED\x10\x02\x1a\x05\xb0\x98\xf4\x01\x05\x1a\x05\xa8\x98\xf4\x01\x0e2\xa4\x01\n" +
+	"\x0fDocumentService\x12\x89\x01\n" +
+	"\vGetDocument\x12\".sylphy.test.v1.GetDocumentRequest\x1a .sylphy.test.v1.GetDocumentReply\"4\x82\xb5\x18\x01\x01\xf2\xa4\xf4\x01'\n" +
+	"\x10Get one document\x1a\tdocuments*\b\n" +
+	"\x06bearer\x90\x02\x02\x1a\x05\x8a\xb5\x18\x01\x02:^\n" +
 	"\x06throws\x12\x1e.google.protobuf.MethodOptions\x18І\x03 \x03(\x0e2\x1d.sylphy.test.v1.FailureReasonB\x05\xb8\x98\xf4\x01\x01R\x06throws:n\n" +
-	"\x0eservice_throws\x12\x1f.google.protobuf.ServiceOptions\x18ц\x03 \x03(\x0e2\x1d.sylphy.test.v1.FailureReasonB\x05\xb8\x98\xf4\x01\x01R\rserviceThrowsB0Z.example.com/sylphy/api-consumer/test/v1;testv1b\x06proto3"
+	"\x0eservice_throws\x12\x1f.google.protobuf.ServiceOptions\x18ц\x03 \x03(\x0e2\x1d.sylphy.test.v1.FailureReasonB\x05\xb8\x98\xf4\x01\x01R\rserviceThrowsB\xc4\x01\xea\xa4\xf4\x01\x8e\x01\n" +
+	"\fDocument API\x12\x051.0.0\x1a\x12Manages documents.\"%\n" +
+	"\x17https://api.example.com\x12\n" +
+	"Production*$\n" +
+	"\x06bearer\x12\x13Service-issued JWT.\x1a\x05\n" +
+	"\x03JWT*\x16\n" +
+	"\aapi_key\"\v\n" +
+	"\tX-Api-KeyZ.example.com/sylphy/api-consumer/test/v1;testv1b\x06proto3"
 
 var (
 	file_test_v1_consumer_proto_rawDescOnce sync.Once
