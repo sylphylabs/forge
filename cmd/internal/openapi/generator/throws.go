@@ -10,9 +10,9 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	v3 "github.com/google/gnostic/openapiv3"
 	forgeerrors "github.com/sylphylabs/forge/errors"
 
+	"github.com/sylphylabs/forge/cmd/internal/openapi/model"
 	"github.com/sylphylabs/forge/cmd/internal/throws"
 )
 
@@ -178,33 +178,26 @@ func groupIdentitiesByStatus(identities []throws.Identity) []throwsResponseSpec 
 }
 
 // applyThrowsResponses adds the derived error responses to an operation. A
-// handwritten response on a status code the declarations also produce is a
-// second source of truth for the same fact, so it fails generation instead of
-// being merged or overwritten.
-func (g *OpenAPIv3Generator) applyThrowsResponses(d *v3.Document, op *v3.Operation, specs []throwsResponseSpec) error {
+// response already present on a status code the declarations also produce is
+// a second source of truth for the same fact, so it fails generation instead
+// of being merged or overwritten.
+func (g *OpenAPIv3Generator) applyThrowsResponses(d *model.Document, op *model.Operation, specs []throwsResponseSpec) error {
 	if len(specs) == 0 {
 		return nil
 	}
-	if op.Responses == nil {
-		op.Responses = &v3.Responses{}
-	}
-	existing := make(map[string]bool, len(op.Responses.ResponseOrReference))
-	for _, namedResponse := range op.Responses.ResponseOrReference {
-		existing[namedResponse.GetName()] = true
+	existing := make(map[string]bool, len(op.Responses))
+	for _, namedResponse := range op.Responses {
+		existing[namedResponse.Name] = true
 	}
 	for _, spec := range specs {
 		if existing[spec.code] {
 			return fmt.Errorf("declared errors produce response %s, which the method also declares as a handwritten OpenAPI response; delete the handwritten response and keep the throws declaration as the single source", spec.code)
 		}
-		op.Responses.ResponseOrReference = append(op.Responses.ResponseOrReference, &v3.NamedResponseOrReference{
+		op.Responses = append(op.Responses, &model.NamedResponse{
 			Name: spec.code,
-			Value: &v3.ResponseOrReference{
-				Oneof: &v3.ResponseOrReference_Response{
-					Response: &v3.Response{
-						Description: spec.description,
-						Content:     g.forgeErrorContent(d),
-					},
-				},
+			Response: &model.Response{
+				Description: spec.description,
+				Content:     g.forgeErrorContent(d),
 			},
 		})
 	}
@@ -214,12 +207,9 @@ func (g *OpenAPIv3Generator) applyThrowsResponses(d *v3.Document, op *v3.Operati
 // sortOperationResponses orders responses by status code with the default
 // response last, so generated documents are stable however responses were
 // accumulated.
-func sortOperationResponses(op *v3.Operation) {
-	if op.Responses == nil {
-		return
-	}
-	sort.SliceStable(op.Responses.ResponseOrReference, func(i, j int) bool {
-		return responseRank(op.Responses.ResponseOrReference[i].GetName()) < responseRank(op.Responses.ResponseOrReference[j].GetName())
+func sortOperationResponses(op *model.Operation) {
+	sort.SliceStable(op.Responses, func(i, j int) bool {
+		return responseRank(op.Responses[i].Name) < responseRank(op.Responses[j].Name)
 	})
 }
 
