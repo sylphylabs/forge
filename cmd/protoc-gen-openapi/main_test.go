@@ -9,8 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	v3 "github.com/google/gnostic/openapiv3"
 	"github.com/pb33f/libopenapi"
+	base "github.com/pb33f/libopenapi/datamodel/high/base"
+	highv3 "github.com/pb33f/libopenapi/datamodel/high/v3"
+	"github.com/pb33f/libopenapi/orderedmap"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	forgeerrors "github.com/sylphylabs/forge/errors"
 	forgehttp "github.com/sylphylabs/forge/transport/http"
@@ -64,7 +66,10 @@ func TestGenerateOpenAPI32UsesForgeProblem(t *testing.T) {
 	validateOpenAPI32(t, content)
 }
 
-func TestGenerateOpenAPIPatchesAnnotatedErrorResponses(t *testing.T) {
+// TestGenerateOpenAPIDefaultResponseDisabled locks the default_response
+// option: with it off, no operation carries a default response and the error
+// component is not emitted unless something else references it.
+func TestGenerateOpenAPIDefaultResponseDisabled(t *testing.T) {
 	plugin := newOpenAPIPlugin(t)
 	generator.Configure(plugin)
 	conf := testConfig()
@@ -78,23 +83,30 @@ func TestGenerateOpenAPIPatchesAnnotatedErrorResponses(t *testing.T) {
 	if strings.Contains(content, "default:") {
 		t.Fatalf("default response should be disabled:\n%s", content)
 	}
-	if !strings.Contains(content, "\"401\":") || !strings.Contains(content, "$ref: '#/components/schemas/ForgeProblem'") {
-		t.Fatalf("annotated 401 response did not receive Forge error content:\n%s", content)
+	document := parseDocument(t, content)
+	operation := findOperation(t, document, "/v1/hello/{name}", "GET")
+	if operation.Responses.Default != nil {
+		t.Fatal("operation still carries a default response")
 	}
+	validateOpenAPI32(t, content)
+}
 
-	document, err := v3.ParseDocument([]byte(content))
-	if err != nil {
-		t.Fatalf("parse generated OpenAPI: %v", err)
+// TestGenerateOpenAPIIsDeterministic locks byte determinism end to end: two
+// runs over an equal request produce identical output files.
+func TestGenerateOpenAPIIsDeterministic(t *testing.T) {
+	generate := func() string {
+		plugin := newOpenAPIPluginForFile(t, projectionTestFile())
+		generator.Configure(plugin)
+		if err := generateOpenAPI(plugin, testConfig()); err != nil {
+			t.Fatalf("generateOpenAPI() error = %v", err)
+		}
+		return plugin.Response().File[0].GetContent()
 	}
-	patched := findResponse(t, document, "401")
-	patchedTypes := patched.GetContent().GetAdditionalProperties()
-	if len(patchedTypes) != 1 || patchedTypes[0].GetName() != "application/problem+json" {
-		t.Fatalf("patched 401 content = %v, want application/problem+json", patchedTypes)
-	}
-	response := findResponse(t, document, "409")
-	mediaTypes := response.GetContent().GetAdditionalProperties()
-	if len(mediaTypes) != 1 || mediaTypes[0].GetName() != "application/problem+json" {
-		t.Fatalf("annotated 409 content = %v, want application/problem+json", mediaTypes)
+	first := generate()
+	for i := 0; i < 4; i++ {
+		if next := generate(); next != first {
+			t.Fatalf("generation is not deterministic:\nfirst:\n%s\nnext:\n%s", first, next)
+		}
 	}
 }
 
@@ -102,24 +114,24 @@ func TestGenerateOpenAPIProjectsBodyAndResponseSchemas(t *testing.T) {
 	content, document := generateOpenAPIDocument(t, projectionTestFile())
 
 	scalar := requestBodySchema(t, findOperation(t, document, "/v1/scalar/{name}", "POST"))
-	if scalar.Type != "integer" || scalar.Format != "int32" {
-		t.Fatalf("scalar request schema = type %q format %q, want integer/int32", scalar.Type, scalar.Format)
+	if schemaType(scalar) != "integer" || scalar.Format != "int32" {
+		t.Fatalf("scalar request schema = type %q format %q, want integer/int32", schemaType(scalar), scalar.Format)
 	}
 
 	repeated := requestBodySchema(t, findOperation(t, document, "/v1/repeated/{name}", "POST"))
-	if repeated.Type != "array" || repeated.Items == nil {
+	if schemaType(repeated) != "array" || repeated.Items == nil {
 		t.Fatalf("repeated request schema = %+v, want array with items", repeated)
 	}
 
 	mapped := requestBodySchema(t, findOperation(t, document, "/v1/mapped/{name}", "POST"))
-	if mapped.Type != "object" || mapped.AdditionalProperties == nil {
+	if schemaType(mapped) != "object" || mapped.AdditionalProperties == nil {
 		t.Fatalf("map request schema = %+v, want object with additionalProperties", mapped)
 	}
 
 	response := findOperationResponse(t, findOperation(t, document, "/v1/scalar/{name}", "POST"), "200")
 	responseSchema := mediaTypeSchema(t, response.Content, "application/json")
-	if responseSchema.Type != "string" {
-		t.Fatalf("projected response schema type = %q, want string", responseSchema.Type)
+	if schemaType(responseSchema) != "string" {
+		t.Fatalf("projected response schema type = %q, want string", schemaType(responseSchema))
 	}
 
 	nested := findOperation(t, document, "/v1/nested/{resource.name}", "GET")
@@ -142,7 +154,7 @@ func TestGenerateOpenAPIUsesHTTPBodyMediaType(t *testing.T) {
 		protodesc.ToFileDescriptorProto(httpbody.File_google_api_httpbody_proto))
 	operation := findOperation(t, document, "/v1/media/{name}", "POST")
 
-	requestBody := operation.RequestBody.GetRequestBody()
+	requestBody := operation.RequestBody
 	if requestBody == nil {
 		t.Fatal("request body is nil")
 	}
@@ -211,14 +223,14 @@ func TestGenerateOpenAPIRejectsInvalidBindings(t *testing.T) {
 			file: bindingTestFile(&annotations.HttpRule{
 				Pattern: &annotations.HttpRule_Custom{Custom: &annotations.CustomHttpPattern{Kind: "QUERY", Path: "/v1/query/{name}"}},
 			}),
-			wantErr: `HTTP method "QUERY" cannot be represented`,
+			wantErr: `HTTP method "QUERY" is not emitted`,
 		},
 		{
 			name: "arbitrary method",
 			file: bindingTestFile(&annotations.HttpRule{
 				Pattern: &annotations.HttpRule_Custom{Custom: &annotations.CustomHttpPattern{Kind: "REPORT", Path: "/v1/report/{name}"}},
 			}),
-			wantErr: `HTTP method "REPORT" cannot be represented`,
+			wantErr: `HTTP method "REPORT" is not emitted`,
 		},
 	}
 
@@ -245,11 +257,10 @@ func TestForgeProblemSchemaMatchesRuntimeWireFormat(t *testing.T) {
 	problemSchema := findComponentSchema(t, document, openapigen.DefaultErrorSchemaName)
 	schemaKeys := propertyNames(t, problemSchema)
 	violationsProperty := findProperty(t, problemSchema, "violations")
-	violationItems := violationsProperty.GetItems().GetSchemaOrReference()
-	if len(violationItems) != 1 {
-		t.Fatalf("violations item schemas = %d, want 1", len(violationItems))
+	if violationsProperty.Items == nil || violationsProperty.Items.A == nil {
+		t.Fatal("violations property has no item schema")
 	}
-	violationKeys := propertyNames(t, violationItems[0].GetSchema())
+	violationKeys := propertyNames(t, violationsProperty.Items.A.Schema())
 
 	public := forgeerrors.Public{
 		Kind:     forgeerrors.KindInvalidArgument,
@@ -267,11 +278,12 @@ func TestForgeProblemSchemaMatchesRuntimeWireFormat(t *testing.T) {
 	forgehttp.DefaultErrorEncoder(recorder, request, forgeerrors.FromPublic(public))
 
 	mediaTypes := errorResponseMediaTypes(t, document)
-	if len(mediaTypes) != 1 {
-		t.Fatalf("error response media types = %d, want 1", len(mediaTypes))
+	if orderedmap.Len(mediaTypes) != 1 {
+		t.Fatalf("error response media types = %d, want 1", orderedmap.Len(mediaTypes))
 	}
-	if contentType := recorder.Header().Get("Content-Type"); contentType != mediaTypes[0].GetName() {
-		t.Fatalf("runtime Content-Type = %q, OpenAPI media type = %q", contentType, mediaTypes[0].GetName())
+	documentedType := mediaTypes.First().Key()
+	if contentType := recorder.Header().Get("Content-Type"); contentType != documentedType {
+		t.Fatalf("runtime Content-Type = %q, OpenAPI media type = %q", contentType, documentedType)
 	}
 
 	var wire map[string]json.RawMessage
@@ -295,71 +307,67 @@ func TestForgeProblemSchemaMatchesRuntimeWireFormat(t *testing.T) {
 	}
 }
 
+// schemaType returns the single JSON Schema type of a parsed schema, or ""
+// when none is declared.
+func schemaType(schema *base.Schema) string {
+	if schema == nil || len(schema.Type) != 1 {
+		return ""
+	}
+	return schema.Type[0]
+}
+
 // findComponentSchema returns the named schema from document components.
-func findComponentSchema(t *testing.T, document *v3.Document, name string) *v3.Schema {
+func findComponentSchema(t *testing.T, document *highv3.Document, name string) *base.Schema {
 	t.Helper()
 
-	for _, namedSchema := range document.GetComponents().GetSchemas().GetAdditionalProperties() {
-		if namedSchema.GetName() == name {
-			schema := namedSchema.GetValue().GetSchema()
-			if schema == nil {
-				t.Fatalf("component schema %q is a reference, want an inline schema", name)
-			}
-			return schema
-		}
+	proxy := document.Components.Schemas.GetOrZero(name)
+	if proxy == nil {
+		t.Fatalf("component schema %q not found", name)
 	}
-	t.Fatalf("component schema %q not found", name)
-	return nil
+	schema := proxy.Schema()
+	if schema == nil {
+		t.Fatalf("component schema %q did not build: %v", name, proxy.GetBuildError())
+	}
+	return schema
 }
 
 // findProperty returns the named property schema of an object schema.
-func findProperty(t *testing.T, schema *v3.Schema, name string) *v3.Schema {
+func findProperty(t *testing.T, schema *base.Schema, name string) *base.Schema {
 	t.Helper()
 
-	for _, property := range schema.GetProperties().GetAdditionalProperties() {
-		if property.GetName() == name {
-			value := property.GetValue().GetSchema()
-			if value == nil {
-				t.Fatalf("property %q is a reference, want an inline schema", name)
-			}
-			return value
-		}
+	proxy := schema.Properties.GetOrZero(name)
+	if proxy == nil {
+		t.Fatalf("property %q not found", name)
 	}
-	t.Fatalf("property %q not found", name)
-	return nil
+	return proxy.Schema()
 }
 
 // propertyNames returns the sorted property names of an object schema.
-func propertyNames(t *testing.T, schema *v3.Schema) []string {
+func propertyNames(t *testing.T, schema *base.Schema) []string {
 	t.Helper()
 
-	properties := schema.GetProperties().GetAdditionalProperties()
-	if len(properties) == 0 {
+	if orderedmap.Len(schema.Properties) == 0 {
 		t.Fatal("schema declares no properties")
 	}
-	names := make([]string, 0, len(properties))
-	for _, property := range properties {
-		names = append(names, property.GetName())
+	names := make([]string, 0, orderedmap.Len(schema.Properties))
+	for name := range schema.Properties.KeysFromOldest() {
+		names = append(names, name)
 	}
 	slices.Sort(names)
 	return names
 }
 
 // errorResponseMediaTypes returns the media types of the first default error
-// response in the document. A parsed gnostic document carries the `default`
-// response in the dedicated Default field rather than the named response list.
-func errorResponseMediaTypes(t *testing.T, document *v3.Document) []*v3.NamedMediaType {
+// response in the document.
+func errorResponseMediaTypes(t *testing.T, document *highv3.Document) *orderedmap.Map[string, *highv3.MediaType] {
 	t.Helper()
 
-	for _, path := range document.GetPaths().GetPath() {
-		for _, operation := range []*v3.Operation{
-			path.GetValue().GetGet(), path.GetValue().GetPost(),
-		} {
-			response := operation.GetResponses().GetDefault().GetResponse()
-			if response == nil {
+	for pathItem := range document.Paths.PathItems.ValuesFromOldest() {
+		for _, operation := range []*highv3.Operation{pathItem.Get, pathItem.Post} {
+			if operation == nil || operation.Responses == nil || operation.Responses.Default == nil {
 				continue
 			}
-			return response.GetContent().GetAdditionalProperties()
+			return operation.Responses.Default.Content
 		}
 	}
 	t.Fatal("no default error response found")
@@ -376,120 +384,106 @@ func sortedKeys(object map[string]json.RawMessage) []string {
 	return keys
 }
 
-func findResponse(t *testing.T, document *v3.Document, name string) *v3.Response {
+func findOperation(t *testing.T, document *highv3.Document, path, method string) *highv3.Operation {
 	t.Helper()
 
-	for _, path := range document.GetPaths().GetPath() {
-		operation := path.GetValue().GetGet()
-		if operation == nil {
-			continue
-		}
-		for _, response := range operation.GetResponses().GetResponseOrReference() {
-			if response.GetName() == name {
-				return response.GetValue().GetResponse()
-			}
-		}
+	pathItem := document.Paths.PathItems.GetOrZero(path)
+	if pathItem == nil {
+		t.Fatalf("path %q not found", path)
 	}
-	t.Fatalf("response %q not found", name)
-	return nil
+	var operation *highv3.Operation
+	switch method {
+	case "GET":
+		operation = pathItem.Get
+	case "POST":
+		operation = pathItem.Post
+	case "PUT":
+		operation = pathItem.Put
+	case "DELETE":
+		operation = pathItem.Delete
+	case "OPTIONS":
+		operation = pathItem.Options
+	case "HEAD":
+		operation = pathItem.Head
+	case "PATCH":
+		operation = pathItem.Patch
+	case "TRACE":
+		operation = pathItem.Trace
+	default:
+		t.Fatalf("unsupported test method %q", method)
+	}
+	if operation == nil {
+		t.Fatalf("operation %s %s is nil", method, path)
+	}
+	return operation
 }
 
-func findOperation(t *testing.T, document *v3.Document, path, method string) *v3.Operation {
+func findOperationResponse(t *testing.T, operation *highv3.Operation, name string) *highv3.Response {
 	t.Helper()
 
-	for _, namedPath := range document.GetPaths().GetPath() {
-		if namedPath.GetName() != path {
-			continue
-		}
-		pathItem := namedPath.GetValue()
-		var operation *v3.Operation
-		switch method {
-		case "GET":
-			operation = pathItem.GetGet()
-		case "POST":
-			operation = pathItem.GetPost()
-		case "PUT":
-			operation = pathItem.GetPut()
-		case "DELETE":
-			operation = pathItem.GetDelete()
-		case "OPTIONS":
-			operation = pathItem.GetOptions()
-		case "HEAD":
-			operation = pathItem.GetHead()
-		case "PATCH":
-			operation = pathItem.GetPatch()
-		case "TRACE":
-			operation = pathItem.GetTrace()
-		default:
-			t.Fatalf("unsupported test method %q", method)
-		}
-		if operation == nil {
-			t.Fatalf("operation %s %s is nil", method, path)
-		}
-		return operation
+	response := findOptionalResponse(operation, name)
+	if response == nil {
+		t.Fatalf("response %q not found", name)
 	}
-	t.Fatalf("path %q not found", path)
-	return nil
+	return response
 }
 
-func findOperationResponse(t *testing.T, operation *v3.Operation, name string) *v3.Response {
-	t.Helper()
-
-	for _, response := range operation.GetResponses().GetResponseOrReference() {
-		if response.GetName() == name {
-			return response.GetValue().GetResponse()
-		}
+func findOptionalResponse(operation *highv3.Operation, name string) *highv3.Response {
+	if operation.Responses == nil {
+		return nil
 	}
-	t.Fatalf("response %q not found", name)
-	return nil
+	if name == "default" {
+		return operation.Responses.Default
+	}
+	return operation.Responses.Codes.GetOrZero(name)
 }
 
-func hasParameter(operation *v3.Operation, name, location string) bool {
-	for _, parameterOrReference := range operation.GetParameters() {
-		parameter := parameterOrReference.GetParameter()
-		if parameter.GetName() == name && parameter.GetIn() == location {
+func hasParameter(operation *highv3.Operation, name, location string) bool {
+	for _, parameter := range operation.Parameters {
+		if parameter.Name == name && parameter.In == location {
 			return true
 		}
 	}
 	return false
 }
 
-func requestBodySchema(t *testing.T, operation *v3.Operation) *v3.Schema {
+func requestBodySchema(t *testing.T, operation *highv3.Operation) *base.Schema {
 	t.Helper()
 
-	requestBody := operation.GetRequestBody().GetRequestBody()
-	if requestBody == nil {
+	if operation.RequestBody == nil {
 		t.Fatal("request body is nil")
 	}
-	return mediaTypeSchema(t, requestBody.Content, "application/json")
+	return mediaTypeSchema(t, operation.RequestBody.Content, "application/json")
 }
 
-func mediaTypeSchema(t *testing.T, mediaTypes *v3.MediaTypes, name string) *v3.Schema {
+func mediaTypeSchema(t *testing.T, mediaTypes *orderedmap.Map[string, *highv3.MediaType], name string) *base.Schema {
 	t.Helper()
 
-	schema := mediaType(t, mediaTypes, name).GetSchema().GetSchema()
+	proxy := mediaType(t, mediaTypes, name).Schema
+	if proxy == nil {
+		t.Fatalf("media type %q has no schema", name)
+	}
+	schema := proxy.Schema()
 	if schema == nil {
-		t.Fatalf("media type %q has no inline schema", name)
+		t.Fatalf("media type %q schema did not build: %v", name, proxy.GetBuildError())
 	}
 	return schema
 }
 
-func mediaType(t *testing.T, mediaTypes *v3.MediaTypes, name string) *v3.MediaType {
+func mediaType(t *testing.T, mediaTypes *orderedmap.Map[string, *highv3.MediaType], name string) *highv3.MediaType {
 	t.Helper()
 
 	if mediaTypes == nil {
 		t.Fatalf("media types are nil, want %q", name)
 	}
-	for _, namedMediaType := range mediaTypes.GetAdditionalProperties() {
-		if namedMediaType.GetName() == name {
-			return namedMediaType.GetValue()
-		}
+	value := mediaTypes.GetOrZero(name)
+	if value == nil {
+		t.Fatalf("media type %q not found", name)
 	}
-	t.Fatalf("media type %q not found", name)
-	return nil
+	return value
 }
 
-func generateOpenAPIDocument(t *testing.T, file *descriptorpb.FileDescriptorProto, dependencies ...*descriptorpb.FileDescriptorProto) (string, *v3.Document) {
+func generateOpenAPIDocument(t *testing.T, file *descriptorpb.FileDescriptorProto, dependencies ...*descriptorpb.FileDescriptorProto) (string, *highv3.Document) {
 	t.Helper()
 
 	plugin := newOpenAPIPluginForFile(t, file, dependencies...)
@@ -505,11 +499,23 @@ func generateOpenAPIDocument(t *testing.T, file *descriptorpb.FileDescriptorProt
 		t.Fatalf("generated files = %d, want 1", len(response.File))
 	}
 	content := response.File[0].GetContent()
-	document, err := v3.ParseDocument([]byte(content))
+	return content, parseDocument(t, content)
+}
+
+// parseDocument parses generated output with libopenapi, the independent
+// parser the tests assert structure through.
+func parseDocument(t *testing.T, content string) *highv3.Document {
+	t.Helper()
+
+	document, err := libopenapi.NewDocument([]byte(content))
 	if err != nil {
 		t.Fatalf("parse generated OpenAPI: %v", err)
 	}
-	return content, document
+	model, err := document.BuildV3Model()
+	if err != nil {
+		t.Fatalf("build OpenAPI model: %v", err)
+	}
+	return &model.Model
 }
 
 func validateOpenAPI32(t *testing.T, content string) {
@@ -784,50 +790,12 @@ func newOpenAPIPlugin(t *testing.T) *protogen.Plugin {
 	proto.SetExtension(methodOptions, annotations.E_Http, &annotations.HttpRule{
 		Pattern: &annotations.HttpRule_Get{Get: "/v1/hello/{name}"},
 	})
-	proto.SetExtension(methodOptions, v3.E_Operation, &v3.Operation{
-		Responses: &v3.Responses{
-			ResponseOrReference: []*v3.NamedResponseOrReference{
-				{
-					Name: "401",
-					Value: &v3.ResponseOrReference{
-						Oneof: &v3.ResponseOrReference_Response{
-							Response: &v3.Response{Description: "unauthenticated"},
-						},
-					},
-				},
-				{
-					Name: "409",
-					Value: &v3.ResponseOrReference{
-						Oneof: &v3.ResponseOrReference_Response{
-							Response: &v3.Response{
-								Description: "conflict",
-								Content: &v3.MediaTypes{
-									AdditionalProperties: []*v3.NamedMediaType{
-										{
-											Name: "application/problem+json",
-											Value: &v3.MediaType{
-												Schema: &v3.SchemaOrReference{
-													Oneof: &v3.SchemaOrReference_Schema{
-														Schema: &v3.Schema{Type: "string"},
-													},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	})
 
 	file := &descriptorpb.FileDescriptorProto{
 		Name:       proto.String("test/v1/greeter.proto"),
 		Package:    proto.String("test.v1"),
 		Syntax:     proto.String("proto3"),
-		Dependency: []string{"google/api/annotations.proto", "openapiv3/annotations.proto"},
+		Dependency: []string{"google/api/annotations.proto"},
 		Options: &descriptorpb.FileOptions{
 			GoPackage: proto.String("example.com/test/v1;testv1"),
 		},
@@ -835,23 +803,13 @@ func newOpenAPIPlugin(t *testing.T) *protogen.Plugin {
 			{
 				Name: proto.String("SayHelloRequest"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{
-						Name:   proto.String("name"),
-						Number: proto.Int32(1),
-						Label:  descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
-						Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
-					},
+					stringField("name", 1),
 				},
 			},
 			{
 				Name: proto.String("SayHelloReply"),
 				Field: []*descriptorpb.FieldDescriptorProto{
-					{
-						Name:   proto.String("message"),
-						Number: proto.Int32(1),
-						Label:  descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
-						Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
-					},
+					stringField("message", 1),
 				},
 			},
 		},
@@ -875,14 +833,12 @@ func newOpenAPIPlugin(t *testing.T) *protogen.Plugin {
 func newOpenAPIPluginForFile(t *testing.T, file *descriptorpb.FileDescriptorProto, dependencies ...*descriptorpb.FileDescriptorProto) *protogen.Plugin {
 	t.Helper()
 
-	protoFiles := make([]*descriptorpb.FileDescriptorProto, 0, 6+len(dependencies)+1)
+	protoFiles := make([]*descriptorpb.FileDescriptorProto, 0, 4+len(dependencies)+1)
 	protoFiles = append(protoFiles,
 		protodesc.ToFileDescriptorProto(descriptorpb.File_google_protobuf_descriptor_proto),
 		protodesc.ToFileDescriptorProto(anypb.File_google_protobuf_any_proto),
 		protodesc.ToFileDescriptorProto(annotations.File_google_api_http_proto),
 		protodesc.ToFileDescriptorProto(annotations.File_google_api_annotations_proto),
-		protodesc.ToFileDescriptorProto(v3.File_openapiv3_OpenAPIv3_proto),
-		protodesc.ToFileDescriptorProto(v3.File_openapiv3_annotations_proto),
 	)
 	protoFiles = append(protoFiles, dependencies...)
 	protoFiles = append(protoFiles, file)

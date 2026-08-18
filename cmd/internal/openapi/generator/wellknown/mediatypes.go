@@ -6,7 +6,7 @@
 //
 //    http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, softwis
+// Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
@@ -16,30 +16,18 @@
 package wellknown
 
 import (
-	v3 "github.com/google/gnostic/openapiv3"
+	"github.com/sylphylabs/forge/cmd/internal/openapi/model"
 )
 
-func NewGoogleAPIHTTPBodyMediaType() *v3.MediaTypes {
-	return &v3.MediaTypes{
-		AdditionalProperties: []*v3.NamedMediaType{
-			{
-				Name:  "*/*",
-				Value: &v3.MediaType{},
-			},
-		},
+func NewGoogleAPIHTTPBodyMediaType() model.MediaTypes {
+	return model.MediaTypes{
+		{Name: "*/*", Value: &model.MediaType{}},
 	}
 }
 
-func NewApplicationJSONMediaType(schema *v3.SchemaOrReference) *v3.MediaTypes {
-	return &v3.MediaTypes{
-		AdditionalProperties: []*v3.NamedMediaType{
-			{
-				Name: "application/json",
-				Value: &v3.MediaType{
-					Schema: schema,
-				},
-			},
-		},
+func NewApplicationJSONMediaType(schema *model.Schema) model.MediaTypes {
+	return model.MediaTypes{
+		{Name: "application/json", Value: &model.MediaType{Schema: schema}},
 	}
 }
 
@@ -49,15 +37,8 @@ func NewApplicationJSONMediaType(schema *v3.SchemaOrReference) *v3.MediaTypes {
 // and the client accepts a problem document under no other media type, so an
 // error response documented as anything else would describe a body the client
 // refuses to parse.
-func NewProblemJSONMediaType(schema *v3.SchemaOrReference) *v3.MediaTypes {
-	return &v3.MediaTypes{
-		AdditionalProperties: []*v3.NamedMediaType{
-			{
-				Name: "application/problem+json",
-				Value: &v3.MediaType{
-					Schema: schema,
-				},
-			},
-		},
+func NewProblemJSONMediaType(schema *model.Schema) model.MediaTypes {
+	return model.MediaTypes{
+		{Name: "application/problem+json", Value: &model.MediaType{Schema: schema}},
 	}
 }

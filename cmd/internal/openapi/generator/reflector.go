@@ -21,9 +21,8 @@ import (
 
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	v3 "github.com/google/gnostic/openapiv3"
-
 	wk "github.com/sylphylabs/forge/cmd/internal/openapi/generator/wellknown"
+	"github.com/sylphylabs/forge/cmd/internal/openapi/model"
 )
 
 const (
@@ -102,11 +101,11 @@ func (r *OpenAPIv3Reflector) fullMessageTypeName(message protoreflect.MessageDes
 	return "." + string(message.ParentFile().Package()) + "." + name
 }
 
-func (r *OpenAPIv3Reflector) responseContentForMessage(message protoreflect.MessageDescriptor) (string, *v3.MediaTypes) {
+func (r *OpenAPIv3Reflector) responseContentForMessage(message protoreflect.MessageDescriptor) (string, model.MediaTypes) {
 	typeName := r.fullMessageTypeName(message)
 
 	if typeName == ".google.protobuf.Empty" {
-		return "200", &v3.MediaTypes{}
+		return "200", model.MediaTypes{}
 	}
 
 	if typeName == httpBodyTypeName {
@@ -116,7 +115,7 @@ func (r *OpenAPIv3Reflector) responseContentForMessage(message protoreflect.Mess
 	return "200", wk.NewApplicationJSONMediaType(r.schemaOrReferenceForMessage(message))
 }
 
-func (r *OpenAPIv3Reflector) responseContentForField(field protoreflect.FieldDescriptor) (string, *v3.MediaTypes) {
+func (r *OpenAPIv3Reflector) responseContentForField(field protoreflect.FieldDescriptor) (string, model.MediaTypes) {
 	if field.Kind() == protoreflect.MessageKind && r.fullMessageTypeName(field.Message()) == httpBodyTypeName {
 		return "200", wk.NewGoogleAPIHTTPBodyMediaType()
 	}
@@ -133,7 +132,7 @@ func (r *OpenAPIv3Reflector) schemaReferenceForMessage(message protoreflect.Mess
 
 // Returns a full schema for simple types, and a schema reference for complex types that reference
 // the definition in `#/components/schemas/`
-func (r *OpenAPIv3Reflector) schemaOrReferenceForMessage(message protoreflect.MessageDescriptor) *v3.SchemaOrReference {
+func (r *OpenAPIv3Reflector) schemaOrReferenceForMessage(message protoreflect.MessageDescriptor) *model.Schema {
 	typeName := r.fullMessageTypeName(message)
 
 	switch typeName {
@@ -160,7 +159,7 @@ func (r *OpenAPIv3Reflector) schemaOrReferenceForMessage(message protoreflect.Me
 
 	case ".google.protobuf.Empty":
 		// Empty is closer to JSON undefined than null, so ignore this field
-		return nil //&v3.SchemaOrReference{Oneof: &v3.SchemaOrReference_Schema{Schema: &v3.Schema{Type: "null"}}}
+		return nil
 
 	case ".google.protobuf.BoolValue":
 		return wk.NewBooleanSchema()
@@ -178,17 +177,12 @@ func (r *OpenAPIv3Reflector) schemaOrReferenceForMessage(message protoreflect.Me
 		return wk.NewNumberSchema(getValueKind(message))
 
 	default:
-		ref := r.schemaReferenceForMessage(message)
-		return &v3.SchemaOrReference{
-			Oneof: &v3.SchemaOrReference_Reference{
-				Reference: &v3.Reference{XRef: ref},
-			},
-		}
+		return &model.Schema{Ref: r.schemaReferenceForMessage(message)}
 	}
 }
 
-func (r *OpenAPIv3Reflector) schemaOrReferenceForField(field protoreflect.FieldDescriptor) *v3.SchemaOrReference {
-	var kindSchema *v3.SchemaOrReference
+func (r *OpenAPIv3Reflector) schemaOrReferenceForField(field protoreflect.FieldDescriptor) *model.Schema {
+	var kindSchema *model.Schema
 
 	kind := field.Kind()
 
