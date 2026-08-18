@@ -124,6 +124,128 @@ replace github.com/sylphylabs/forge => %s
 	testutil.RunCommand(t, out, "go", "test", "-mod=mod", "./...")
 }
 
+func TestGeneratedThrowsAssertionCompilesAndRuns(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping protoc integration test in short mode")
+	}
+	for _, tool := range []string{"go", "protoc"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("%s is not installed: %v", tool, err)
+		}
+	}
+
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiRoot := filepath.Join(root, "api")
+	protocPath, err := exec.LookPath("protoc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	protocPath, err = filepath.EvalSymlinks(protocPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	protocInclude := filepath.Join(filepath.Dir(filepath.Dir(protocPath)), "include")
+	tmp := t.TempDir()
+	bin := filepath.Join(tmp, "bin")
+	out := filepath.Join(tmp, "consumer")
+	if err = os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.MkdirAll(out, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	testutil.RunCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go"), "google.golang.org/protobuf/cmd/protoc-gen-go")
+	testutil.RunCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go-grpc"), "google.golang.org/grpc/cmd/protoc-gen-go-grpc")
+	testutil.RunCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go-http"), "../protoc-gen-go-http")
+	testutil.RunCommand(t, ".", "go", "build", "-o", filepath.Join(bin, "protoc-gen-go-middleware"), ".")
+
+	args := []string{
+		"-I", "testdata",
+		"-I", filepath.Join(apiRoot, "proto"),
+		"-I", protocInclude,
+		"--descriptor_set_in=" + testutil.AnnotationsDescriptorSet(t),
+		"--go_out=" + out,
+		"--go_opt=module=throws.test",
+		"--go-grpc_out=" + out,
+		"--go-grpc_opt=module=throws.test",
+		"--go-http_out=" + out,
+		"--go-http_opt=module=throws.test",
+		"--go-middleware_out=" + out,
+		"--go-middleware_opt=module=throws.test,http=annotated,grpc=true",
+		"throwsdecl/service.proto",
+	}
+	cmd := exec.Command("protoc", args...)
+	cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("protoc failed: %v\n%s", err, output)
+	}
+
+	generated, err := os.ReadFile(filepath.Join(out, "api", "service_middleware.pb.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The declared method compiles its identity set as static data and
+	// asserts through it; the identities are the method ∪ service union.
+	for _, want := range []string{
+		`_LibraryServiceThrowsGetBook = throws.Declare("throws.test.v1.LibraryService/GetBook",`,
+		`throws.Identity{Domain: "throws.test.v1", Reason: "FAILURE_REASON_DENIED"}`,
+		`throws.Identity{Domain: "throws.test.v1", Reason: "FAILURE_REASON_NOT_FOUND"}`,
+		`throws.Identity{Domain: "throws.test.v1", Reason: "FAILURE_REASON_STALE"}`,
+		`_LibraryServiceThrowsWatchBooks = throws.Declare("throws.test.v1.LibraryService/WatchBooks",`,
+		"opts ...throws.Option",
+		"throwsConfig, err := throws.NewConfig(opts, _LibraryServiceThrowsGetBook, _LibraryServiceThrowsWatchBooks)",
+		"wrapped.assertGetBook = throwsConfig.Asserter(_LibraryServiceThrowsGetBook)",
+		"return nil, s.assertGetBook(ctx, err)",
+	} {
+		if !bytes.Contains(generated, []byte(want)) {
+			t.Fatalf("generated middleware missing %q:\n%s", want, generated)
+		}
+	}
+	// The undeclared service keeps its exact pre-assertion shape: no options
+	// parameter, no assertion machinery.
+	for _, forbidden := range []string{
+		"_UndeclaredServiceThrows",
+		"assertGetShelf",
+		"proto.GetExtension",
+		"reflect.",
+	} {
+		if bytes.Contains(generated, []byte(forbidden)) {
+			t.Fatalf("generated middleware unexpectedly contains %q", forbidden)
+		}
+	}
+
+	consumerTest, err := os.ReadFile(filepath.Join("testdata", "throwsdecl", "consumer_test.gotxt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(out, "api", "service_middleware_test.go"), consumerTest, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	goMod := fmt.Sprintf(`module throws.test
+
+go 1.27rc3
+
+require (
+	github.com/sylphylabs/forge/api v0.0.0
+	github.com/sylphylabs/forge v0.0.0
+	google.golang.org/grpc v1.82.1
+	google.golang.org/protobuf v1.36.11
+)
+
+replace github.com/sylphylabs/forge/api => %s
+
+replace github.com/sylphylabs/forge => %s
+`, apiRoot, root)
+	if err := os.WriteFile(filepath.Join(out, "go.mod"), []byte(goMod), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	testutil.RunCommand(t, out, "go", "test", "-mod=mod", "./...")
+}
+
 func TestGeneratedMiddlewareRejectsIdentifierCollision(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping protoc integration test in short mode")
