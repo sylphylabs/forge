@@ -238,7 +238,6 @@ The plugin accepts these options:
 | `version` | `0.0.1` | API information version |
 | `naming` | `json` | JSON or protobuf field names |
 | `fq_schema_naming` | `false` | Prefix message schemas with the proto package |
-| `enum_type` | `integer` | Integer or string enum representation |
 | `depth` | `2` | Recursive query-message expansion depth |
 | `default_response` | `true` | Add the shared Forge default error response |
 | `error_schema_name` | `ForgeProblem` | Error component name |
@@ -254,10 +253,16 @@ plugins:
     out: openapi
     opt:
       - naming=proto
-      - enum_type=string
       - fq_schema_naming=true
       - output_mode=merged
 ```
+
+Enum representation is not an option. Forge pins protojson without
+`UseEnumNumbers`, and the form codec that binds query and path values resolves
+an enum by name before it falls back to a number, so an enum crosses the wire
+as its value name in every direction. An enum field is therefore documented as
+a `string` listing every declared value name, the same way a 64-bit integer is
+documented as a `string` because that is what protojson writes.
 
 Generated fixtures are parsed independently with `libopenapi` and validated
 with `jsonschema/v6` against libopenapi's embedded official OpenAPI 3.2 schema.
