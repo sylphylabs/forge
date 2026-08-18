@@ -21,7 +21,6 @@ func main() {
 		Description:     flags.String("description", "", "API description"),
 		Naming:          flags.String("naming", "json", "naming convention. Use proto for names from proto files"),
 		FQSchemaNaming:  flags.Bool("fq_schema_naming", false, "prefix schema names with the proto package"),
-		EnumType:        flags.String("enum_type", "integer", "enum serialization. Use string for string-based serialization"),
 		CircularDepth:   flags.Int("depth", 2, "query-parameter recursion depth for circular messages"),
 		DefaultResponse: flags.Bool("default_response", true, "add an Forge default error response"),
 		ErrorSchemaName: flags.String("error_schema_name", openapigen.DefaultErrorSchemaName, "Forge error schema component name"),

@@ -14,16 +14,23 @@ import (
 	highv3 "github.com/pb33f/libopenapi/datamodel/high/v3"
 	"github.com/pb33f/libopenapi/orderedmap"
 	"github.com/santhosh-tekuri/jsonschema/v6"
-	forgeerrors "github.com/sylphylabs/forge/errors"
-	forgehttp "github.com/sylphylabs/forge/transport/http"
 	"google.golang.org/genproto/googleapis/api/annotations"
 	"google.golang.org/genproto/googleapis/api/httpbody"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/dynamicpb"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/pluginpb"
+
+	forgeerrors "github.com/sylphylabs/forge/errors"
+	forgehttp "github.com/sylphylabs/forge/transport/http"
+
+	// Importing the transcoding runtime is what makes the transport encode a
+	// message with protojson, which is the path this test asserts against.
+	_ "github.com/sylphylabs/forge/transport/http/transcoding"
 
 	"github.com/sylphylabs/forge/cmd/internal/generator"
 	openapigen "github.com/sylphylabs/forge/cmd/internal/openapi/generator"
@@ -305,6 +312,121 @@ func TestForgeProblemSchemaMatchesRuntimeWireFormat(t *testing.T) {
 	if wireViolationKeys := sortedKeys(wireViolations[0]); !slices.Equal(wireViolationKeys, violationKeys) {
 		t.Fatalf("runtime violation keys = %v, OpenAPI violation properties = %v", wireViolationKeys, violationKeys)
 	}
+}
+
+// TestEnumSchemaMatchesRuntimeWireFormat locks the generated enum schema to the
+// runtime response encoder. Forge pins protojson without UseEnumNumbers, so an
+// enum reaches a caller as its value name, and the schema has to name the
+// values a caller can expect rather than the numbers it never sees.
+func TestEnumSchemaMatchesRuntimeWireFormat(t *testing.T) {
+	file := enumTestFile()
+	content, document := generateOpenAPIDocument(t, file)
+	wantValues := []string{"DEVICE_MODE_UNSPECIFIED", "DEVICE_MODE_GATEWAY", "DEVICE_MODE_EDGE"}
+
+	operation := findOperation(t, document, "/v1/devices/{name}", "GET")
+	replySchema := mediaTypeSchema(t, findOperationResponse(t, operation, "200").Content, "application/json")
+	assertEnumSchema(t, "reply property mode", findProperty(t, replySchema, "mode"), wantValues)
+
+	history := findProperty(t, replySchema, "history")
+	if schemaType(history) != "array" || history.Items == nil || history.Items.A == nil {
+		t.Fatalf("repeated enum property = %+v, want an array carrying an item schema", history)
+	}
+	assertEnumSchema(t, "reply property history items", history.Items.A.Schema(), wantValues)
+
+	// A query parameter reaches the same schema through the form codec, which
+	// resolves an enum by name before it falls back to a number.
+	assertEnumSchema(t, "query parameter mode", parameterSchema(t, operation, "mode", "query"), wantValues)
+
+	// The runtime half: render a reply through the published forge encoder and
+	// require the value it puts on the wire to be one the document declares.
+	replyMessage := dynamicpb.NewMessage(messageDescriptor(t, file, "DeviceReply"))
+	modeField := replyMessage.Descriptor().Fields().ByName("mode")
+	replyMessage.Set(modeField, protoreflect.ValueOfEnum(deviceModeGateway))
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest("GET", "/v1/devices/edge-1", nil)
+	request.Header.Set("Accept", "application/json")
+	if err := forgehttp.DefaultResponseEncoder(recorder, request, replyMessage); err != nil {
+		t.Fatalf("DefaultResponseEncoder() error = %v", err)
+	}
+
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(recorder.Body.Bytes(), &wire); err != nil {
+		t.Fatalf("decode runtime reply %q: %v", recorder.Body.String(), err)
+	}
+	var wireMode string
+	if err := json.Unmarshal(wire["mode"], &wireMode); err != nil {
+		t.Fatalf("runtime encoded the enum as %s, want the JSON string the schema declares: %v", wire["mode"], err)
+	}
+	if !slices.Contains(wantValues, wireMode) {
+		t.Fatalf("runtime enum value %q is not among the documented values %v", wireMode, wantValues)
+	}
+
+	validateOpenAPI32(t, content)
+}
+
+// assertEnumSchema requires a schema to describe an enum the way protojson
+// writes one: a string naming one of the declared values, with no format
+// annotation standing in for the value list.
+func assertEnumSchema(t *testing.T, where string, schema *base.Schema, want []string) {
+	t.Helper()
+
+	if got := schemaType(schema); got != "string" {
+		t.Fatalf("%s type = %q, want string", where, got)
+	}
+	if schema.Format != "" {
+		t.Fatalf("%s format = %q, want no format", where, schema.Format)
+	}
+	got := make([]string, 0, len(schema.Enum))
+	for _, node := range schema.Enum {
+		got = append(got, node.Value)
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("%s enum = %v, want %v", where, got, want)
+	}
+}
+
+// parameterSchema returns the schema of one named operation parameter.
+func parameterSchema(t *testing.T, operation *highv3.Operation, name, location string) *base.Schema {
+	t.Helper()
+
+	for _, parameter := range operation.Parameters {
+		if parameter.Name != name || parameter.In != location {
+			continue
+		}
+		if parameter.Schema == nil {
+			t.Fatalf("%s parameter %q has no schema", location, name)
+		}
+		return parameter.Schema.Schema()
+	}
+	t.Fatalf("%s parameter %q not found", location, name)
+	return nil
+}
+
+// messageDescriptor resolves one message of a test file so a dynamic message
+// can be rendered through the runtime encoder.
+func messageDescriptor(t *testing.T, file *descriptorpb.FileDescriptorProto, name protoreflect.Name) protoreflect.MessageDescriptor {
+	t.Helper()
+
+	files, err := protodesc.NewFiles(&descriptorpb.FileDescriptorSet{File: []*descriptorpb.FileDescriptorProto{
+		protodesc.ToFileDescriptorProto(descriptorpb.File_google_protobuf_descriptor_proto),
+		protodesc.ToFileDescriptorProto(anypb.File_google_protobuf_any_proto),
+		protodesc.ToFileDescriptorProto(annotations.File_google_api_http_proto),
+		protodesc.ToFileDescriptorProto(annotations.File_google_api_annotations_proto),
+		file,
+	}})
+	if err != nil {
+		t.Fatalf("protodesc.NewFiles() error = %v", err)
+	}
+	descriptor, err := files.FindFileByPath(file.GetName())
+	if err != nil {
+		t.Fatalf("FindFileByPath(%q) error = %v", file.GetName(), err)
+	}
+	message := descriptor.Messages().ByName(name)
+	if message == nil {
+		t.Fatalf("message %q not found in %s", name, file.GetName())
+	}
+	return message
 }
 
 // schemaType returns the single JSON Schema type of a parsed schema, or ""
@@ -722,6 +844,71 @@ func bindingTestFile(rules ...*annotations.HttpRule) *descriptorpb.FileDescripto
 	}
 }
 
+// deviceModeGateway is the non-zero DeviceMode value the enum fixture renders
+// through the runtime encoder.
+const deviceModeGateway = 1
+
+// enumTestFile declares an enum reached three ways: as a query parameter, as a
+// singular reply field, and as a repeated reply field.
+func enumTestFile() *descriptorpb.FileDescriptorProto {
+	return &descriptorpb.FileDescriptorProto{
+		Name:       proto.String("test/v1/device.proto"),
+		Package:    proto.String("test.v1"),
+		Syntax:     proto.String("proto3"),
+		Dependency: []string{"google/api/annotations.proto"},
+		Options: &descriptorpb.FileOptions{
+			GoPackage: proto.String("example.com/test/v1;testv1"),
+		},
+		EnumType: []*descriptorpb.EnumDescriptorProto{
+			{
+				Name: proto.String("DeviceMode"),
+				Value: []*descriptorpb.EnumValueDescriptorProto{
+					{Name: proto.String("DEVICE_MODE_UNSPECIFIED"), Number: proto.Int32(0)},
+					{Name: proto.String("DEVICE_MODE_GATEWAY"), Number: proto.Int32(deviceModeGateway)},
+					{Name: proto.String("DEVICE_MODE_EDGE"), Number: proto.Int32(2)},
+				},
+			},
+		},
+		MessageType: []*descriptorpb.DescriptorProto{
+			{
+				Name: proto.String("DeviceRequest"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					stringField("name", 1),
+					enumField("mode", 2, ".test.v1.DeviceMode"),
+				},
+			},
+			{
+				Name: proto.String("DeviceReply"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					enumField("mode", 1, ".test.v1.DeviceMode"),
+					repeatedField("history", 2, descriptorpb.FieldDescriptorProto_TYPE_ENUM, ".test.v1.DeviceMode"),
+				},
+			},
+		},
+		Service: []*descriptorpb.ServiceDescriptorProto{
+			{
+				Name: proto.String("Devices"),
+				Method: []*descriptorpb.MethodDescriptorProto{
+					httpMethod("GetDevice", ".test.v1.DeviceRequest", ".test.v1.DeviceReply", &annotations.HttpRule{
+						Pattern: &annotations.HttpRule_Get{Get: "/v1/devices/{name}"},
+					}),
+				},
+			},
+		},
+	}
+}
+
+// enumField builds an optional proto3 enum-typed field descriptor.
+func enumField(name string, number int32, typeName string) *descriptorpb.FieldDescriptorProto {
+	return &descriptorpb.FieldDescriptorProto{
+		Name:     proto.String(name),
+		Number:   proto.Int32(number),
+		Label:    descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+		Type:     descriptorpb.FieldDescriptorProto_TYPE_ENUM.Enum(),
+		TypeName: proto.String(typeName),
+	}
+}
+
 // stringField builds an optional proto3 string field descriptor.
 func stringField(name string, number int32) *descriptorpb.FieldDescriptorProto {
 	return &descriptorpb.FieldDescriptorProto{
@@ -860,7 +1047,6 @@ func testConfig() openapigen.Configuration {
 	description := ""
 	naming := "proto"
 	fqSchemaNaming := true
-	enumType := "string"
 	circularDepth := 2
 	defaultResponse := true
 	errorSchemaName := openapigen.DefaultErrorSchemaName
@@ -872,7 +1058,6 @@ func testConfig() openapigen.Configuration {
 		Description:     &description,
 		Naming:          &naming,
 		FQSchemaNaming:  &fqSchemaNaming,
-		EnumType:        &enumType,
 		CircularDepth:   &circularDepth,
 		DefaultResponse: &defaultResponse,
 		ErrorSchemaName: &errorSchemaName,

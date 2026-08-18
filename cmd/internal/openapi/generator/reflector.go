@@ -218,7 +218,7 @@ func (r *OpenAPIv3Reflector) schemaOrReferenceForField(field protoreflect.FieldD
 		kindSchema = wk.NewStringSchema()
 
 	case protoreflect.EnumKind:
-		kindSchema = wk.NewEnumSchema(r.conf.EnumType, field)
+		kindSchema = wk.NewEnumSchema(field)
 
 	case protoreflect.BoolKind:
 		kindSchema = wk.NewBooleanSchema()

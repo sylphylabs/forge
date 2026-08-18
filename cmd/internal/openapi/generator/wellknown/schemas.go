@@ -52,16 +52,20 @@ func NewNumberSchema(format string) *model.Schema {
 	return &model.Schema{Type: "number", Format: format}
 }
 
-func NewEnumSchema(enumType *string, field protoreflect.FieldDescriptor) *model.Schema {
-	schema := &model.Schema{Format: "enum"}
-	if enumType != nil && *enumType == typeString {
-		schema.Type = typeString
-		schema.Enum = make([]string, 0, field.Enum().Values().Len())
-		for i := 0; i < field.Enum().Values().Len(); i++ {
-			schema.Enum = append(schema.Enum, string(field.Enum().Values().Get(i).Name()))
-		}
-	} else {
-		schema.Type = typeInteger
+// NewEnumSchema describes an enum field as the value name it is serialized as.
+//
+// Forge pins protojson without UseEnumNumbers, so a response spells an enum
+// with its value name, and the form codec that binds query and path values
+// resolves a name before it falls back to a number. A document that promised an
+// integer described a wire format the framework cannot produce.
+func NewEnumSchema(field protoreflect.FieldDescriptor) *model.Schema {
+	values := field.Enum().Values()
+	schema := &model.Schema{
+		Type: typeString,
+		Enum: make([]string, 0, values.Len()),
+	}
+	for i := 0; i < values.Len(); i++ {
+		schema.Enum = append(schema.Enum, string(values.Get(i).Name()))
 	}
 	return schema
 }

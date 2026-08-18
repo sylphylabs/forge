@@ -43,7 +43,6 @@ type Configuration struct {
 	Description      *string
 	Naming           *string
 	FQSchemaNaming   *bool
-	EnumType         *string
 	CircularDepth    *int
 	DefaultResponse  *bool
 	ErrorSchemaName  *string

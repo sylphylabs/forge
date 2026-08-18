@@ -45,7 +45,6 @@ func main() {
 		Description:     s(""),
 		Naming:          s("json"),
 		FQSchemaNaming:  b(false),
-		EnumType:        s("integer"),
 		CircularDepth:   i(2),
 		DefaultResponse: b(true),
 		ErrorSchemaName: s("ForgeProblem"),
