@@ -4,8 +4,25 @@ package sylphy.test.v1;
 
 import "google/protobuf/descriptor.proto";
 import "sylphy/errors/v1/errors.proto";
+import "sylphy/openapi/v1/annotations.proto";
 
 option go_package = "example.com/sylphy/api-consumer/test/v1;testv1";
+
+option (sylphy.openapi.v1.document) = {
+  title: "Document API"
+  version: "1.0.0"
+  description: "Manages documents."
+  servers: {url: "https://api.example.com", description: "Production"}
+  security_schemes: {
+    name: "bearer"
+    description: "Service-issued JWT."
+    http_bearer: {bearer_format: "JWT"}
+  }
+  security_schemes: {
+    name: "api_key"
+    api_key_header: {header: "X-Api-Key"}
+  }
+};
 
 enum FailureReason {
   option (sylphy.errors.v1.default_kind) = KIND_INTERNAL;
@@ -29,7 +46,12 @@ extend google.protobuf.ServiceOptions {
 }
 
 message GetDocumentRequest {
-  string name = 1;
+  option (sylphy.openapi.v1.schema) = {description: "Request to fetch one document."};
+
+  string name = 1 [(sylphy.openapi.v1.field) = {
+    description: "Resource name of the document."
+    example: "documents/1"
+  }];
 }
 
 message GetDocumentReply {
@@ -43,5 +65,10 @@ service DocumentService {
   rpc GetDocument(GetDocumentRequest) returns (GetDocumentReply) {
     option idempotency_level = IDEMPOTENT;
     option (throws) = FAILURE_REASON_NOT_FOUND;
+    option (sylphy.openapi.v1.operation) = {
+      summary: "Get one document"
+      tags: "documents"
+      security: {schemes: "bearer"}
+    };
   }
 }

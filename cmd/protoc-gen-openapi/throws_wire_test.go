@@ -23,7 +23,8 @@ import (
 	"strings"
 	"testing"
 
-	v3 "github.com/google/gnostic/openapiv3"
+	highv3 "github.com/pb33f/libopenapi/datamodel/high/v3"
+	"github.com/pb33f/libopenapi/orderedmap"
 	forgeerrors "github.com/sylphylabs/forge/errors"
 	forgehttp "github.com/sylphylabs/forge/transport/http"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -119,17 +120,19 @@ func TestThrowsDeclarationToWireClosure(t *testing.T) {
 				t.Fatalf("wire status = %d, want %d", recorder.Code, tt.wantStatus)
 			}
 
-			// Closure 1: the wire status has exactly one entry in the
-			// operation's documented responses.
-			response := exactlyOneResponse(t, operation, strconv.Itoa(recorder.Code))
+			// Closure 1: the wire status is documented on the operation. The
+			// independent parser's response map cannot hold a duplicate code,
+			// and generation itself fails on one (the single-source guard), so
+			// presence here is presence exactly once.
+			response := findOperationResponse(t, operation, strconv.Itoa(recorder.Code))
 
 			// Closure 2: the wire Content-Type is the documented media type.
-			mediaTypes := response.GetContent().GetAdditionalProperties()
-			if len(mediaTypes) != 1 {
-				t.Fatalf("documented media types = %d, want 1", len(mediaTypes))
+			if orderedmap.Len(response.Content) != 1 {
+				t.Fatalf("documented media types = %d, want 1", orderedmap.Len(response.Content))
 			}
-			if contentType := recorder.Header().Get("Content-Type"); contentType != mediaTypes[0].GetName() {
-				t.Fatalf("wire Content-Type = %q, documented media type = %q", contentType, mediaTypes[0].GetName())
+			documentedPair := response.Content.First()
+			if contentType := recorder.Header().Get("Content-Type"); contentType != documentedPair.Key() {
+				t.Fatalf("wire Content-Type = %q, documented media type = %q", contentType, documentedPair.Key())
 			}
 
 			// Closure 3: the identity on the wire is listed in the documented
@@ -143,18 +146,15 @@ func TestThrowsDeclarationToWireClosure(t *testing.T) {
 				if err := json.Unmarshal(wire[member], &value); err != nil {
 					t.Fatalf("wire body has no string %q member: %v", member, err)
 				}
-				if !strings.Contains(response.GetDescription(), value) {
+				if !strings.Contains(response.Description, value) {
 					t.Fatalf("documented %d description %q does not name the wire %s %q",
-						recorder.Code, response.GetDescription(), member, value)
+						recorder.Code, response.Description, member, value)
 				}
 			}
 
 			// Closure 4: every member on the wire is a documented ForgeProblem
 			// property, and the response schema is that shared component.
-			reference := mediaTypes[0].GetValue().GetSchema().GetReference().GetXRef()
-			if want := "#/components/schemas/" + openapigen.DefaultErrorSchemaName; reference != want {
-				t.Fatalf("documented schema reference = %q, want %q", reference, want)
-			}
+			assertSchemaReference(t, documentedPair.Value(), "#/components/schemas/"+openapigen.DefaultErrorSchemaName)
 			for key := range wire {
 				if !slices.Contains(problemProperties, key) {
 					t.Fatalf("wire member %q is not a documented %s property %v",
@@ -165,23 +165,16 @@ func TestThrowsDeclarationToWireClosure(t *testing.T) {
 	}
 }
 
-// exactlyOneResponse returns the single documented response with the given
-// name and fails when the operation documents it zero times or twice.
-func exactlyOneResponse(t *testing.T, operation *v3.Operation, name string) *v3.Response {
+// assertSchemaReference asserts a media type's schema is a reference to the
+// given component.
+func assertSchemaReference(t *testing.T, mediaType *highv3.MediaType, want string) {
 	t.Helper()
 
-	var found *v3.Response
-	for _, response := range operation.GetResponses().GetResponseOrReference() {
-		if response.GetName() != name {
-			continue
-		}
-		if found != nil {
-			t.Fatalf("response %q is documented more than once", name)
-		}
-		found = response.GetValue().GetResponse()
+	schema := mediaType.Schema
+	if schema == nil || !schema.IsReference() {
+		t.Fatal("documented schema is not a reference")
 	}
-	if found == nil {
-		t.Fatalf("response %q is not documented", name)
+	if schema.GetReference() != want {
+		t.Fatalf("documented schema reference = %q, want %q", schema.GetReference(), want)
 	}
-	return found
 }

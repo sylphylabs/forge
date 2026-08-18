@@ -10,6 +10,7 @@ import (
 
 	"github.com/sylphylabs/forge/api/errors/v1"
 	message "github.com/sylphylabs/forge/api/message/v1"
+	openapi "github.com/sylphylabs/forge/api/openapi/v1"
 )
 
 func TestCustomOptions(t *testing.T) {
@@ -23,6 +24,34 @@ func TestCustomOptions(t *testing.T) {
 	proto.SetExtension(valueOptions, errors.E_Kind, errors.Kind_KIND_NOT_FOUND)
 	if got := proto.GetExtension(valueOptions, errors.E_Kind); got != errors.Kind_KIND_NOT_FOUND {
 		t.Fatalf("kind = %v, want KIND_NOT_FOUND", got)
+	}
+}
+
+func TestOpenAPIAnnotationOptions(t *testing.T) {
+	fileOptions := new(descriptorpb.FileOptions)
+	proto.SetExtension(fileOptions, openapi.E_Document, &openapi.Document{
+		Title:   "Library API",
+		Version: "1.2.3",
+		Servers: []*openapi.Server{{Url: "https://api.example.com"}},
+		SecuritySchemes: []*openapi.SecurityScheme{{
+			Name:   "bearer",
+			Scheme: &openapi.SecurityScheme_HttpBearer{HttpBearer: &openapi.HTTPBearer{BearerFormat: "JWT"}},
+		}},
+	})
+	document, ok := proto.GetExtension(fileOptions, openapi.E_Document).(*openapi.Document)
+	if !ok || document.GetTitle() != "Library API" || len(document.GetServers()) != 1 {
+		t.Fatalf("document annotation round-trip = %v", document)
+	}
+
+	methodOptions := new(descriptorpb.MethodOptions)
+	proto.SetExtension(methodOptions, openapi.E_Operation, &openapi.Operation{
+		Summary:  "Get one book",
+		Tags:     []string{"books"},
+		Security: []*openapi.SecurityRequirement{{Schemes: []string{"bearer"}}},
+	})
+	operation, ok := proto.GetExtension(methodOptions, openapi.E_Operation).(*openapi.Operation)
+	if !ok || operation.GetSummary() != "Get one book" || len(operation.GetSecurity()) != 1 {
+		t.Fatalf("operation annotation round-trip = %v", operation)
 	}
 }
 
@@ -49,6 +78,10 @@ func TestExtensionAllocations(t *testing.T) {
 		{"google.protobuf.EnumOptions", 500101, "sylphy.errors.v1.default_kind"},
 		{"google.protobuf.EnumValueOptions", 500102, "sylphy.errors.v1.kind"},
 		{"google.protobuf.MethodOptions", 500201, "sylphy.message.v1.subscribe"},
+		{"google.protobuf.FileOptions", 500301, "sylphy.openapi.v1.document"},
+		{"google.protobuf.MethodOptions", 500302, "sylphy.openapi.v1.operation"},
+		{"google.protobuf.MessageOptions", 500303, "sylphy.openapi.v1.schema"},
+		{"google.protobuf.FieldOptions", 500304, "sylphy.openapi.v1.field"},
 	}
 	for _, test := range tests {
 		extension, err := protoregistry.GlobalTypes.FindExtensionByNumber(test.message, test.number)

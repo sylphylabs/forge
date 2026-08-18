@@ -1,0 +1,184 @@
+syntax = "proto3";
+
+package sylphy.openapi.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/sylphylabs/forge/api/openapi/v1;openapi";
+option java_multiple_files = true;
+option java_package = "com.github.sylphy.openapi.v1";
+
+// This file is the OpenAPI annotation vocabulary of protoc-gen-openapi. It
+// carries only what protobuf descriptors cannot already say: presentation
+// metadata (titles, summaries, tags), server URLs, and security. Everything
+// the generator can derive — schemas from messages, paths from
+// google.api.http, error responses from sylphy.errors.v1 throws declarations —
+// stays derived and has no annotation here, so a document can never disagree
+// with the contract it was generated from.
+//
+// The vocabulary is deliberately small and grows append-only: a published
+// annotation is a frozen contract, so a field is added when a need is proven,
+// never speculatively.
+
+// Document supplies document-level metadata for a generated OpenAPI document.
+//
+//   option (sylphy.openapi.v1.document) = {
+//     title: "Library API"
+//     version: "1.2.3"
+//     servers: {url: "https://api.example.com"}
+//   };
+//
+// title, version, and description override the generator's corresponding
+// plugin options when set. In merged output mode the annotations of all
+// generated files are combined: scalar fields are last-writer-wins in file
+// order, servers and security schemes accumulate.
+message Document {
+  // title of the API, emitted as info.title.
+  string title = 1;
+
+  // version of the API, emitted as info.version.
+  string version = 2;
+
+  // description of the API, emitted as info.description.
+  string description = 3;
+
+  // servers the API is served on, emitted as the document servers list.
+  repeated Server servers = 4;
+
+  // security_schemes defines the named security schemes operation-level
+  // security requirements reference. Emitted under
+  // components.securitySchemes. A requirement naming a scheme no document
+  // annotation defines fails generation.
+  repeated SecurityScheme security_schemes = 5;
+}
+
+// Server is one server the API is available at.
+message Server {
+  // url of the server.
+  string url = 1;
+
+  // description of the server.
+  string description = 2;
+}
+
+// Operation supplies presentation metadata for one method's operation.
+//
+//   rpc GetBook(GetBookRequest) returns (Book) {
+//     option (google.api.http) = {get: "/v1/books/{name}"};
+//     option (sylphy.openapi.v1.operation) = {
+//       summary: "Get one book"
+//       tags: "books"
+//       security: {schemes: "bearer"}
+//     };
+//   }
+//
+// Responses are deliberately absent: error responses come from
+// sylphy.errors.v1 throws declarations and success responses from the method
+// signature, so there is no annotation through which documentation can drift
+// from the contract.
+message Operation {
+  // summary of the operation.
+  string summary = 1;
+
+  // description of the operation; overrides the method's leading comment
+  // when set.
+  string description = 2;
+
+  // tags of the operation; replaces the generated default (the service name)
+  // when set.
+  repeated string tags = 3;
+
+  // deprecated marks the operation deprecated.
+  bool deprecated = 4;
+
+  // security lists the operation's alternative security requirements: a
+  // request must satisfy every scheme of one requirement (AND within a
+  // requirement, OR across requirements). An empty requirement makes
+  // authentication optional, per OpenAPI semantics.
+  repeated SecurityRequirement security = 5;
+}
+
+// Schema supplies presentation metadata for one message's schema.
+message Schema {
+  // description of the schema; overrides the message's leading comment
+  // when set.
+  string description = 1;
+}
+
+// Field supplies presentation metadata for one field's property schema.
+message Field {
+  // description of the property; overrides the field's leading comment
+  // when set.
+  string description = 1;
+
+  // example of the property, emitted as a string value.
+  string example = 2;
+
+  // format of the property; overrides the format derived from the field's
+  // protobuf type.
+  string format = 3;
+}
+
+// SecurityScheme defines one named security scheme. The v1 vocabulary covers
+// the two most common forms — HTTP bearer and API key in a header — and other
+// forms are added append-only when a need is proven.
+message SecurityScheme {
+  // name is the component key requirements reference.
+  string name = 1;
+
+  // description of the scheme.
+  string description = 2;
+
+  oneof scheme {
+    // http_bearer is an HTTP authentication scheme with the Bearer method
+    // (type: http, scheme: bearer).
+    HTTPBearer http_bearer = 3;
+
+    // api_key_header is an API key carried in a request header
+    // (type: apiKey, in: header).
+    APIKeyHeader api_key_header = 4;
+  }
+}
+
+// HTTPBearer configures an HTTP bearer security scheme.
+message HTTPBearer {
+  // bearer_format is a hint naming how the bearer token is formatted,
+  // for example "JWT".
+  string bearer_format = 1;
+}
+
+// APIKeyHeader configures an API key security scheme carried in a header.
+message APIKeyHeader {
+  // header is the name of the header carrying the key.
+  string header = 1;
+}
+
+// SecurityRequirement names the schemes a request must satisfy together.
+message SecurityRequirement {
+  // schemes are names of security schemes defined by a Document annotation.
+  repeated string schemes = 1;
+}
+
+// The extensions live in the 5003xx block of the registered Forge range:
+// sylphy.errors.v1 occupies 500101–500103 and sylphy.message.v1 occupies
+// 500201, so the OpenAPI vocabulary takes the next hundred.
+
+// document attaches document-level OpenAPI metadata to a file.
+extend google.protobuf.FileOptions {
+  Document document = 500301;
+}
+
+// operation attaches operation-level OpenAPI metadata to a method.
+extend google.protobuf.MethodOptions {
+  Operation operation = 500302;
+}
+
+// schema attaches schema-level OpenAPI metadata to a message.
+extend google.protobuf.MessageOptions {
+  Schema schema = 500303;
+}
+
+// field attaches property-level OpenAPI metadata to a field.
+extend google.protobuf.FieldOptions {
+  Field field = 500304;
+}

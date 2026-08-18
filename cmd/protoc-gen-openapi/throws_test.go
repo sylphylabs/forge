@@ -4,7 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	v3 "github.com/google/gnostic/openapiv3"
+	highv3 "github.com/pb33f/libopenapi/datamodel/high/v3"
+	"github.com/pb33f/libopenapi/orderedmap"
 	errorapi "github.com/sylphylabs/forge/api/errors/v1"
 	"google.golang.org/genproto/googleapis/api/annotations"
 	"google.golang.org/protobuf/encoding/protowire"
@@ -33,34 +34,34 @@ func TestGenerateOpenAPIThrowsProducesExactErrorResponses(t *testing.T) {
 
 	forbidden := findOperationResponse(t, operation, "403")
 	wantForbidden := "PERMISSION_DENIED (test.v1) — reasons: FAILURE_REASON_DENIED, FAILURE_REASON_EXPIRED"
-	if forbidden.GetDescription() != wantForbidden {
-		t.Fatalf("403 description = %q, want %q", forbidden.GetDescription(), wantForbidden)
+	if forbidden.Description != wantForbidden {
+		t.Fatalf("403 description = %q, want %q", forbidden.Description, wantForbidden)
 	}
 	assertProblemContent(t, forbidden)
 
 	notFound := findOperationResponse(t, operation, "404")
-	if want := "NOT_FOUND (test.v1) — reasons: FAILURE_REASON_NOT_FOUND"; notFound.GetDescription() != want {
-		t.Fatalf("404 description = %q, want %q", notFound.GetDescription(), want)
+	if want := "NOT_FOUND (test.v1) — reasons: FAILURE_REASON_NOT_FOUND"; notFound.Description != want {
+		t.Fatalf("404 description = %q, want %q", notFound.Description, want)
 	}
 
 	internal := findOperationResponse(t, operation, "500")
-	if want := "INTERNAL (test.v1) — reasons: FAILURE_REASON_STALE"; internal.GetDescription() != want {
-		t.Fatalf("500 description = %q, want %q", internal.GetDescription(), want)
+	if want := "INTERNAL (test.v1) — reasons: FAILURE_REASON_STALE"; internal.Description != want {
+		t.Fatalf("500 description = %q, want %q", internal.Description, want)
 	}
 
 	// The service-level declaration alone covers the method with no method
 	// declaration of its own.
 	list := findOperation(t, document, "/v1/books", "GET")
 	listForbidden := findOperationResponse(t, list, "403")
-	if want := "PERMISSION_DENIED (test.v1) — reasons: FAILURE_REASON_DENIED"; listForbidden.GetDescription() != want {
-		t.Fatalf("service-level 403 description = %q, want %q", listForbidden.GetDescription(), want)
+	if want := "PERMISSION_DENIED (test.v1) — reasons: FAILURE_REASON_DENIED"; listForbidden.Description != want {
+		t.Fatalf("service-level 403 description = %q, want %q", listForbidden.Description, want)
 	}
 	if findOptionalResponse(list, "404") != nil {
 		t.Fatal("method-level declaration leaked onto a method that did not declare it")
 	}
 
 	// The default response coexists with the exact responses.
-	if operation.GetResponses().GetDefault().GetResponse() == nil {
+	if operation.Responses.Default == nil {
 		t.Fatal("default response was dropped from an operation with throws declarations")
 	}
 
@@ -76,8 +77,8 @@ func TestGenerateOpenAPIValidationConstraintsAddBadRequest(t *testing.T) {
 	badRequest := findOperationResponse(t, operation, "400")
 	want := "INVALID_ARGUMENT (forge.sylphylabs.io) — reasons: VALIDATION_FAILED\n" +
 		"INVALID_ARGUMENT (test.v1) — reasons: FAILURE_REASON_NOT_FOUND"
-	if badRequest.GetDescription() != want {
-		t.Fatalf("400 description = %q, want %q", badRequest.GetDescription(), want)
+	if badRequest.Description != want {
+		t.Fatalf("400 description = %q, want %q", badRequest.Description, want)
 	}
 	assertProblemContent(t, badRequest)
 
@@ -85,8 +86,8 @@ func TestGenerateOpenAPIValidationConstraintsAddBadRequest(t *testing.T) {
 	// request still documents the 400.
 	nested := findOperation(t, document, "/v1/books", "POST")
 	nestedBadRequest := findOperationResponse(t, nested, "400")
-	if want := "INVALID_ARGUMENT (forge.sylphylabs.io) — reasons: VALIDATION_FAILED"; nestedBadRequest.GetDescription() != want {
-		t.Fatalf("validation-only 400 description = %q, want %q", nestedBadRequest.GetDescription(), want)
+	if want := "INVALID_ARGUMENT (forge.sylphylabs.io) — reasons: VALIDATION_FAILED"; nestedBadRequest.Description != want {
+		t.Fatalf("validation-only 400 description = %q, want %q", nestedBadRequest.Description, want)
 	}
 
 	// An unconstrained request produces no 400.
@@ -112,8 +113,8 @@ func TestGenerateOpenAPIValidationReasonDisabled(t *testing.T) {
 	// Declared throws keep working with the option off.
 	operation := findOperation(t, document, "/v1/books/{name}", "GET")
 	badRequest := findOperationResponse(t, operation, "400")
-	if want := "INVALID_ARGUMENT (test.v1) — reasons: FAILURE_REASON_NOT_FOUND"; badRequest.GetDescription() != want {
-		t.Fatalf("400 description = %q, want %q", badRequest.GetDescription(), want)
+	if want := "INVALID_ARGUMENT (test.v1) — reasons: FAILURE_REASON_NOT_FOUND"; badRequest.Description != want {
+		t.Fatalf("400 description = %q, want %q", badRequest.Description, want)
 	}
 }
 
@@ -231,26 +232,6 @@ func TestGenerateOpenAPIThrowsRejectsDuplicateDeclaration(t *testing.T) {
 	assertThrowsGenerationFails(t, testConfig(), file, "declared more than once")
 }
 
-func TestGenerateOpenAPIThrowsRejectsHandwrittenResponseOnSameStatus(t *testing.T) {
-	file := throwsServiceFile(func(method *descriptorpb.MethodDescriptorProto) {
-		proto.SetExtension(method.Options, v3.E_Operation, &v3.Operation{
-			Responses: &v3.Responses{
-				ResponseOrReference: []*v3.NamedResponseOrReference{
-					{
-						Name: "404",
-						Value: &v3.ResponseOrReference{
-							Oneof: &v3.ResponseOrReference_Response{
-								Response: &v3.Response{Description: "handwritten not found"},
-							},
-						},
-					},
-				},
-			},
-		})
-	}, nil)
-	assertThrowsGenerationFails(t, testConfig(), file, "handwritten OpenAPI response")
-}
-
 func TestGenerateOpenAPIThrowsIgnoresUnresolvableExtensions(t *testing.T) {
 	// An extension no descriptor in the request declares stays unknown. It must
 	// not fail generation, and the resolvable declarations next to it must all
@@ -268,29 +249,26 @@ func TestGenerateOpenAPIThrowsIgnoresUnresolvableExtensions(t *testing.T) {
 
 // assertProblemContent asserts a response carries the shared Forge problem
 // schema under the problem media type.
-func assertProblemContent(t *testing.T, response *v3.Response) {
+func assertProblemContent(t *testing.T, response *highv3.Response) {
 	t.Helper()
 
-	mediaTypes := response.GetContent().GetAdditionalProperties()
-	if len(mediaTypes) != 1 || mediaTypes[0].GetName() != "application/problem+json" {
-		t.Fatalf("error response media types = %v, want application/problem+json", mediaTypes)
+	if orderedmap.Len(response.Content) != 1 {
+		t.Fatalf("error response media types = %d, want 1", orderedmap.Len(response.Content))
 	}
-	reference := mediaTypes[0].GetValue().GetSchema().GetReference().GetXRef()
-	if want := "#/components/schemas/" + openapigen.DefaultErrorSchemaName; reference != want {
-		t.Fatalf("error response schema reference = %q, want %q", reference, want)
+	pair := response.Content.First()
+	if pair.Key() != "application/problem+json" {
+		t.Fatalf("error response media type = %q, want application/problem+json", pair.Key())
+	}
+	schema := pair.Value().Schema
+	if schema == nil || !schema.IsReference() {
+		t.Fatal("error response schema is not a reference")
+	}
+	if want := "#/components/schemas/" + openapigen.DefaultErrorSchemaName; schema.GetReference() != want {
+		t.Fatalf("error response schema reference = %q, want %q", schema.GetReference(), want)
 	}
 }
 
-func findOptionalResponse(operation *v3.Operation, name string) *v3.Response {
-	for _, response := range operation.GetResponses().GetResponseOrReference() {
-		if response.GetName() == name {
-			return response.GetValue().GetResponse()
-		}
-	}
-	return nil
-}
-
-func generateThrowsDocument(t *testing.T, conf openapigen.Configuration, file *descriptorpb.FileDescriptorProto, dependencies ...*descriptorpb.FileDescriptorProto) (string, *v3.Document) {
+func generateThrowsDocument(t *testing.T, conf openapigen.Configuration, file *descriptorpb.FileDescriptorProto, dependencies ...*descriptorpb.FileDescriptorProto) (string, *highv3.Document) {
 	t.Helper()
 	dependencies = append([]*descriptorpb.FileDescriptorProto{errorsProtoWithThrows(), bufValidateFile()}, dependencies...)
 	plugin := newOpenAPIPluginForFile(t, file, dependencies...)
@@ -303,11 +281,7 @@ func generateThrowsDocument(t *testing.T, conf openapigen.Configuration, file *d
 		t.Fatalf("generation error = %s", response.GetError())
 	}
 	content := response.File[0].GetContent()
-	document, err := v3.ParseDocument([]byte(content))
-	if err != nil {
-		t.Fatalf("parse generated OpenAPI: %v", err)
-	}
-	return content, document
+	return content, parseDocument(t, content)
 }
 
 func assertThrowsGenerationFails(t *testing.T, conf openapigen.Configuration, file *descriptorpb.FileDescriptorProto, wantErr string) {

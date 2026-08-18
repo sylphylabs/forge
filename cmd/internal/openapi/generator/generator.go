@@ -22,7 +22,6 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"google.golang.org/genproto/googleapis/api/annotations"
@@ -31,10 +30,9 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	any_pb "google.golang.org/protobuf/types/known/anypb"
 
-	v3 "github.com/google/gnostic/openapiv3"
-
 	"github.com/sylphylabs/forge/cmd/internal/httpbinding"
 	wk "github.com/sylphylabs/forge/cmd/internal/openapi/generator/wellknown"
+	"github.com/sylphylabs/forge/cmd/internal/openapi/model"
 	"github.com/sylphylabs/forge/cmd/internal/throws"
 )
 
@@ -89,6 +87,7 @@ type OpenAPIv3Generator struct {
 	reflect           *OpenAPIv3Reflector
 	throws            *throws.Analyzer
 	generatedSchemas  []string // Names of schemas that have already been generated.
+	securitySchemes   map[string]bool
 	linterRulePattern *regexp.Regexp
 	pathPattern       *regexp.Regexp
 	namedPathPattern  *regexp.Regexp
@@ -103,6 +102,7 @@ func NewOpenAPIv3Generator(plugin *protogen.Plugin, conf Configuration, inputFil
 		inputFiles:        inputFiles,
 		reflect:           NewOpenAPIv3Reflector(conf),
 		generatedSchemas:  make([]string, 0),
+		securitySchemes:   make(map[string]bool),
 		linterRulePattern: regexp.MustCompile(`\(-- .* --\)`),
 		pathPattern:       regexp.MustCompile("{([^=}]+)}"),
 		namedPathPattern:  regexp.MustCompile("{(.+)=(.+)}"),
@@ -115,7 +115,7 @@ func (g *OpenAPIv3Generator) Run(outputFile *protogen.GeneratedFile) error {
 	if err != nil {
 		return err
 	}
-	bytes, err := d.YAMLValue("Generated with protoc-gen-openapi\n" + infoURL)
+	bytes, err := d.YAML("Generated with protoc-gen-openapi\n" + infoURL)
 	if err != nil {
 		return fmt.Errorf("failed to marshal yaml: %s", err.Error())
 	}
@@ -126,8 +126,8 @@ func (g *OpenAPIv3Generator) Run(outputFile *protogen.GeneratedFile) error {
 }
 
 // buildDocumentV3 builds an OpenAPIv3 document for a plugin request.
-func (g *OpenAPIv3Generator) buildDocumentV3() (*v3.Document, error) {
-	d := &v3.Document{}
+func (g *OpenAPIv3Generator) buildDocumentV3() (*model.Document, error) {
+	d := &model.Document{}
 	rules := httpbinding.NewSet()
 
 	analyzer, err := throws.NewAnalyzer(g.plugin.Request)
@@ -139,18 +139,50 @@ func (g *OpenAPIv3Generator) buildDocumentV3() (*v3.Document, error) {
 	}
 	g.throws = analyzer
 
-	d.Openapi = stringValue(g.conf.OpenAPIVersion, DefaultOpenAPIVersion)
-	d.Info = &v3.Info{
+	d.OpenAPI = stringValue(g.conf.OpenAPIVersion, DefaultOpenAPIVersion)
+	d.Info = model.Info{
 		Version:     *g.conf.Version,
 		Title:       *g.conf.Title,
 		Description: *g.conf.Description,
 	}
+	d.Components = &model.Components{}
 
-	d.Paths = &v3.Paths{}
-	d.Components = &v3.Components{
-		Schemas: &v3.SchemasOrReferences{
-			AdditionalProperties: []*v3.NamedSchemaOrReference{},
-		},
+	// Resolve every generated file's document annotation before any operation
+	// is built, so an operation's security requirement can reference a scheme
+	// any generated file defines. Scalar fields are last-writer-wins in file
+	// order; servers and security schemes accumulate.
+	var annotationServers []*model.Server
+	for _, file := range g.inputFiles {
+		if !file.Generate {
+			continue
+		}
+		annotation, err := g.documentAnnotation(file.Desc.Options())
+		if err != nil {
+			return nil, fmt.Errorf("file %s: %w", file.Desc.Path(), err)
+		}
+		if annotation == nil {
+			continue
+		}
+		if annotation.title != "" {
+			d.Info.Title = annotation.title
+		}
+		if annotation.version != "" {
+			d.Info.Version = annotation.version
+		}
+		if annotation.description != "" {
+			d.Info.Description = annotation.description
+		}
+		annotationServers = append(annotationServers, annotation.servers...)
+		for _, scheme := range annotation.schemes {
+			if g.securitySchemes[scheme.name] {
+				return nil, fmt.Errorf("file %s: security scheme %q is defined more than once", file.Desc.Path(), scheme.name)
+			}
+			g.securitySchemes[scheme.name] = true
+			d.Components.SecuritySchemes = append(d.Components.SecuritySchemes, &model.NamedSecurityScheme{
+				Name:   scheme.name,
+				Scheme: scheme.securityScheme(),
+			})
+		}
 	}
 
 	// Go through the files and add the services to the documents, keeping
@@ -158,12 +190,6 @@ func (g *OpenAPIv3Generator) buildDocumentV3() (*v3.Document, error) {
 	// add them later.
 	for _, file := range g.inputFiles {
 		if file.Generate {
-			// Merge any `Document` annotations with the current
-			extDocument := proto.GetExtension(file.Desc.Options(), v3.E_Document)
-			if extDocument != nil {
-				proto.Merge(d, extDocument.(*v3.Document))
-			}
-
 			if err := g.addPathsToDocumentV3(d, file.Services, rules); err != nil {
 				return nil, fmt.Errorf("file %s: %w", file.Desc.Path(), err)
 			}
@@ -175,7 +201,9 @@ func (g *OpenAPIv3Generator) buildDocumentV3() (*v3.Document, error) {
 	for len(g.reflect.requiredSchemas) > 0 {
 		count := len(g.reflect.requiredSchemas)
 		for _, file := range g.plugin.Files {
-			g.addSchemasForMessagesToDocumentV3(d, file.Messages)
+			if err := g.addSchemasForMessagesToDocumentV3(d, file.Messages); err != nil {
+				return nil, err
+			}
 		}
 		g.reflect.requiredSchemas = g.reflect.requiredSchemas[count:len(g.reflect.requiredSchemas)]
 	}
@@ -195,21 +223,21 @@ func (g *OpenAPIv3Generator) buildDocumentV3() (*v3.Document, error) {
 	allServers := []string{}
 
 	// If paths methods has servers, but they're all the same, then move servers to path level
-	for _, path := range d.Paths.Path {
+	for _, path := range d.Paths {
 		servers := []string{}
 		// Only 1 server will ever be set, per method, by the generator
 
-		for _, operation := range pathItemOperations(path.Value) {
+		for _, operation := range pathItemOperations(path.Item) {
 			if operation != nil && len(operation.Servers) == 1 {
-				servers = appendUnique(servers, operation.Servers[0].Url)
-				allServers = appendUnique(allServers, operation.Servers[0].Url)
+				servers = appendUnique(servers, operation.Servers[0].URL)
+				allServers = appendUnique(allServers, operation.Servers[0].URL)
 			}
 		}
 
 		if len(servers) == 1 {
-			path.Value.Servers = []*v3.Server{{Url: servers[0]}}
+			path.Item.Servers = []*model.Server{{URL: servers[0]}}
 
-			for _, operation := range pathItemOperations(path.Value) {
+			for _, operation := range pathItemOperations(path.Item) {
 				if operation != nil {
 					operation.Servers = nil
 				}
@@ -217,50 +245,62 @@ func (g *OpenAPIv3Generator) buildDocumentV3() (*v3.Document, error) {
 		}
 	}
 
-	// Set all servers on API level
+	// Set all derived servers on API level.
 	if len(allServers) > 0 {
-		d.Servers = []*v3.Server{}
+		d.Servers = []*model.Server{}
 		for _, server := range allServers {
-			d.Servers = append(d.Servers, &v3.Server{Url: server})
+			d.Servers = append(d.Servers, &model.Server{URL: server})
 		}
 	}
 
-	// If there is only 1 server, we can safely remove all path level servers
+	// If there is only 1 derived server, we can safely remove all path level servers
 	if len(allServers) == 1 {
-		for _, path := range d.Paths.Path {
-			path.Value.Servers = nil
+		for _, path := range d.Paths {
+			path.Item.Servers = nil
+		}
+	}
+
+	// Document-annotation servers come first: they are explicit, the
+	// default_host derivations follow. A derived URL an annotation already
+	// declares is not repeated.
+	if len(annotationServers) > 0 {
+		derived := d.Servers
+		d.Servers = annotationServers
+		for _, server := range derived {
+			declared := false
+			for _, annotated := range annotationServers {
+				if annotated.URL == server.URL {
+					declared = true
+					break
+				}
+			}
+			if !declared {
+				d.Servers = append(d.Servers, server)
+			}
 		}
 	}
 
 	// Sort the tags.
-	{
-		pairs := d.Tags
-		sort.Slice(pairs, func(i, j int) bool {
-			return pairs[i].Name < pairs[j].Name
-		})
-		d.Tags = pairs
-	}
+	sort.Slice(d.Tags, func(i, j int) bool {
+		return d.Tags[i].Name < d.Tags[j].Name
+	})
 	// Sort the paths.
-	{
-		pairs := d.Paths.Path
-		sort.Slice(pairs, func(i, j int) bool {
-			return pairs[i].Name < pairs[j].Name
-		})
-		d.Paths.Path = pairs
-	}
+	sort.Slice(d.Paths, func(i, j int) bool {
+		return d.Paths[i].Path < d.Paths[j].Path
+	})
 	// Sort the schemas.
-	{
-		pairs := d.Components.Schemas.AdditionalProperties
-		sort.Slice(pairs, func(i, j int) bool {
-			return pairs[i].Name < pairs[j].Name
-		})
-		d.Components.Schemas.AdditionalProperties = pairs
-	}
+	sort.Slice(d.Components.Schemas, func(i, j int) bool {
+		return d.Components.Schemas[i].Name < d.Components.Schemas[j].Name
+	})
+	// Sort the security schemes.
+	sort.Slice(d.Components.SecuritySchemes, func(i, j int) bool {
+		return d.Components.SecuritySchemes[i].Name < d.Components.SecuritySchemes[j].Name
+	})
 	return d, nil
 }
 
-func pathItemOperations(path *v3.PathItem) []*v3.Operation {
-	return []*v3.Operation{
+func pathItemOperations(path *model.PathItem) []*model.Operation {
+	return []*model.Operation{
 		path.Get,
 		path.Put,
 		path.Post,
@@ -310,7 +350,7 @@ func (g *OpenAPIv3Generator) findAndFormatFieldName(name string, inMessage *prot
 // messages can have any number of sub messages - including circular (e.g. sub.subsub.sub.subsub.id)
 
 // buildQueryParamsV3 extracts any valid query params, including sub and recursive messages.
-func (g *OpenAPIv3Generator) buildQueryParamsV3(field *protogen.Field, coveredFields []string) []*v3.ParameterOrReference {
+func (g *OpenAPIv3Generator) buildQueryParamsV3(field *protogen.Field, coveredFields []string) []*model.Parameter {
 	depths := map[string]int{}
 	return g._buildQueryParamsV3(field, string(field.Desc.Name()), depths, coveredFields)
 }
@@ -322,22 +362,18 @@ func (g *OpenAPIv3Generator) buildQueryParamsV3(field *protogen.Field, coveredFi
 // the schema, so the parameter they wrap is written once here. Path parameters
 // are not built through it: they are required and carry a different location,
 // and folding those differences in would mean passing them as flags.
-func queryParameter(name, description string, schema *v3.SchemaOrReference) *v3.ParameterOrReference {
-	return &v3.ParameterOrReference{
-		Oneof: &v3.ParameterOrReference_Parameter{
-			Parameter: &v3.Parameter{
-				Name:        name,
-				In:          inQuery,
-				Description: description,
-				Required:    false,
-				Schema:      schema,
-			},
-		},
+func queryParameter(name, description string, schema *model.Schema) *model.Parameter {
+	return &model.Parameter{
+		Name:        name,
+		In:          inQuery,
+		Description: description,
+		Required:    false,
+		Schema:      schema,
 	}
 }
 
-func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, fieldPath string, depths map[string]int, covered []string) []*v3.ParameterOrReference {
-	parameters := []*v3.ParameterOrReference{}
+func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, fieldPath string, depths map[string]int, covered []string) []*model.Parameter {
+	parameters := []*model.Parameter{}
 	if contains(covered, fieldPath) {
 		return parameters
 	}
@@ -420,10 +456,8 @@ func (g *OpenAPIv3Generator) _buildQueryParamsV3(field *protogen.Field, fieldPat
 				subFieldPath := fieldPath + "." + string(subField.Desc.Name())
 				subParams := g._buildQueryParamsV3(subField, subFieldPath, depths, covered)
 				for _, subParam := range subParams {
-					if param, ok := subParam.Oneof.(*v3.ParameterOrReference_Parameter); ok {
-						param.Parameter.Name = queryFieldName + "." + param.Parameter.Name
-						parameters = append(parameters, subParam)
-					}
+					subParam.Name = queryFieldName + "." + subParam.Name
+					parameters = append(parameters, subParam)
 				}
 			}
 		}
@@ -450,7 +484,7 @@ type operationRequest struct {
 }
 
 // buildOperationV3 constructs an operation for a set of values.
-func (g *OpenAPIv3Generator) buildOperationV3(d *v3.Document, req operationRequest) (*v3.Operation, string) {
+func (g *OpenAPIv3Generator) buildOperationV3(d *model.Document, req operationRequest) (*model.Operation, string) {
 	operationID, tagName, description, defaultHost := req.operationID, req.tagName, req.description, req.defaultHost
 	binding, inputMessage, outputMessage := req.binding, req.inputMessage, req.outputMessage
 	path := binding.Path
@@ -463,7 +497,7 @@ func (g *OpenAPIv3Generator) buildOperationV3(d *v3.Document, req operationReque
 		coveredParameters = append(coveredParameters, variable.FieldPath)
 	}
 	// Initialize the list of operation parameters.
-	parameters := []*v3.ParameterOrReference{}
+	parameters := []*model.Parameter{}
 
 	// Find simple path parameters like {id}
 	if allMatches := g.pathPattern.FindAllStringSubmatch(path, -1); allMatches != nil {
@@ -474,7 +508,7 @@ func (g *OpenAPIv3Generator) buildOperationV3(d *v3.Document, req operationReque
 			path = strings.Replace(path, matches[1], pathParameter, 1)
 
 			// Add the path parameters to the operation parameters.
-			var fieldSchema *v3.SchemaOrReference
+			var fieldSchema *model.Schema
 
 			var fieldDescription string
 			field := g.findField(pathParameter, inputMessage)
@@ -483,27 +517,16 @@ func (g *OpenAPIv3Generator) buildOperationV3(d *v3.Document, req operationReque
 				fieldDescription = g.filterCommentString(field.Comments.Leading)
 			} else {
 				// If field does not exist, it is safe to set it to string, as it is ignored downstream
-				fieldSchema = &v3.SchemaOrReference{
-					Oneof: &v3.SchemaOrReference_Schema{
-						Schema: &v3.Schema{
-							Type: "string",
-						},
-					},
-				}
+				fieldSchema = &model.Schema{Type: "string"}
 			}
 
-			parameters = append(parameters,
-				&v3.ParameterOrReference{
-					Oneof: &v3.ParameterOrReference_Parameter{
-						Parameter: &v3.Parameter{
-							Name:        pathParameter,
-							In:          "path",
-							Description: fieldDescription,
-							Required:    true,
-							Schema:      fieldSchema,
-						},
-					},
-				})
+			parameters = append(parameters, &model.Parameter{
+				Name:        pathParameter,
+				In:          "path",
+				Description: fieldDescription,
+				Required:    true,
+				Schema:      fieldSchema,
+			})
 		}
 	}
 
@@ -532,24 +555,13 @@ func (g *OpenAPIv3Generator) buildOperationV3(d *v3.Document, req operationReque
 
 		// Add the named path parameters to the operation parameters.
 		for _, namedPathParameter := range namedPathParameters {
-			parameters = append(parameters,
-				&v3.ParameterOrReference{
-					Oneof: &v3.ParameterOrReference_Parameter{
-						Parameter: &v3.Parameter{
-							Name:        namedPathParameter,
-							In:          "path",
-							Required:    true,
-							Description: "The " + namedPathParameter + " id.",
-							Schema: &v3.SchemaOrReference{
-								Oneof: &v3.SchemaOrReference_Schema{
-									Schema: &v3.Schema{
-										Type: "string",
-									},
-								},
-							},
-						},
-					},
-				})
+			parameters = append(parameters, &model.Parameter{
+				Name:        namedPathParameter,
+				In:          "path",
+				Required:    true,
+				Description: "The " + namedPathParameter + " id.",
+				Schema:      &model.Schema{Type: "string"},
+			})
 		}
 	}
 
@@ -569,44 +581,32 @@ func (g *OpenAPIv3Generator) buildOperationV3(d *v3.Document, req operationReque
 	if binding.ResponseBodyField != nil {
 		name, content = g.reflect.responseContentForField(binding.ResponseBodyField)
 	}
-	responses := &v3.Responses{
-		ResponseOrReference: []*v3.NamedResponseOrReference{
-			{
-				Name: name,
-				Value: &v3.ResponseOrReference{
-					Oneof: &v3.ResponseOrReference_Response{
-						Response: &v3.Response{
-							Description: "OK",
-							Content:     content,
-						},
-					},
-				},
+	responses := []*model.NamedResponse{
+		{
+			Name: name,
+			Response: &model.Response{
+				Description: "OK",
+				Content:     content,
 			},
 		},
 	}
 
 	// Add the default response if needed.
 	if *g.conf.DefaultResponse {
-		defaultResponse := &v3.NamedResponseOrReference{
+		responses = append(responses, &model.NamedResponse{
 			Name: defaultResponseName,
-			Value: &v3.ResponseOrReference{
-				Oneof: &v3.ResponseOrReference_Response{
-					Response: &v3.Response{
-						Description: defaultErrorDescription,
-						Content:     g.forgeErrorContent(d),
-					},
-				},
+			Response: &model.Response{
+				Description: defaultErrorDescription,
+				Content:     g.forgeErrorContent(d),
 			},
-		}
-
-		responses.ResponseOrReference = append(responses.ResponseOrReference, defaultResponse)
+		})
 	}
 
 	// Create the operation.
-	op := &v3.Operation{
+	op := &model.Operation{
 		Tags:        []string{tagName},
 		Description: description,
-		OperationId: operationID,
+		OperationID: operationID,
 		Parameters:  parameters,
 		Responses:   responses,
 	}
@@ -615,14 +615,14 @@ func (g *OpenAPIv3Generator) buildOperationV3(d *v3.Document, req operationReque
 		hostURL, err := url.Parse(defaultHost)
 		if err == nil {
 			hostURL.Scheme = "https"
-			op.Servers = append(op.Servers, &v3.Server{Url: hostURL.String()})
+			op.Servers = append(op.Servers, &model.Server{URL: hostURL.String()})
 		}
 	}
 
 	// If a body field is specified, we need to pass a message as the request body.
 	if binding.Body != "" {
-		var requestSchema *v3.SchemaOrReference
-		var requestContent *v3.MediaTypes
+		var requestSchema *model.Schema
+		var requestContent model.MediaTypes
 
 		if binding.Body == "*" {
 			// Pass the entire request message as the request body.
@@ -641,52 +641,75 @@ func (g *OpenAPIv3Generator) buildOperationV3(d *v3.Document, req operationReque
 			requestContent = wk.NewApplicationJSONMediaType(requestSchema)
 		}
 
-		op.RequestBody = &v3.RequestBodyOrReference{
-			Oneof: &v3.RequestBodyOrReference_RequestBody{
-				RequestBody: &v3.RequestBody{
-					Required: true,
-					Content:  requestContent,
-				},
-			},
+		op.RequestBody = &model.RequestBody{
+			Required: true,
+			Content:  requestContent,
 		}
 	}
 	return op, path
 }
 
+// applyOperationAnnotation merges a method's (sylphy.openapi.v1.operation)
+// annotation into its built operation. Every security requirement must
+// reference a scheme some document annotation defines: a dangling name is a
+// contradiction, not a decoration.
+func (g *OpenAPIv3Generator) applyOperationAnnotation(op *model.Operation, annotation *annOperation) error {
+	if annotation == nil {
+		return nil
+	}
+	op.Summary = annotation.summary
+	if annotation.description != "" {
+		op.Description = annotation.description
+	}
+	if len(annotation.tags) > 0 {
+		op.Tags = annotation.tags
+	}
+	op.Deprecated = annotation.deprecated
+	for _, requirement := range annotation.security {
+		for _, scheme := range requirement {
+			if !g.securitySchemes[scheme.Name] {
+				return fmt.Errorf("security requirement references scheme %q, which no document annotation defines", scheme.Name)
+			}
+		}
+	}
+	op.Security = annotation.security
+	return nil
+}
+
 // addOperationToDocumentV3 adds an operation to the specified path/method.
-func (g *OpenAPIv3Generator) addOperationToDocumentV3(d *v3.Document, op *v3.Operation, path string, methodName string) error {
-	var selectedPathItem *v3.NamedPathItem
-	for _, namedPathItem := range d.Paths.Path {
-		if namedPathItem.Name == path {
+func (g *OpenAPIv3Generator) addOperationToDocumentV3(d *model.Document, op *model.Operation, path string, methodName string) error {
+	var selectedPathItem *model.NamedPathItem
+	for _, namedPathItem := range d.Paths {
+		if namedPathItem.Path == path {
 			selectedPathItem = namedPathItem
 			break
 		}
 	}
 	// If we get here, we need to create a path item.
 	if selectedPathItem == nil {
-		selectedPathItem = &v3.NamedPathItem{Name: path, Value: &v3.PathItem{}}
-		d.Paths.Path = append(d.Paths.Path, selectedPathItem)
+		selectedPathItem = &model.NamedPathItem{Path: path, Item: &model.PathItem{}}
+		d.Paths = append(d.Paths, selectedPathItem)
 	}
 	// Set the operation on the specified method.
 	switch methodName {
 	case http.MethodGet:
-		selectedPathItem.Value.Get = op
+		selectedPathItem.Item.Get = op
 	case http.MethodPost:
-		selectedPathItem.Value.Post = op
+		selectedPathItem.Item.Post = op
 	case http.MethodPut:
-		selectedPathItem.Value.Put = op
+		selectedPathItem.Item.Put = op
 	case http.MethodDelete:
-		selectedPathItem.Value.Delete = op
+		selectedPathItem.Item.Delete = op
 	case http.MethodOptions:
-		selectedPathItem.Value.Options = op
+		selectedPathItem.Item.Options = op
 	case http.MethodHead:
-		selectedPathItem.Value.Head = op
+		selectedPathItem.Item.Head = op
 	case http.MethodPatch:
-		selectedPathItem.Value.Patch = op
+		selectedPathItem.Item.Patch = op
 	case http.MethodTrace:
-		selectedPathItem.Value.Trace = op
+		selectedPathItem.Item.Trace = op
 	default:
-		return fmt.Errorf("HTTP method %q cannot be represented by the current OpenAPI model", methodName)
+		return fmt.Errorf("HTTP method %q is not emitted by this generator", methodName)
 	}
 	return nil
 }
@@ -695,49 +718,14 @@ func (g *OpenAPIv3Generator) forgeErrorSchemaName() string {
 	return stringValue(g.conf.ErrorSchemaName, DefaultErrorSchemaName)
 }
 
-func (g *OpenAPIv3Generator) forgeErrorContent(d *v3.Document) *v3.MediaTypes {
+func (g *OpenAPIv3Generator) forgeErrorContent(d *model.Document) model.MediaTypes {
 	schemaName := g.forgeErrorSchemaName()
 	g.addSchemaToDocumentV3(d, wk.NewForgeProblemSchema(schemaName))
-	return wk.NewProblemJSONMediaType(&v3.SchemaOrReference{
-		Oneof: &v3.SchemaOrReference_Reference{
-			Reference: &v3.Reference{XRef: "#/components/schemas/" + schemaName},
-		},
-	})
-}
-
-func (g *OpenAPIv3Generator) applyForgeErrorResponses(d *v3.Document, op *v3.Operation) {
-	if op == nil || op.Responses == nil {
-		return
-	}
-	for _, namedResponse := range op.Responses.ResponseOrReference {
-		if namedResponse == nil || namedResponse.Value == nil || !isErrorResponseName(namedResponse.Name) {
-			continue
-		}
-		response, ok := namedResponse.Value.Oneof.(*v3.ResponseOrReference_Response)
-		if !ok || response.Response == nil || hasResponseContent(response.Response) {
-			continue
-		}
-		response.Response.Content = g.forgeErrorContent(d)
-	}
-}
-
-func isErrorResponseName(name string) bool {
-	if name == defaultResponseName {
-		return true
-	}
-	code, err := strconv.Atoi(name)
-	if err != nil {
-		return false
-	}
-	return code >= 400 && code <= 599
-}
-
-func hasResponseContent(response *v3.Response) bool {
-	return response.Content != nil && len(response.Content.AdditionalProperties) != 0
+	return wk.NewProblemJSONMediaType(&model.Schema{Ref: "#/components/schemas/" + schemaName})
 }
 
 // addPathsToDocumentV3 adds paths from a specified file descriptor.
-func (g *OpenAPIv3Generator) addPathsToDocumentV3(d *v3.Document, services []*protogen.Service, rules *httpbinding.Set) error {
+func (g *OpenAPIv3Generator) addPathsToDocumentV3(d *model.Document, services []*protogen.Service, rules *httpbinding.Set) error {
 	for _, service := range services {
 		annotationsCount := 0
 
@@ -775,12 +763,13 @@ func (g *OpenAPIv3Generator) addPathsToDocumentV3(d *v3.Document, services []*pr
 					outputMessage: outputMessage,
 				})
 
-				// Merge any `Operation` annotations with the current.
-				extOperation := proto.GetExtension(method.Desc.Options(), v3.E_Operation)
-				if extOperation != nil {
-					proto.Merge(op, extOperation.(*v3.Operation))
+				operationAnnotation, err := g.operationAnnotation(method.Desc.Options())
+				if err != nil {
+					return fmt.Errorf("RPC %s: %w", method.Desc.FullName(), err)
 				}
-				g.applyForgeErrorResponses(d, op)
+				if err := g.applyOperationAnnotation(op, operationAnnotation); err != nil {
+					return fmt.Errorf("RPC %s: %w", method.Desc.FullName(), err)
+				}
 
 				throwsResponses, err := g.methodErrorResponses(service, method)
 				if err != nil {
@@ -802,27 +791,29 @@ func (g *OpenAPIv3Generator) addPathsToDocumentV3(d *v3.Document, services []*pr
 
 		if annotationsCount > 0 {
 			comment := g.filterCommentString(service.Comments.Leading)
-			d.Tags = append(d.Tags, &v3.Tag{Name: service.GoName, Description: comment})
+			d.Tags = append(d.Tags, &model.Tag{Name: service.GoName, Description: comment})
 		}
 	}
 	return nil
 }
 
 // addSchemaForMessageToDocumentV3 adds the schema to the document if required
-func (g *OpenAPIv3Generator) addSchemaToDocumentV3(d *v3.Document, schema *v3.NamedSchemaOrReference) {
+func (g *OpenAPIv3Generator) addSchemaToDocumentV3(d *model.Document, schema *model.NamedSchema) {
 	if contains(g.generatedSchemas, schema.Name) {
 		return
 	}
 	g.generatedSchemas = append(g.generatedSchemas, schema.Name)
-	d.Components.Schemas.AdditionalProperties = append(d.Components.Schemas.AdditionalProperties, schema)
+	d.Components.Schemas = append(d.Components.Schemas, schema)
 }
 
 // addSchemasForMessagesToDocumentV3 adds info from one file descriptor.
-func (g *OpenAPIv3Generator) addSchemasForMessagesToDocumentV3(d *v3.Document, messages []*protogen.Message) {
+func (g *OpenAPIv3Generator) addSchemasForMessagesToDocumentV3(d *model.Document, messages []*protogen.Message) error {
 	// For each message, generate a definition.
 	for _, message := range messages {
 		if message.Messages != nil {
-			g.addSchemasForMessagesToDocumentV3(d, message.Messages)
+			if err := g.addSchemasForMessagesToDocumentV3(d, message.Messages); err != nil {
+				return err
+			}
 		}
 
 		schemaName := g.reflect.formatMessageName(message.Desc)
@@ -851,10 +842,15 @@ func (g *OpenAPIv3Generator) addSchemasForMessagesToDocumentV3(d *v3.Document, m
 			continue
 		}
 
-		// Build an array holding the fields of the message.
-		definitionProperties := &v3.Properties{
-			AdditionalProperties: make([]*v3.NamedSchemaOrReference, 0),
+		// The message annotation overrides the comment-derived description.
+		if annotation, err := g.schemaAnnotation(message.Desc.Options()); err != nil {
+			return fmt.Errorf("message %s: %w", message.Desc.FullName(), err)
+		} else if annotation != nil && annotation.description != "" {
+			messageDescription = annotation.description
 		}
+
+		// Build an array holding the fields of the message.
+		var definitionProperties []*model.NamedSchema
 
 		var required []string
 		for _, field := range message.Fields {
@@ -882,64 +878,61 @@ func (g *OpenAPIv3Generator) addSchemasForMessagesToDocumentV3(d *v3.Document, m
 				}
 			}
 
+			fieldAnnotation, err := g.fieldAnnotation(field.Desc.Options())
+			if err != nil {
+				return fmt.Errorf("field %s: %w", field.Desc.FullName(), err)
+			}
+			if fieldAnnotation != nil && fieldAnnotation.description != "" {
+				description = fieldAnnotation.description
+			}
+
 			// The field is either described by a reference or a schema.
 			fieldSchema := g.reflect.schemaOrReferenceForField(field.Desc)
 			if fieldSchema == nil {
 				continue
 			}
 
-			// If this field has siblings and is a $ref now, create a new schema use `allOf` to wrap it
-			wrapperNeeded := inputOnly || outputOnly || description != ""
-			if wrapperNeeded {
-				if _, ok := fieldSchema.Oneof.(*v3.SchemaOrReference_Reference); ok {
-					fieldSchema = &v3.SchemaOrReference{Oneof: &v3.SchemaOrReference_Schema{Schema: &v3.Schema{
-						AllOf: []*v3.SchemaOrReference{fieldSchema},
-					}}}
+			// A $ref cannot carry sibling members, so a reference that needs any
+			// is wrapped in an `allOf` schema holding them.
+			wrapperNeeded := inputOnly || outputOnly || description != "" || fieldAnnotation != nil
+			if wrapperNeeded && fieldSchema.Ref != "" {
+				fieldSchema = &model.Schema{AllOf: []*model.Schema{fieldSchema}}
+			}
+
+			if fieldSchema.Ref == "" {
+				fieldSchema.Description = description
+				fieldSchema.ReadOnly = outputOnly
+				fieldSchema.WriteOnly = inputOnly
+
+				if fieldAnnotation != nil {
+					if fieldAnnotation.example != "" {
+						fieldSchema.Example = fieldAnnotation.example
+						fieldSchema.HasExample = true
+					}
+					if fieldAnnotation.format != "" {
+						fieldSchema.Format = fieldAnnotation.format
+					}
 				}
 			}
 
-			if schema, ok := fieldSchema.Oneof.(*v3.SchemaOrReference_Schema); ok {
-				schema.Schema.Description = description
-				schema.Schema.ReadOnly = outputOnly
-				schema.Schema.WriteOnly = inputOnly
-
-				// Merge any `Property` annotations with the current
-				extProperty := proto.GetExtension(field.Desc.Options(), v3.E_Property)
-				if extProperty != nil {
-					proto.Merge(schema.Schema, extProperty.(*v3.Schema))
-				}
-			}
-
-			definitionProperties.AdditionalProperties = append(
-				definitionProperties.AdditionalProperties,
-				&v3.NamedSchemaOrReference{
-					Name:  g.reflect.formatFieldName(field.Desc),
-					Value: fieldSchema,
-				},
-			)
+			definitionProperties = append(definitionProperties, &model.NamedSchema{
+				Name:   g.reflect.formatFieldName(field.Desc),
+				Schema: fieldSchema,
+			})
 		}
 
-		schema := &v3.Schema{
+		schema := &model.Schema{
 			Type:        "object",
 			Description: messageDescription,
 			Properties:  definitionProperties,
 			Required:    required,
 		}
 
-		// Merge any `Schema` annotations with the current
-		extSchema := proto.GetExtension(message.Desc.Options(), v3.E_Schema)
-		if extSchema != nil {
-			proto.Merge(schema, extSchema.(*v3.Schema))
-		}
-
 		// Add the schema to the components.schema list.
-		g.addSchemaToDocumentV3(d, &v3.NamedSchemaOrReference{
-			Name: schemaName,
-			Value: &v3.SchemaOrReference{
-				Oneof: &v3.SchemaOrReference_Schema{
-					Schema: schema,
-				},
-			},
+		g.addSchemaToDocumentV3(d, &model.NamedSchema{
+			Name:   schemaName,
+			Schema: schema,
 		})
 	}
+	return nil
 }
