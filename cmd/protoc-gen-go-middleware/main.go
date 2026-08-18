@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 
 	"github.com/sylphylabs/forge/cmd/internal/generator"
+	"github.com/sylphylabs/forge/cmd/internal/throws"
 )
 
 var (
@@ -27,6 +28,13 @@ func main() {
 		if err != nil {
 			return err
 		}
+		analyzer, err := throws.NewAnalyzer(gen.Request)
+		if err != nil {
+			return err
+		}
+		if err := analyzer.ScanMarkers(); err != nil {
+			return err
+		}
 		for _, file := range gen.Files {
 			if file.Generate {
 				if err := validateMiddlewareIdentifiers(gen, file, mode, *generateGRPC); err != nil {
@@ -38,7 +46,7 @@ func main() {
 			if !file.Generate {
 				continue
 			}
-			if _, err := generateMiddlewareFile(gen, file, mode, *generateGRPC); err != nil {
+			if _, err := generateMiddlewareFile(gen, file, mode, *generateGRPC, analyzer); err != nil {
 				return err
 			}
 		}

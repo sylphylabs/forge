@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -10,12 +11,14 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/sylphylabs/forge/cmd/internal/generator"
+	"github.com/sylphylabs/forge/cmd/internal/throws"
 )
 
 const (
 	contextPackage       = protogen.GoImportPath("context")
 	fmtPackage           = protogen.GoImportPath("fmt")
 	middlewarePackage    = protogen.GoImportPath("github.com/sylphylabs/forge/middleware")
+	throwsPackage        = protogen.GoImportPath("github.com/sylphylabs/forge/middleware/throws")
 	transportHTTPPackage = protogen.GoImportPath("github.com/sylphylabs/forge/transport/http")
 	grpcPackage          = protogen.GoImportPath("google.golang.org/grpc")
 )
@@ -46,7 +49,7 @@ func parseHTTPMode(value string) (httpMode, error) {
 	}
 }
 
-func generateMiddlewareFile(gen *protogen.Plugin, file *protogen.File, mode httpMode, grpcEnabled bool) (*protogen.GeneratedFile, error) {
+func generateMiddlewareFile(gen *protogen.Plugin, file *protogen.File, mode httpMode, grpcEnabled bool, analyzer *throws.Analyzer) (*protogen.GeneratedFile, error) {
 	if len(file.Services) == 0 {
 		return nil, nil
 	}
@@ -66,15 +69,109 @@ func generateMiddlewareFile(gen *protogen.Plugin, file *protogen.File, mode http
 
 	for _, service := range file.Services {
 		httpMethods := enabledHTTPMethods(service, mode)
+		hasHTTP := mode != httpDisabled && len(httpMethods) > 0
+		declarations, err := resolveServiceThrows(analyzer, service, hasHTTP || grpcEnabled)
+		if err != nil {
+			return nil, err
+		}
 		generateMiddlewarePlan(g, service)
-		if mode != httpDisabled && len(httpMethods) > 0 {
-			generateHTTPMiddlewareWrapper(g, service, httpMethods, mode)
+		generateThrowsDeclarations(g, service, declarations)
+		if hasHTTP {
+			generateHTTPMiddlewareWrapper(g, service, httpMethods, mode, declarations)
 		}
 		if grpcEnabled {
-			generateGRPCMiddlewareWrapper(g, service)
+			generateGRPCMiddlewareWrapper(g, service, declarations)
 		}
 	}
 	return g, nil
+}
+
+// serviceThrows is the resolved throws declarations of one service: for each
+// declared method, the identity set its wrapper asserts against.
+type serviceThrows struct {
+	// byMethod holds the effective identity set of each declared method,
+	// deduplicated to the (domain, reason) pairs the runtime asserts on and
+	// sorted for deterministic output. A method with no declaration is absent.
+	byMethod map[*protogen.Method][]runtimeIdentity
+	// declared lists the declared methods in service order.
+	declared []*protogen.Method
+}
+
+// runtimeIdentity is the (domain, reason) pair compiled into generated code.
+type runtimeIdentity struct {
+	domain string
+	reason string
+}
+
+// resolveServiceThrows resolves every method's effective declaration through
+// the shared analyzer — the same resolution, and the same failure semantics,
+// that protoc-gen-openapi applies to the identical declarations. When no
+// wrapper is emitted there is no assertion point, so resolution is skipped
+// and existing plan-only output stays untouched.
+func resolveServiceThrows(analyzer *throws.Analyzer, service *protogen.Service, wrappersEnabled bool) (*serviceThrows, error) {
+	result := &serviceThrows{byMethod: make(map[*protogen.Method][]runtimeIdentity)}
+	if !wrappersEnabled {
+		return result, nil
+	}
+	for _, method := range service.Methods {
+		identities, err := analyzer.MethodDeclarations(service.Desc.Options(), method.Desc.Options())
+		if err != nil {
+			return nil, fmt.Errorf("resolving throws for %s/%s: %w", service.Desc.FullName(), method.Desc.Name(), err)
+		}
+		if len(identities) == 0 {
+			continue
+		}
+		seen := make(map[runtimeIdentity]bool, len(identities))
+		pairs := make([]runtimeIdentity, 0, len(identities))
+		for _, identity := range identities {
+			pair := runtimeIdentity{domain: identity.Domain, reason: identity.Reason}
+			if seen[pair] {
+				continue
+			}
+			seen[pair] = true
+			pairs = append(pairs, pair)
+		}
+		sort.Slice(pairs, func(i, j int) bool {
+			if pairs[i].domain != pairs[j].domain {
+				return pairs[i].domain < pairs[j].domain
+			}
+			return pairs[i].reason < pairs[j].reason
+		})
+		result.byMethod[method] = pairs
+		result.declared = append(result.declared, method)
+	}
+	return result, nil
+}
+
+// hasDeclarations reports whether any method of the service participates in
+// runtime assertion.
+func (s *serviceThrows) hasDeclarations() bool { return len(s.declared) > 0 }
+
+// declarationVar names the generated package-level throws declaration of one
+// method.
+func declarationVar(service *protogen.Service, method *protogen.Method) string {
+	return "_" + service.GoName + "Throws" + method.GoName
+}
+
+// generateThrowsDeclarations emits one compiled declaration per declared
+// method. The identity set is static data resolved at generation time: the
+// request path reads no descriptors and performs no reflection.
+func generateThrowsDeclarations(g *protogen.GeneratedFile, service *protogen.Service, declarations *serviceThrows) {
+	if !declarations.hasDeclarations() {
+		return
+	}
+	for _, method := range declarations.declared {
+		fullMethod := string(service.Desc.FullName()) + "/" + string(method.Desc.Name())
+		g.P("// ", declarationVar(service, method), " is the declared error identity set of ", fullMethod, ",")
+		g.P("// compiled from its Protobuf throws declarations. Wrappers assert every")
+		g.P("// returned error against it.")
+		g.P("var ", declarationVar(service, method), " = ", throwsPackage.Ident("Declare"), "(", strconv.Quote(fullMethod), ",")
+		for _, identity := range declarations.byMethod[method] {
+			g.P(throwsPackage.Ident("Identity"), "{Domain: ", strconv.Quote(identity.domain), ", Reason: ", strconv.Quote(identity.reason), "},")
+		}
+		g.P(")")
+		g.P()
+	}
 }
 
 func validateMiddlewareIdentifiers(gen *protogen.Plugin, file *protogen.File, mode httpMode, grpcEnabled bool) error {
@@ -162,7 +259,7 @@ func generateMiddlewarePlan(g *protogen.GeneratedFile, service *protogen.Service
 	g.P()
 }
 
-func generateHTTPMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.Service, methods []*protogen.Method, mode httpMode) {
+func generateHTTPMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.Service, methods []*protogen.Method, mode httpMode, declarations *serviceThrows) {
 	wrapper := "_" + service.GoName + "HTTPMiddlewareServer"
 	expectedMethodSet := 1
 	if mode == httpAll {
@@ -180,6 +277,9 @@ func generateHTTPMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.
 		} else {
 			g.P("handler", method.GoName, " ", middlewarePackage.Ident("UnaryHandler"))
 		}
+		if _, ok := declarations.byMethod[method]; ok {
+			g.P("assert", method.GoName, " ", throwsPackage.Ident("Assert"))
+		}
 	}
 	g.P("}")
 	g.P()
@@ -191,23 +291,24 @@ func generateHTTPMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.
 	}
 
 	g.P("// Wrap", service.GoName, "HTTPServer snapshots plan and composes every HTTP handler before registration.")
-	g.P("func Wrap", service.GoName, "HTTPServer(srv ", service.GoName, "HTTPServer, plan ", service.GoName, "Middleware) (",
-		service.GoName, "HTTPServer, error) {")
+	served := servedDeclarations(methods, declarations)
+	generateWrapperSignature(g, service, "HTTP", service.GoName+"HTTPServer", served)
 	g.P("if srv == nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: nil "+service.GoName+" HTTP server"), ") }")
+	generateThrowsConfig(g, service, "HTTP", served)
 	g.P("wrapped := &", wrapper, "{", service.GoName, "HTTPServer: srv}")
 	for _, method := range methods {
-		generateComposeBlock(g, service, method, "HTTP", "srv", "wrapped")
+		generateComposeBlock(g, service, method, "HTTP", "srv", "wrapped", declarations)
 	}
 	g.P("return wrapped, nil")
 	g.P("}")
 	g.P()
 
 	for _, method := range methods {
-		generateHTTPWrapperMethod(g, service, method, wrapper)
+		generateHTTPWrapperMethod(g, service, method, wrapper, declarations)
 	}
 }
 
-func generateGRPCMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.Service) {
+func generateGRPCMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.Service, declarations *serviceThrows) {
 	wrapper := "_" + service.GoName + "GRPCMiddlewareServer"
 	g.P("type ", wrapper, " struct {")
 	g.P(service.GoName, "Server")
@@ -216,6 +317,9 @@ func generateGRPCMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.
 			g.P("handler", method.GoName, " ", middlewarePackage.Ident("StreamHandler"))
 		} else {
 			g.P("handler", method.GoName, " ", middlewarePackage.Ident("UnaryHandler"))
+		}
+		if _, ok := declarations.byMethod[method]; ok {
+			g.P("assert", method.GoName, " ", throwsPackage.Ident("Assert"))
 		}
 	}
 	g.P("}")
@@ -228,22 +332,79 @@ func generateGRPCMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.
 	}
 
 	g.P("// Wrap", service.GoName, "GRPCServer snapshots plan and composes every gRPC handler before registration.")
-	g.P("func Wrap", service.GoName, "GRPCServer(srv ", service.GoName, "Server, plan ", service.GoName, "Middleware) (", service.GoName, "Server, error) {")
+	served := servedDeclarations(service.Methods, declarations)
+	generateWrapperSignature(g, service, "gRPC", service.GoName+"Server", served)
 	g.P("if srv == nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: nil "+service.GoName+" gRPC server"), ") }")
+	generateThrowsConfig(g, service, "gRPC", served)
 	g.P("wrapped := &", wrapper, "{", service.GoName, "Server: srv}")
 	for _, method := range service.Methods {
-		generateComposeBlock(g, service, method, "gRPC", "srv", "wrapped")
+		generateComposeBlock(g, service, method, "gRPC", "srv", "wrapped", declarations)
 	}
 	g.P("return wrapped, nil")
 	g.P("}")
 	g.P()
 
 	for _, method := range service.Methods {
-		generateGRPCWrapperMethod(g, service, method, wrapper)
+		generateGRPCWrapperMethod(g, service, method, wrapper, declarations)
 	}
 }
 
-func generateComposeBlock(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, transport, serviceVar, wrapperVar string) {
+// servedDeclarations filters declarations to the methods a wrapper actually
+// serves: the HTTP wrapper in annotated mode covers only annotated methods,
+// so a declared-but-unserved method contributes no assertion — and no
+// configuration surface — to that wrapper.
+func servedDeclarations(methods []*protogen.Method, declarations *serviceThrows) *serviceThrows {
+	served := &serviceThrows{byMethod: make(map[*protogen.Method][]runtimeIdentity)}
+	for _, method := range declarations.declared {
+		if !containsMethod(methods, method) {
+			continue
+		}
+		served.byMethod[method] = declarations.byMethod[method]
+		served.declared = append(served.declared, method)
+	}
+	return served
+}
+
+func containsMethod(methods []*protogen.Method, method *protogen.Method) bool {
+	for _, candidate := range methods {
+		if candidate == method {
+			return true
+		}
+	}
+	return false
+}
+
+// generateWrapperSignature emits the Wrap constructor's signature. A service
+// with throws declarations accepts assertion options; one without keeps the
+// exact signature it had before declarations existed, so undeclared services
+// generate byte-identical wrappers.
+func generateWrapperSignature(g *protogen.GeneratedFile, service *protogen.Service, transport, serverType string, declarations *serviceThrows) {
+	name := "Wrap" + service.GoName + "HTTPServer"
+	if transport == "gRPC" {
+		name = "Wrap" + service.GoName + "GRPCServer"
+	}
+	if declarations.hasDeclarations() {
+		g.P("func ", name, "(srv ", serverType, ", plan ", service.GoName, "Middleware, opts ...", throwsPackage.Ident("Option"), ") (", serverType, ", error) {")
+		return
+	}
+	g.P("func ", name, "(srv ", serverType, ", plan ", service.GoName, "Middleware) (", serverType, ", error) {")
+}
+
+// generateThrowsConfig resolves the assertion configuration once per wrapper
+// construction, covering the declared methods this wrapper serves.
+func generateThrowsConfig(g *protogen.GeneratedFile, service *protogen.Service, transport string, declarations *serviceThrows) {
+	if !declarations.hasDeclarations() {
+		return
+	}
+	vars := make([]string, 0, len(declarations.declared))
+	for _, method := range declarations.declared {
+		vars = append(vars, declarationVar(service, method))
+	}
+	g.P("throwsConfig, err := ", throwsPackage.Ident("NewConfig"), "(opts, ", strings.Join(vars, ", "), ")")
+	g.P("if err != nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: wrapping "+string(service.Desc.FullName())+" "+transport+": %w"), ", err) }")
+}
+
+func generateComposeBlock(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, transport, serviceVar, wrapperVar string, declarations *serviceThrows) {
 	field := "handler" + method.GoName
 	qualified := string(service.Desc.FullName()) + "/" + string(method.Desc.Name()) + " " + transport
 	g.P("{")
@@ -267,6 +428,9 @@ func generateComposeBlock(g *protogen.GeneratedFile, service *protogen.Service, 
 	}
 	g.P("if err != nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: wrapping "+qualified+": %w"), ", err) }")
 	g.P(wrapperVar, ".", field, " = handler")
+	if _, ok := declarations.byMethod[method]; ok {
+		g.P(wrapperVar, ".assert", method.GoName, " = throwsConfig.Asserter(", declarationVar(service, method), ")")
+	}
 	g.P("}")
 }
 
@@ -299,32 +463,37 @@ type wrapperTransport struct {
 	nativeStream protogen.GoIdent
 }
 
-func generateHTTPWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, wrapper string) {
+func generateHTTPWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, wrapper string, declarations *serviceThrows) {
 	generateWrapperMethod(g, service, method, wrapperTransport{
 		name:         "HTTP",
 		wrapper:      wrapper,
 		streamType:   service.GoName + "_" + method.GoName + "HTTPServer",
 		nativeStream: transportHTTPPackage.Ident("ServerStream"),
-	})
+	}, declarations)
 }
 
-func generateGRPCWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, wrapper string) {
+func generateGRPCWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, wrapper string, declarations *serviceThrows) {
 	generateWrapperMethod(g, service, method, wrapperTransport{
 		name:         "gRPC",
 		wrapper:      wrapper,
 		streamType:   service.GoName + "_" + method.GoName + "Server",
 		nativeStream: grpcPackage.Ident("ServerStream"),
-	})
+	}, declarations)
 }
 
-func generateWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, tr wrapperTransport) {
+func generateWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, tr wrapperTransport, declarations *serviceThrows) {
 	wrapper, transport, streamType, nativeStream := tr.wrapper, tr.name, tr.streamType, tr.nativeStream
 	field := "handler" + method.GoName
+	_, asserted := declarations.byMethod[method]
 	if !isStreaming(method) {
 		g.P("func (s *", wrapper, ") ", method.GoName, "(ctx ", contextPackage.Ident("Context"),
 			", request *", method.Input.GoIdent, ") (*", method.Output.GoIdent, ", error) {")
 		g.P("reply, err := s.", field, "(ctx, request)")
-		g.P("if err != nil { return nil, err }")
+		if asserted {
+			g.P("if err != nil { return nil, s.assert", method.GoName, "(ctx, err) }")
+		} else {
+			g.P("if err != nil { return nil, err }")
+		}
 		g.P("typed, ok := reply.(*", method.Output.GoIdent, ")")
 		g.P("if !ok { return nil, ", fmtPackage.Ident("Errorf"), "(",
 			strconv.Quote("forge: "+string(service.Desc.FullName())+"/"+string(method.Desc.Name())+
@@ -339,13 +508,21 @@ func generateWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service,
 		g.P("func (s *", wrapper, ") ", method.GoName, "(stream ", streamType, ") error {")
 		g.P("base := &", adapter, "{ServerStream: stream, ctx: ", contextPackage.Ident("WithValue"),
 			"(stream.Context(), ", adapter, "Key{}, ", nativeStream, "(stream))}")
-		g.P("return s.", field, "(nil, base)")
+		if asserted {
+			g.P("return s.assert", method.GoName, "(base.Context(), s.", field, "(nil, base))")
+		} else {
+			g.P("return s.", field, "(nil, base)")
+		}
 	} else {
 		g.P("func (s *", wrapper, ") ", method.GoName, "(request *", method.Input.GoIdent,
 			", stream ", streamType, ") error {")
 		g.P("base := &", adapter, "{ServerStream: stream, ctx: ", contextPackage.Ident("WithValue"),
 			"(stream.Context(), ", adapter, "Key{}, ", nativeStream, "(stream))}")
-		g.P("return s.", field, "(request, base)")
+		if asserted {
+			g.P("return s.assert", method.GoName, "(base.Context(), s.", field, "(request, base))")
+		} else {
+			g.P("return s.", field, "(request, base)")
+		}
 	}
 	g.P("}")
 	g.P()

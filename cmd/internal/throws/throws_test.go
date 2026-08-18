@@ -1,4 +1,4 @@
-package generator
+package throws
 
 import (
 	"strings"
@@ -13,12 +13,12 @@ import (
 // exact function the runtime error encoder uses.
 func TestProjectDeclaredStatusMatchesRuntime(t *testing.T) {
 	for kind := forgeerrors.KindUnknown + 1; kind <= forgeerrors.KindDataLoss; kind++ {
-		status, err := projectDeclaredStatus(kind.String())
+		status, err := ProjectDeclaredStatus(kind.String())
 		if err != nil {
-			t.Fatalf("projectDeclaredStatus(%s) error = %v", kind, err)
+			t.Fatalf("ProjectDeclaredStatus(%s) error = %v", kind, err)
 		}
 		if status < 400 || status > 599 {
-			t.Fatalf("projectDeclaredStatus(%s) = %d, outside 4xx/5xx", kind, status)
+			t.Fatalf("ProjectDeclaredStatus(%s) = %d, outside 4xx/5xx", kind, status)
 		}
 	}
 }
@@ -27,18 +27,18 @@ func TestProjectDeclaredStatusMatchesRuntime(t *testing.T) {
 // No real Kind projects outside the error range, so the projection is stubbed
 // to produce the contradiction the guard exists for.
 func TestProjectDeclaredStatusRejectsNonErrorStatus(t *testing.T) {
-	original := statusOf
-	statusOf = func(forgeerrors.Kind) int { return 200 }
-	defer func() { statusOf = original }()
+	original := StatusOf
+	StatusOf = func(forgeerrors.Kind) int { return 200 }
+	defer func() { StatusOf = original }()
 
-	_, err := projectDeclaredStatus(forgeerrors.KindNotFound.String())
+	_, err := ProjectDeclaredStatus(forgeerrors.KindNotFound.String())
 	if err == nil || !strings.Contains(err.Error(), "not a 4xx or 5xx status") {
-		t.Fatalf("projectDeclaredStatus() error = %v, want the 4xx/5xx guard", err)
+		t.Fatalf("ProjectDeclaredStatus() error = %v, want the 4xx/5xx guard", err)
 	}
 }
 
 func TestProjectDeclaredStatusRejectsUnknownKindName(t *testing.T) {
-	if _, err := projectDeclaredStatus("NO_SUCH_KIND"); err == nil {
-		t.Fatal("projectDeclaredStatus() accepted an unknown kind name")
+	if _, err := ProjectDeclaredStatus("NO_SUCH_KIND"); err == nil {
+		t.Fatal("ProjectDeclaredStatus() accepted an unknown kind name")
 	}
 }

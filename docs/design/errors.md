@@ -279,6 +279,53 @@ prefix, and a reason that is only the prefix. Generation is all-or-nothing
 for each file; it never silently skips an error value from a participating
 enum.
 
+### Disclosure gating and the undisclosed mark
+
+`PublicOf` discloses full public data only for identities declared through
+`MustDefine` — the constructor shared by generated `*_errors.pb.go` files and
+deliberate hand-written sentinels. An undeclared local identity (an `Of()`
+product, an ad-hoc `WithDomain`/`WithReason` pair) projects as
+`Public{Kind: KindInternal, TraceID: …}`; a remote error passes through
+verbatim because its producer already chose to disclose it (ADR-0012).
+
+Two exported helpers expose the pieces of that gate other layers build on:
+
+```go
+func Undisclose(err error) error
+func IsUndisclosed(err error) bool
+func IsContract(domain, reason string) bool
+```
+
+`Undisclose` marks one error occurrence as not disclosable. The mark overrides
+every other rule in `PublicOf`, including the remote pass-through: the
+projection is `KindInternal` plus the trace ID, always. Nothing else about the
+error changes — `Is` still matches its sentinel, `KindOf` still reports its
+class, and the original chain stays reachable through `Unwrap` — so logging
+and metrics observe the real failure before the single disclosure gate hides
+it. It is the mechanism behind strict throws assertion (ADR-0014): a
+generated wrapper that catches an undeclared identity leaving a method marks
+the error rather than rewriting it, and the one gate does the projecting.
+
+`IsContract` answers the same registry query `PublicOf` performs: whether a
+(domain, reason) pair was declared in this process. Runtime assertion uses it
+to separate an undeclared contract identity — which would leave the process
+fully disclosed — from an anonymous local failure, which projects as an
+internal error anyway.
+
+### Runtime throws assertion
+
+A method's throws declarations (ADR-0013) drive its OpenAPI error responses;
+generated middleware wrappers additionally assert at runtime that every error
+identity leaving a declared method is in its declared set (ADR-0014). The
+effective set is the declaration union plus the framework domain
+(`errors.Domain`, operational identities reachable on any method) plus
+undeclared local identities (they project internal regardless). Remote
+identities are not exempt: an undeclared remote identity on the wire is a
+business layer that forwarded a foreign sentinel instead of translating it
+once — exactly the layering violation the table above forbids. The runtime
+contract lives in `middleware/throws`; the wrapper wiring is described in
+[`generated-middleware.md`](generated-middleware.md).
+
 ## Service layering
 
 The meaning of a failure is decided in exactly one place:

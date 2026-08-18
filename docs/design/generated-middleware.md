@@ -313,6 +313,64 @@ The HTTP adapter owns SSE and WebSocket protocol behavior. The gRPC adapter owns
 gRPC metadata, peer, compression, status, and trailer behavior. Neither changes
 the common middleware ordering.
 
+## Throws Assertion
+
+A service whose Protobuf contract carries throws declarations (ADR-0013) gets
+runtime enforcement in its generated wrappers (ADR-0014). The generator
+resolves each method's effective declaration — the union of method-level and
+service-level marked extensions, through the same `cmd/internal/throws`
+resolver protoc-gen-openapi uses — and emits it as static package data:
+
+```go
+var _LibraryServiceThrowsGetBook = throws.Declare(
+	"throws.test.v1.LibraryService/GetBook",
+	throws.Identity{Domain: "throws.test.v1", Reason: "FAILURE_REASON_DENIED"},
+	throws.Identity{Domain: "throws.test.v1", Reason: "FAILURE_REASON_NOT_FOUND"},
+)
+```
+
+The wrapper's outermost methods — after the composed chain returns, on both
+the HTTP and gRPC wrappers — check every non-nil error against the method's
+set. That position is deliberate: an error minted by plan middleware (a
+per-method authorization denial, for example) is asserted, while the
+transport encoder and `PublicOf` stay method-blind and keep the request-path
+contract intact. The assertion itself is a precomposed closure over static
+data; it reads no descriptors, matches no strings, and consults no registry
+on the request path beyond the errors package's own contract query.
+
+Identities exempt from assertion: the framework domain (`errors.Domain`,
+operational failures reachable on any method), undeclared local identities
+(they project as internal errors regardless), and errors already marked
+undisclosed. Remote identities are asserted — an undeclared one is an
+untranslated foreign sentinel leaving the process.
+
+A wrapper for a service with declarations accepts trailing
+`...throws.Option` arguments:
+
+```go
+httpService, err := documentv1.WrapDocumentServiceHTTPServer(service, plan,
+	throws.Strict("GetDocument"))
+```
+
+- Default (observe): a violation is logged — method, identity, and the
+  declaration line that would fix it — and the error passes unchanged.
+- `throws.Strict(methods ...string)`: violations are marked with
+  `errors.Undisclose`, so the disclosure gate projects them as internal
+  failures; the in-process error is untouched.
+- `throws.FailUndeclared(methods ...string)` or `FORGE_THROWS=fail` in the
+  environment at construction time: violations are replaced by
+  `throws.ErrUndeclared` wrapping the original, for integration tests.
+- `Declaration.Unobserved()` reports declared identities that never left the
+  method, for pruning stale declarations.
+
+A service without any declaration is untouched: its generated file is
+byte-identical to pre-assertion output, its constructors keep the
+two-argument signature, and no assertion code exists on its request path.
+Errors raised above the wrapper — server-wide middleware, transport-native
+layers, the panic backstop — do not pass a per-method assertion point;
+framework identities among them are exempt by domain, and application
+server-wide errors can be documented with `service_throws` but not asserted.
+
 ## Transport-Specific Middleware
 
 The complete server order is:
