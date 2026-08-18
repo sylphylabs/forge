@@ -56,6 +56,12 @@ func PublicOf(err error) Public {
 	if e == nil {
 		return Public{}
 	}
+	if e.undisclosed {
+		// Undisclose is a deliberate verdict that overrides every other rule,
+		// including the remote pass-through: it exists precisely for identities
+		// whose disclosure would otherwise be legal but is not wanted here.
+		return Public{Kind: KindInternal, TraceID: e.trace}
+	}
 	if !e.remote && !isContract(e.domain, e.reason) {
 		return Public{Kind: KindInternal, TraceID: e.trace}
 	}
@@ -98,6 +104,51 @@ func FromPublic(p Public) *Error {
 		e.violations = append([]Violation(nil), p.Violations...)
 	}
 	return e
+}
+
+// Undisclose returns err with its public data marked as not disclosable.
+//
+// [PublicOf] projects the result as an internal failure carrying only its
+// trace ID, regardless of every other disclosure rule — a declared contract
+// identity and even a remote pass-through are overridden, because Undisclose
+// is a deliberate verdict about this occurrence, not a property of the
+// identity. Everything else about the error is untouched: [Is] still matches
+// its sentinel, accessors still return its fields, and the original error
+// remains reachable through [Unwrap], so logging and metrics observe the real
+// failure before the projection hides it.
+//
+// It is the mechanism behind strict throws assertion: a generated wrapper
+// that catches an undeclared contract identity leaving a method does not
+// rewrite the error — classification stays observable in-process — it marks
+// the error, and the single disclosure gate does the rest.
+func Undisclose(err error) error {
+	if err == nil {
+		return nil
+	}
+	c := FromError(err).clone()
+	c.undisclosed = true
+	// Keep the complete original chain reachable: FromError selects the first
+	// *Error in the chain, and any wrapping outside it must stay diagnosable.
+	c.cause = err
+	return c
+}
+
+// IsUndisclosed reports whether err carries the [Undisclose] marker.
+func IsUndisclosed(err error) bool {
+	e := asError(err)
+	return e != nil && e.undisclosed
+}
+
+// IsContract reports whether the identity pair was declared through
+// [MustDefine] in this process.
+//
+// It answers "may this identity disclose itself through [PublicOf]?" — the
+// same registry consultation the projection performs. Runtime assertion uses
+// it to separate an undeclared contract identity, which would leave the
+// process fully disclosed, from an anonymous local failure, which projects as
+// an internal error anyway.
+func IsContract(domain, reason string) bool {
+	return isContract(domain, reason)
 }
 
 // asError returns err as an *Error, or nil when it did not originate here.

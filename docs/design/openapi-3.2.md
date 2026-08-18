@@ -220,11 +220,13 @@ changing only the version string is not sufficient evidence of support.
 
 ## Next Gates
 
-1. Enforce the declarations at runtime — assert an outbound reason is in the
-   method's declared set — and diff generated OpenAPI documents in CI, so a
-   declaration that drifts from behavior fails a gate instead of aging into
-   fiction. Method-level declarations themselves are implemented; see
-   [ADR-0013](../adr/0013-method-error-declaration-via-marked-extensions.md).
+1. Diff generated OpenAPI documents in CI, so a declaration that drifts from
+   behavior fails a gate instead of aging into fiction. Method-level
+   declarations are implemented
+   ([ADR-0013](../adr/0013-method-error-declaration-via-marked-extensions.md)),
+   and generated wrappers assert at runtime that an outbound reason is in the
+   method's declared set
+   ([ADR-0014](../adr/0014-runtime-throws-assertion-in-generated-wrappers.md)).
 2. Project supported Protovalidate and field-behavior annotations into JSON
    Schema constraints.
 3. Replace or extend the gnostic model before enabling `QUERY`, arbitrary
