@@ -344,7 +344,10 @@ func (c *Config) Asserter(declaration *Declaration) Assert {
 			slog.String("reason", identity.Reason),
 			slog.String("error_kind", e.Kind().String()),
 			slog.Bool("remote", e.IsRemote()),
-			slog.String("fix", fmt.Sprintf("declare %s in the (throws) option of %s, or translate the error before it leaves the method", identity.Reason, declaration.method)),
+			slog.String("fix", fmt.Sprintf(
+				"declare %s in the (throws) option of %s, or translate the error before it leaves the method",
+				identity.Reason, declaration.method,
+			)),
 			slog.Any("error", err),
 		)
 		switch methodMode {

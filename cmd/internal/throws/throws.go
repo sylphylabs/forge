@@ -41,6 +41,10 @@ const (
 	MarkerName         = "sylphy.errors.v1.throws"
 	kindExtensionName  = "sylphy.errors.v1.kind"
 	defaultKindExtName = "sylphy.errors.v1.default_kind"
+
+	methodOptionsName  = "google.protobuf.MethodOptions"
+	serviceOptionsName = "google.protobuf.ServiceOptions"
+	markerHostHint     = "the marker belongs on extensions of " + methodOptionsName + " or " + serviceOptionsName
 )
 
 // StatusOf projects an error Kind onto an HTTP status code. It is the same
@@ -155,14 +159,17 @@ func (a *Analyzer) enumExtension(options proto.Message, fullName protoreflect.Fu
 // google.protobuf.ServiceOptions whose type is a repeated enum.
 func validateMarkedField(fd protoreflect.FieldDescriptor) error {
 	if !fd.IsExtension() {
-		return fmt.Errorf("field %s carries (%s) but is not an extension field; the marker belongs on extensions of google.protobuf.MethodOptions or google.protobuf.ServiceOptions", fd.FullName(), MarkerName)
+		return fmt.Errorf("field %s carries (%s) but is not an extension field; %s", fd.FullName(), MarkerName, markerHostHint)
 	}
 	extendee := fd.ContainingMessage().FullName()
-	if extendee != "google.protobuf.MethodOptions" && extendee != "google.protobuf.ServiceOptions" {
-		return fmt.Errorf("extension %s carries (%s) but extends %s; the marker belongs on extensions of google.protobuf.MethodOptions or google.protobuf.ServiceOptions", fd.FullName(), MarkerName, extendee)
+	if extendee != methodOptionsName && extendee != serviceOptionsName {
+		return fmt.Errorf("extension %s carries (%s) but extends %s; %s", fd.FullName(), MarkerName, extendee, markerHostHint)
 	}
 	if fd.Kind() != protoreflect.EnumKind || !fd.IsList() {
-		return fmt.Errorf("extension %s carries (%s) but is not a repeated enum; a throws declaration must be a repeated field of an error reason enum", fd.FullName(), MarkerName)
+		return fmt.Errorf(
+			"extension %s carries (%s) but is not a repeated enum; a throws declaration must be a repeated field of an error reason enum",
+			fd.FullName(), MarkerName,
+		)
 	}
 	return nil
 }
@@ -288,7 +295,10 @@ func (a *Analyzer) MethodDeclarations(serviceOptions, methodOptions proto.Messag
 	declared := make(map[string]bool, len(identities))
 	for _, identity := range identities {
 		if declared[identity.DedupeKey] {
-			return nil, fmt.Errorf("error %s is declared more than once across the method and its service; each identity must be declared exactly once", identity.DedupeKey)
+			return nil, fmt.Errorf(
+				"error %s is declared more than once across the method and its service; each identity must be declared exactly once",
+				identity.DedupeKey,
+			)
 		}
 		declared[identity.DedupeKey] = true
 	}

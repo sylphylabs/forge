@@ -191,7 +191,11 @@ func (g *OpenAPIv3Generator) applyThrowsResponses(d *model.Document, op *model.O
 	}
 	for _, spec := range specs {
 		if existing[spec.code] {
-			return fmt.Errorf("declared errors produce response %s, which the method also declares as a handwritten OpenAPI response; delete the handwritten response and keep the throws declaration as the single source", spec.code)
+			return fmt.Errorf(
+				"declared errors produce response %s, which the method also declares as a handwritten OpenAPI response; "+
+					"delete the handwritten response and keep the throws declaration as the single source",
+				spec.code,
+			)
 		}
 		op.Responses = append(op.Responses, &model.NamedResponse{
 			Name: spec.code,
@@ -217,10 +221,10 @@ func sortOperationResponses(op *model.Operation) {
 // non-numeric name, with default last.
 func responseRank(name string) int {
 	if name == defaultResponseName {
-		return 1 << 20
+		return defaultResponseRank
 	}
 	if code, err := strconv.Atoi(name); err == nil {
 		return code
 	}
-	return 1<<20 - 1
+	return unnamedResponseRank
 }

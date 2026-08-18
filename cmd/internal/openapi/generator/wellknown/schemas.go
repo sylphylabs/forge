@@ -25,7 +25,10 @@ import (
 const (
 	typeString  = "string"
 	typeInteger = "integer"
+	typeNumber  = "number"
+	typeBoolean = "boolean"
 	typeObject  = "object"
+	typeArray   = "array"
 )
 
 // fieldCode is the name of the status code property of the google.rpc.Status
@@ -37,7 +40,7 @@ func NewStringSchema() *model.Schema {
 }
 
 func NewBooleanSchema() *model.Schema {
-	return &model.Schema{Type: "boolean"}
+	return &model.Schema{Type: typeBoolean}
 }
 
 func NewBytesSchema() *model.Schema {
@@ -49,7 +52,7 @@ func NewIntegerSchema(format string) *model.Schema {
 }
 
 func NewNumberSchema(format string) *model.Schema {
-	return &model.Schema{Type: "number", Format: format}
+	return &model.Schema{Type: typeNumber, Format: format}
 }
 
 // NewEnumSchema describes an enum field as the value name it is serialized as.
@@ -71,7 +74,7 @@ func NewEnumSchema(field protoreflect.FieldDescriptor) *model.Schema {
 }
 
 func NewListSchema(itemSchema *model.Schema) *model.Schema {
-	return &model.Schema{Type: "array", Items: itemSchema}
+	return &model.Schema{Type: typeArray, Items: itemSchema}
 }
 
 // google.api.HttpBody will contain POST body data
@@ -225,7 +228,7 @@ func NewGoogleRPCStatusSchema(name string, anyName string) *model.NamedSchema {
 				{
 					Name: "details",
 					Schema: &model.Schema{
-						Type:        "array",
+						Type:        typeArray,
 						Items:       &model.Schema{Ref: "#/components/schemas/" + anyName},
 						Description: "A list of messages that carry the error details.  There is a common set of message types for APIs to use.",
 					},
@@ -284,7 +287,7 @@ func NewForgeProblemSchema(name string) *model.NamedSchema {
 				{
 					Name: "violations",
 					Schema: &model.Schema{
-						Type:        "array",
+						Type:        typeArray,
 						Description: "Field-level failures collected by a validation pass.",
 						Items:       violationSchema,
 					},

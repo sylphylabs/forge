@@ -8,6 +8,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	yamlTagBool  = "!!bool"
+	yamlTagInt   = "!!int"
+	yamlTagFloat = "!!float"
+	yamlTagStr   = "!!str"
+	yamlTagMap   = "!!map"
+	yamlTagSeq   = "!!seq"
+)
+
 // YAML serializes the document deterministically. A non-empty comment is
 // emitted as a header comment above the document.
 func (d *Document) YAML(comment string) ([]byte, error) {
@@ -71,7 +80,7 @@ func writeJSON(buf *bytes.Buffer, node *yaml.Node) error {
 		buf.WriteByte(']')
 	case yaml.ScalarNode:
 		switch node.Tag {
-		case "!!bool", "!!int", "!!float":
+		case yamlTagBool, yamlTagInt, yamlTagFloat:
 			buf.WriteString(node.Value)
 		default:
 			value, err := json.Marshal(node.Value)
@@ -93,7 +102,7 @@ type mapping struct {
 }
 
 func newMapping() *mapping {
-	return &mapping{node: &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}}
+	return &mapping{node: &yaml.Node{Kind: yaml.MappingNode, Tag: yamlTagMap}}
 }
 
 func (m *mapping) set(key string, value *yaml.Node) {
@@ -110,7 +119,7 @@ func (m *mapping) setStr(key, value string) {
 // setBool adds a boolean entry, omitting it when the value is false.
 func (m *mapping) setBool(key string, value bool) {
 	if value {
-		m.set(key, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"})
+		m.set(key, &yaml.Node{Kind: yaml.ScalarNode, Tag: yamlTagBool, Value: "true"})
 	}
 }
 
@@ -128,11 +137,11 @@ func (m *mapping) setStrings(key string, values []string) {
 }
 
 func strScalar(value string) *yaml.Node {
-	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value}
+	return &yaml.Node{Kind: yaml.ScalarNode, Tag: yamlTagStr, Value: value}
 }
 
 func newSequence() *yaml.Node {
-	return &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+	return &yaml.Node{Kind: yaml.SequenceNode, Tag: yamlTagSeq}
 }
 
 func (d *Document) node() *yaml.Node {
@@ -192,9 +201,15 @@ func (p *PathItem) node() *yaml.Node {
 		method    string
 		operation *Operation
 	}{
-		{"get", p.Get}, {"put", p.Put}, {"post", p.Post}, {"delete", p.Delete},
-		{"options", p.Options}, {"head", p.Head}, {"patch", p.Patch},
-		{"trace", p.Trace}, {"query", p.Query},
+		{"get", p.Get},
+		{"put", p.Put},
+		{"post", p.Post},
+		{"delete", p.Delete},
+		{"options", p.Options},
+		{"head", p.Head},
+		{"patch", p.Patch},
+		{"trace", p.Trace},
+		{"query", p.Query},
 	} {
 		if entry.operation != nil {
 			m.set(entry.method, entry.operation.node())
@@ -357,7 +372,7 @@ func (s *Schema) node() *yaml.Node {
 			if *s.AdditionalProperties.Allowed {
 				value = "true"
 			}
-			m.set("additionalProperties", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: value})
+			m.set("additionalProperties", &yaml.Node{Kind: yaml.ScalarNode, Tag: yamlTagBool, Value: value})
 		}
 	}
 	if s.Items != nil {

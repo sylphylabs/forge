@@ -25,11 +25,11 @@ import (
 
 	highv3 "github.com/pb33f/libopenapi/datamodel/high/v3"
 	"github.com/pb33f/libopenapi/orderedmap"
-	forgeerrors "github.com/sylphylabs/forge/errors"
-	forgehttp "github.com/sylphylabs/forge/transport/http"
 	"google.golang.org/protobuf/types/descriptorpb"
 
 	openapigen "github.com/sylphylabs/forge/cmd/internal/openapi/generator"
+	forgeerrors "github.com/sylphylabs/forge/errors"
+	forgehttp "github.com/sylphylabs/forge/transport/http"
 )
 
 // The runtime-side declarations. Identity is (domain, reason): these pairs are

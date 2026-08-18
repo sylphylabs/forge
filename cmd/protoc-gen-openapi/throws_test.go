@@ -6,13 +6,13 @@ import (
 
 	highv3 "github.com/pb33f/libopenapi/datamodel/high/v3"
 	"github.com/pb33f/libopenapi/orderedmap"
-	errorapi "github.com/sylphylabs/forge/api/errors/v1"
 	"google.golang.org/genproto/googleapis/api/annotations"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/types/descriptorpb"
 
+	errorapi "github.com/sylphylabs/forge/api/errors/v1"
 	"github.com/sylphylabs/forge/cmd/internal/generator"
 	openapigen "github.com/sylphylabs/forge/cmd/internal/openapi/generator"
 )

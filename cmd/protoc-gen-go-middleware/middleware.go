@@ -36,6 +36,11 @@ const (
 	modeAll       = "all"
 )
 
+const (
+	transportHTTP = "HTTP"
+	transportGRPC = "gRPC"
+)
+
 func parseHTTPMode(value string) (httpMode, error) {
 	switch value {
 	case "":
@@ -49,7 +54,13 @@ func parseHTTPMode(value string) (httpMode, error) {
 	}
 }
 
-func generateMiddlewareFile(gen *protogen.Plugin, file *protogen.File, mode httpMode, grpcEnabled bool, analyzer *throws.Analyzer) (*protogen.GeneratedFile, error) {
+func generateMiddlewareFile(
+	gen *protogen.Plugin,
+	file *protogen.File,
+	mode httpMode,
+	grpcEnabled bool,
+	analyzer *throws.Analyzer,
+) (*protogen.GeneratedFile, error) {
 	if len(file.Services) == 0 {
 		return nil, nil
 	}
@@ -259,7 +270,13 @@ func generateMiddlewarePlan(g *protogen.GeneratedFile, service *protogen.Service
 	g.P()
 }
 
-func generateHTTPMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.Service, methods []*protogen.Method, mode httpMode, declarations *serviceThrows) {
+func generateHTTPMiddlewareWrapper(
+	g *protogen.GeneratedFile,
+	service *protogen.Service,
+	methods []*protogen.Method,
+	mode httpMode,
+	declarations *serviceThrows,
+) {
 	wrapper := "_" + service.GoName + "HTTPMiddlewareServer"
 	expectedMethodSet := 1
 	if mode == httpAll {
@@ -292,12 +309,12 @@ func generateHTTPMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.
 
 	g.P("// Wrap", service.GoName, "HTTPServer snapshots plan and composes every HTTP handler before registration.")
 	served := servedDeclarations(methods, declarations)
-	generateWrapperSignature(g, service, "HTTP", service.GoName+"HTTPServer", served)
-	g.P("if srv == nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: nil "+service.GoName+" HTTP server"), ") }")
-	generateThrowsConfig(g, service, "HTTP", served)
+	generateWrapperSignature(g, service, transportHTTP, service.GoName+"HTTPServer", served)
+	g.P("if srv == nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: nil "+service.GoName+" "+transportHTTP+" server"), ") }")
+	generateThrowsConfig(g, service, transportHTTP, served)
 	g.P("wrapped := &", wrapper, "{", service.GoName, "HTTPServer: srv}")
 	for _, method := range methods {
-		generateComposeBlock(g, service, method, "HTTP", "srv", "wrapped", declarations)
+		generateComposeBlock(g, service, method, transportHTTP, "srv", "wrapped", declarations)
 	}
 	g.P("return wrapped, nil")
 	g.P("}")
@@ -333,12 +350,12 @@ func generateGRPCMiddlewareWrapper(g *protogen.GeneratedFile, service *protogen.
 
 	g.P("// Wrap", service.GoName, "GRPCServer snapshots plan and composes every gRPC handler before registration.")
 	served := servedDeclarations(service.Methods, declarations)
-	generateWrapperSignature(g, service, "gRPC", service.GoName+"Server", served)
-	g.P("if srv == nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: nil "+service.GoName+" gRPC server"), ") }")
-	generateThrowsConfig(g, service, "gRPC", served)
+	generateWrapperSignature(g, service, transportGRPC, service.GoName+"Server", served)
+	g.P("if srv == nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: nil "+service.GoName+" "+transportGRPC+" server"), ") }")
+	generateThrowsConfig(g, service, transportGRPC, served)
 	g.P("wrapped := &", wrapper, "{", service.GoName, "Server: srv}")
 	for _, method := range service.Methods {
-		generateComposeBlock(g, service, method, "gRPC", "srv", "wrapped", declarations)
+		generateComposeBlock(g, service, method, transportGRPC, "srv", "wrapped", declarations)
 	}
 	g.P("return wrapped, nil")
 	g.P("}")
@@ -380,7 +397,7 @@ func containsMethod(methods []*protogen.Method, method *protogen.Method) bool {
 // generate byte-identical wrappers.
 func generateWrapperSignature(g *protogen.GeneratedFile, service *protogen.Service, transport, serverType string, declarations *serviceThrows) {
 	name := "Wrap" + service.GoName + "HTTPServer"
-	if transport == "gRPC" {
+	if transport == transportGRPC {
 		name = "Wrap" + service.GoName + "GRPCServer"
 	}
 	if declarations.hasDeclarations() {
@@ -401,10 +418,17 @@ func generateThrowsConfig(g *protogen.GeneratedFile, service *protogen.Service, 
 		vars = append(vars, declarationVar(service, method))
 	}
 	g.P("throwsConfig, err := ", throwsPackage.Ident("NewConfig"), "(opts, ", strings.Join(vars, ", "), ")")
-	g.P("if err != nil { return nil, ", fmtPackage.Ident("Errorf"), "(", strconv.Quote("forge: wrapping "+string(service.Desc.FullName())+" "+transport+": %w"), ", err) }")
+	wrapErr := strconv.Quote("forge: wrapping " + string(service.Desc.FullName()) + " " + transport + ": %w")
+	g.P("if err != nil { return nil, ", fmtPackage.Ident("Errorf"), "(", wrapErr, ", err) }")
 }
 
-func generateComposeBlock(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, transport, serviceVar, wrapperVar string, declarations *serviceThrows) {
+func generateComposeBlock(
+	g *protogen.GeneratedFile,
+	service *protogen.Service,
+	method *protogen.Method,
+	transport, serviceVar, wrapperVar string,
+	declarations *serviceThrows,
+) {
 	field := "handler" + method.GoName
 	qualified := string(service.Desc.FullName()) + "/" + string(method.Desc.Name()) + " " + transport
 	g.P("{")
@@ -438,7 +462,7 @@ func generateStreamTerminal(g *protogen.GeneratedFile, service *protogen.Service
 	qualified := string(service.Desc.FullName()) + "/" + string(method.Desc.Name()) + " " + transport
 	adapter := streamAdapterName(service, method, transport)
 	nativeType := transportHTTPPackage.Ident("ServerStream")
-	if transport == "gRPC" {
+	if transport == transportGRPC {
 		nativeType = grpcPackage.Ident("ServerStream")
 	}
 	g.P("native, ok := stream.Context().Value(", adapter, "Key{}).(", nativeType, ")")
@@ -465,7 +489,7 @@ type wrapperTransport struct {
 
 func generateHTTPWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, wrapper string, declarations *serviceThrows) {
 	generateWrapperMethod(g, service, method, wrapperTransport{
-		name:         "HTTP",
+		name:         transportHTTP,
 		wrapper:      wrapper,
 		streamType:   service.GoName + "_" + method.GoName + "HTTPServer",
 		nativeStream: transportHTTPPackage.Ident("ServerStream"),
@@ -474,7 +498,7 @@ func generateHTTPWrapperMethod(g *protogen.GeneratedFile, service *protogen.Serv
 
 func generateGRPCWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method, wrapper string, declarations *serviceThrows) {
 	generateWrapperMethod(g, service, method, wrapperTransport{
-		name:         "gRPC",
+		name:         transportGRPC,
 		wrapper:      wrapper,
 		streamType:   service.GoName + "_" + method.GoName + "Server",
 		nativeStream: grpcPackage.Ident("ServerStream"),
@@ -529,7 +553,7 @@ func generateWrapperMethod(g *protogen.GeneratedFile, service *protogen.Service,
 }
 
 func generateHTTPStreamAdapters(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method) {
-	name := streamAdapterName(service, method, "HTTP")
+	name := streamAdapterName(service, method, transportHTTP)
 	typed := name + "Typed"
 	g.P("type ", name, "Key struct{}")
 	g.P("type ", name, " struct { ", transportHTTPPackage.Ident("ServerStream"), "; ctx ", contextPackage.Ident("Context"), " }")
@@ -543,7 +567,7 @@ func generateHTTPStreamAdapters(g *protogen.GeneratedFile, service *protogen.Ser
 }
 
 func generateGRPCStreamAdapter(g *protogen.GeneratedFile, service *protogen.Service, method *protogen.Method) {
-	name := streamAdapterName(service, method, "gRPC")
+	name := streamAdapterName(service, method, transportGRPC)
 	typed := name + "Typed"
 	g.P("type ", name, "Key struct{}")
 	g.P("type ", name, " struct { ", grpcPackage.Ident("ServerStream"), "; ctx ", contextPackage.Ident("Context"), " }")

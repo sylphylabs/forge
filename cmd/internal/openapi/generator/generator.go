@@ -71,6 +71,11 @@ const (
 	inQuery = "query"
 	// defaultResponseName is the OpenAPI name of the default (catch-all) response.
 	defaultResponseName = "default"
+	// defaultResponseRank places "default" after every numeric HTTP status.
+	// Status codes are three digits; 1<<20 is far above that range.
+	defaultResponseRank = 1 << 20
+	// unnamedResponseRank places a non-numeric name just before default.
+	unnamedResponseRank = defaultResponseRank - 1
 )
 
 // In order to dynamically add google.rpc.Status schemas for user-declared
@@ -766,7 +771,7 @@ func (g *OpenAPIv3Generator) addPathsToDocumentV3(d *model.Document, services []
 				if err != nil {
 					return fmt.Errorf("RPC %s: %w", method.Desc.FullName(), err)
 				}
-				if err := g.applyOperationAnnotation(op, operationAnnotation); err != nil {
+				if err = g.applyOperationAnnotation(op, operationAnnotation); err != nil {
 					return fmt.Errorf("RPC %s: %w", method.Desc.FullName(), err)
 				}
 
@@ -774,12 +779,12 @@ func (g *OpenAPIv3Generator) addPathsToDocumentV3(d *model.Document, services []
 				if err != nil {
 					return fmt.Errorf("RPC %s: %w", method.Desc.FullName(), err)
 				}
-				if err := g.applyThrowsResponses(d, op, throwsResponses); err != nil {
+				if err = g.applyThrowsResponses(d, op, throwsResponses); err != nil {
 					return fmt.Errorf("RPC %s: %w", method.Desc.FullName(), err)
 				}
 				sortOperationResponses(op)
 
-				if err := g.addOperationToDocumentV3(d, op, openAPIPath, binding.Method); err != nil {
+				if err = g.addOperationToDocumentV3(d, op, openAPIPath, binding.Method); err != nil {
 					if binding.Index == 0 {
 						return fmt.Errorf("RPC %s: %w", method.Desc.FullName(), err)
 					}
