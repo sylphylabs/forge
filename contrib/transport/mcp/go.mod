@@ -3,7 +3,7 @@ module github.com/sylphylabs/forge/contrib/transport/mcp
 go 1.27rc3
 
 require (
-	github.com/mark3labs/mcp-go v0.57.0
+	github.com/mark3labs/mcp-go v0.58.0
 	github.com/sylphylabs/forge v0.0.1
 )
 
